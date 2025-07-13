@@ -24,6 +24,7 @@ end
 local anchors = {}
 local activeBuffFrames = {}
 local auraInstanceMap = {}
+local altToBase = {}
 
 local LSM = LibStub("LibSharedMedia-3.0")
 
@@ -116,6 +117,19 @@ end
 addon.Aura.functions.BuildSoundTable()
 
 local function getCategory(id) return addon.db["buffTrackerCategories"][id] end
+
+local function rebuildAltMapping()
+	wipe(altToBase)
+	for _, cat in pairs(addon.db["buffTrackerCategories"]) do
+		for baseId, buff in pairs(cat.buffs or {}) do
+			if buff.altIDs then
+				for _, altId in ipairs(buff.altIDs) do
+					altToBase[altId] = baseId
+				end
+			end
+		end
+	end
+end
 
 local function ensureAnchor(id)
 	if anchors[id] then return anchors[id] end
@@ -451,6 +465,7 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
 		end
 		if event == "PLAYER_LOGIN" then
 			addon.Aura.functions.BuildSoundTable()
+			rebuildAltMapping()
 			C_Timer.After(1, scanBuffs)
 			return
 		end
@@ -461,12 +476,14 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
 		if eventInfo then
 			local changed = {}
 			for _, aura in ipairs(eventInfo.addedAuras or {}) do
-				changed[aura.spellId] = true
+				local id = altToBase[aura.spellId] or aura.spellId
+				changed[id] = true
 			end
 			for _, inst in ipairs(eventInfo.updatedAuraInstanceIDs or {}) do
 				local data = C_UnitAuras.GetAuraDataByAuraInstanceID("player", inst)
 				if data then
-					changed[data.spellId] = true
+					local id = altToBase[data.spellId] or data.spellId
+					changed[id] = true
 				elseif auraInstanceMap[inst] then
 					changed[auraInstanceMap[inst].buffId] = true
 				end
@@ -479,17 +496,8 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
 			local updated = {}
 			for catId, cat in pairs(addon.db["buffTrackerCategories"]) do
 				if addon.db["buffTrackerEnabled"][catId] and categoryAllowed(cat) then
-					for buffId, buff in pairs(cat.buffs) do
-						local needs = changed[buffId]
-						if not needs and buff.altIDs then
-							for _, alt in ipairs(buff.altIDs) do
-								if changed[alt] then
-									needs = true
-									break
-								end
-							end
-						end
-						if needs then
+					for buffId in pairs(cat.buffs) do
+						if changed[buffId] then
 							if not addon.db["buffTrackerHidden"][buffId] then
 								updateBuff(catId, buffId)
 							elseif activeBuffFrames[catId] and activeBuffFrames[catId][buffId] then
@@ -543,6 +551,7 @@ local function addBuff(catId, id)
 	-- make sure the buff is not hidden
 	addon.db["buffTrackerHidden"][id] = nil
 
+	rebuildAltMapping()
 	scanBuffs()
 end
 
@@ -563,6 +572,7 @@ local function removeBuff(catId, id)
 		activeBuffFrames[catId][id]:Hide()
 		activeBuffFrames[catId][id] = nil
 	end
+	rebuildAltMapping()
 	scanBuffs()
 end
 
@@ -896,6 +906,7 @@ function addon.Aura.functions.buildBuffOptions(container, catId, buffId)
 					break
 				end
 			end
+			rebuildAltMapping()
 			container:ReleaseChildren()
 			addon.Aura.functions.buildBuffOptions(container, catId, buffId)
 		end)
@@ -907,6 +918,7 @@ function addon.Aura.functions.buildBuffOptions(container, catId, buffId)
 		local alt = tonumber(text)
 		if alt then
 			if not tContains(buff.altIDs, alt) then table.insert(buff.altIDs, alt) end
+			rebuildAltMapping()
 			self:SetText("")
 			container:ReleaseChildren()
 			addon.Aura.functions.buildBuffOptions(container, catId, buffId)
