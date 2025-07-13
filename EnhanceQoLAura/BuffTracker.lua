@@ -23,6 +23,7 @@ end
 
 local anchors = {}
 local activeBuffFrames = {}
+local auraInstanceMap = {}
 
 local LSM = LibStub("LibSharedMedia-3.0")
 
@@ -300,6 +301,8 @@ local function updateBuff(catId, id)
 
 	activeBuffFrames[catId] = activeBuffFrames[catId] or {}
 	local frame = activeBuffFrames[catId][id]
+	local prevInst = frame and frame.auraInstanceID
+	if prevInst then auraInstanceMap[prevInst] = nil end
 	local wasShown = frame and frame:IsShown()
 	local wasActive = frame and frame.isActive
 
@@ -398,6 +401,15 @@ local function updateBuff(catId, id)
 			end
 		end
 	end
+
+	if frame then
+		if aura then
+			frame.auraInstanceID = aura.auraInstanceID
+			auraInstanceMap[aura.auraInstanceID] = { catId = catId, buffId = id }
+		else
+			frame.auraInstanceID = nil
+		end
+	end
 end
 
 local function scanBuffs()
@@ -453,11 +465,20 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
 			end
 			for _, inst in ipairs(eventInfo.updatedAuraInstanceIDs or {}) do
 				local data = C_UnitAuras.GetAuraDataByAuraInstanceID("player", inst)
-				if data then changed[data.spellId] = true end
+				if data then
+					changed[data.spellId] = true
+				elseif auraInstanceMap[inst] then
+					changed[auraInstanceMap[inst].buffId] = true
+				end
 			end
 			for _, inst in ipairs(eventInfo.removedAuraInstanceIDs or {}) do
 				local data = C_UnitAuras.GetAuraDataByAuraInstanceID("player", inst)
-				if data then changed[data.spellId] = true end
+				if data then
+					changed[data.spellId] = true
+				elseif auraInstanceMap[inst] then
+					changed[auraInstanceMap[inst].buffId] = true
+				end
+				auraInstanceMap[inst] = nil
 			end
 
 			local updated = {}
