@@ -13,38 +13,55 @@ local AceGUI = addon.AceGUI
 local selectedCategory = addon.db["buffTrackerSelectedCategory"] or 1
 
 for _, cat in pairs(addon.db["buffTrackerCategories"]) do
-	if not cat.trackType then cat.trackType = "BUFF" end
-	if not cat.allowedSpecs then cat.allowedSpecs = {} end
-	if not cat.allowedClasses then cat.allowedClasses = {} end
+	for _, buff in pairs(cat.buffs or {}) do
+		if not buff.trackType then buff.trackType = "BUFF" end
+		if not buff.allowedSpecs then buff.allowedSpecs = {} end
+		if not buff.allowedClasses then buff.allowedClasses = {} end
+		if not buff.allowedRoles then buff.allowedRoles = {} end
+	end
 end
 
 local anchors = {}
 local activeBuffFrames = {}
+local auraInstanceMap = {}
+local altToBase = {}
+local spellToCat = {}
 
 local LSM = LibStub("LibSharedMedia-3.0")
 
--- build list of all specialization IDs with their names
 local specNames = {}
+local specOrder = {}
 local classNames = {}
+
+-- gather and sort classes alphabetically
+local classes = {}
 for classID = 1, GetNumClasses() do
 	local className, classTag = select(1, GetClassInfo(classID))
-	local numSpecs = C_SpecializationInfo.GetNumSpecializationsForClassID(classID)
+	table.insert(classes, { id = classID, name = className, tag = classTag })
+end
+table.sort(classes, function(a, b) return a.name < b.name end)
+
+-- build specialization names and order grouped by class
+for _, classInfo in ipairs(classes) do
+	local numSpecs = C_SpecializationInfo.GetNumSpecializationsForClassID(classInfo.id)
 	for i = 1, numSpecs do
-		local specID, specName, _, specIcon = GetSpecializationInfoForClassID(classID, i)
-		specNames[specID] = string.format("|T%s:14:14|t %s (%s)", specIcon, specName, className)
+		local specID, specName, _, specIcon = GetSpecializationInfoForClassID(classInfo.id, i)
+		specNames[specID] = string.format("|T%s:14:14|t %s (%s)", specIcon, specName, classInfo.name)
+		table.insert(specOrder, specID)
 	end
-	local coords = CLASS_ICON_TCOORDS[classTag]
+
+	local coords = CLASS_ICON_TCOORDS[classInfo.tag]
 	if coords then
-		classNames[classTag] = string.format(
+		classNames[classInfo.tag] = string.format(
 			"|TInterface\\GLUES\\CHARACTERCREATE\\UI-CharacterCreate-Classes:14:14:0:0:256:256:%d:%d:%d:%d|t %s",
 			coords[1] * 256,
 			coords[2] * 256,
 			coords[3] * 256,
 			coords[4] * 256,
-			className
+			classInfo.name
 		)
 	else
-		classNames[classTag] = className
+		classNames[classInfo.tag] = classInfo.name
 	end
 end
 
@@ -72,6 +89,24 @@ local function categoryAllowed(cat)
 	return true
 end
 
+local function buffAllowed(buff)
+	if buff.allowedClasses and next(buff.allowedClasses) then
+		if not buff.allowedClasses[addon.variables.unitClass] then return false end
+	end
+	if buff.allowedSpecs and next(buff.allowedSpecs) then
+		local specIndex = addon.variables.unitSpec
+		if not specIndex then return false end
+		local currentSpecID = GetSpecializationInfo(specIndex)
+		if not buff.allowedSpecs[currentSpecID] then return false end
+	end
+	if buff.allowedRoles and next(buff.allowedRoles) then
+		local role = UnitGroupRolesAssigned("player")
+		if role == "NONE" then role = addon.variables.unitRole end
+		if not role or not buff.allowedRoles[role] then return false end
+	end
+	return true
+end
+
 function addon.Aura.functions.BuildSoundTable()
 	local result = {}
 
@@ -83,6 +118,25 @@ end
 addon.Aura.functions.BuildSoundTable()
 
 local function getCategory(id) return addon.db["buffTrackerCategories"][id] end
+
+local function rebuildAltMapping()
+	wipe(altToBase)
+	wipe(spellToCat)
+	for catId, cat in pairs(addon.db["buffTrackerCategories"]) do
+		for baseId, buff in pairs(cat.buffs or {}) do
+			spellToCat[baseId] = spellToCat[baseId] or {}
+			spellToCat[baseId][catId] = true
+
+			buff.altHash = {}
+			if buff.altIDs then
+				for _, altId in ipairs(buff.altIDs) do
+					altToBase[altId] = baseId
+					buff.altHash[altId] = true
+				end
+			end
+		end
+	end
+end
 
 local function ensureAnchor(id)
 	if anchors[id] then return anchors[id] end
@@ -149,7 +203,9 @@ end
 
 local function applyLockState()
 	for id, anchor in pairs(anchors) do
-		if addon.db["buffTrackerLocked"][id] then
+		if not addon.db["buffTrackerEnabled"][id] then
+			anchor:Hide()
+		elseif addon.db["buffTrackerLocked"][id] then
 			anchor:RegisterForDrag()
 			anchor:SetMovable(false)
 			anchor:EnableMouse(false)
@@ -236,30 +292,45 @@ local function playBuffSound(catId, baseId, altId)
 	if file then PlaySoundFile(file, "Master") end
 end
 
-local function updateBuff(catId, id)
+local function updateBuff(catId, id, changedId)
 	local cat = getCategory(catId)
 	local buff = cat and cat.buffs and cat.buffs[id]
-	local aura = C_UnitAuras.GetPlayerAuraBySpellID(id)
+	if buff and not buffAllowed(buff) then
+		if activeBuffFrames[catId] and activeBuffFrames[catId][id] then activeBuffFrames[catId][id]:Hide() end
+		return
+	end
+
+	local aura
 	local triggeredId = id
-	if not aura and buff and buff.altIDs then
-		for _, altId in ipairs(buff.altIDs) do
-			aura = C_UnitAuras.GetPlayerAuraBySpellID(altId)
-			if aura then
-				triggeredId = altId
-				break
+	if changedId and (changedId == id or (buff and buff.altHash and buff.altHash[changedId])) then
+		aura = C_UnitAuras.GetPlayerAuraBySpellID(changedId)
+		triggeredId = changedId
+	else
+		aura = C_UnitAuras.GetPlayerAuraBySpellID(id)
+		triggeredId = id
+		if not aura and buff and buff.altHash then
+			for altId in pairs(buff.altHash) do
+				aura = C_UnitAuras.GetPlayerAuraBySpellID(altId)
+				if aura then
+					triggeredId = altId
+					break
+				end
 			end
 		end
 	end
 	if aura then
-		if cat and cat.trackType == "DEBUFF" and not aura.isHarmful then
+		local tType = buff and buff.trackType or (cat and cat.trackType) or "BUFF"
+		if tType == "DEBUFF" and not aura.isHarmful then
 			aura = nil
-		elseif cat and cat.trackType == "BUFF" and not aura.isHelpful then
+		elseif tType == "BUFF" and not aura.isHelpful then
 			aura = nil
 		end
 	end
 
 	activeBuffFrames[catId] = activeBuffFrames[catId] or {}
 	local frame = activeBuffFrames[catId][id]
+	local prevInst = frame and frame.auraInstanceID
+	if prevInst then auraInstanceMap[prevInst] = nil end
 	local wasShown = frame and frame:IsShown()
 	local wasActive = frame and frame.isActive
 
@@ -358,6 +429,15 @@ local function updateBuff(catId, id)
 			end
 		end
 	end
+
+	if frame then
+		if aura then
+			frame.auraInstanceID = aura.auraInstanceID
+			auraInstanceMap[aura.auraInstanceID] = { catId = catId, buffId = id }
+		else
+			frame.auraInstanceID = nil
+		end
+	end
 end
 
 local function scanBuffs()
@@ -387,7 +467,7 @@ addon.Aura.buffAnchors = anchors
 addon.Aura.scanBuffs = scanBuffs
 
 local eventFrame = CreateFrame("Frame")
-eventFrame:SetScript("OnEvent", function(_, event, unit)
+eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
 	if event == "PLAYER_LOGIN" or event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED" then
 		for id, anchor in pairs(anchors) do
 			local cat = getCategory(id)
@@ -399,181 +479,63 @@ eventFrame:SetScript("OnEvent", function(_, event, unit)
 		end
 		if event == "PLAYER_LOGIN" then
 			addon.Aura.functions.BuildSoundTable()
+			rebuildAltMapping()
 			C_Timer.After(1, scanBuffs)
 			return
 		end
 	end
+
+	if event == "UNIT_AURA" and unit == "player" then
+		local eventInfo = ...
+		if eventInfo then
+			local changed = {}
+			for _, aura in ipairs(eventInfo.addedAuras or {}) do
+				local base = altToBase[aura.spellId] or aura.spellId
+				changed[base] = aura.spellId
+			end
+			for _, inst in ipairs(eventInfo.updatedAuraInstanceIDs or {}) do
+				local data = C_UnitAuras.GetAuraDataByAuraInstanceID("player", inst)
+				if data then
+					local base = altToBase[data.spellId] or data.spellId
+					changed[base] = data.spellId
+				elseif auraInstanceMap[inst] then
+					changed[auraInstanceMap[inst].buffId] = true
+				end
+			end
+			for _, inst in ipairs(eventInfo.removedAuraInstanceIDs or {}) do
+				if auraInstanceMap[inst] then changed[auraInstanceMap[inst].buffId] = true end
+				auraInstanceMap[inst] = nil
+			end
+
+			local updated = {}
+			for spellId, cId in pairs(changed) do
+				for catId in pairs(spellToCat[spellId] or {}) do
+					local cat = addon.db["buffTrackerCategories"][catId]
+					if addon.db["buffTrackerEnabled"][catId] and categoryAllowed(cat) then
+						if not addon.db["buffTrackerHidden"][spellId] then
+							local changedId = cId ~= true and cId or nil
+							updateBuff(catId, spellId, changedId)
+						elseif activeBuffFrames[catId] and activeBuffFrames[catId][spellId] then
+							activeBuffFrames[catId][spellId]:Hide()
+						end
+						updated[catId] = true
+					end
+				end
+			end
+
+			for catId in pairs(updated) do
+				updatePositions(catId)
+				if anchors[catId] then anchors[catId]:Show() end
+			end
+			return
+		end
+	end
+
 	scanBuffs()
 end)
 eventFrame:RegisterUnitEvent("UNIT_AURA", "player")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
-
-local function moveTrackedBuff(catId, id, direction)
-	if nil == addon.db["buffTrackerOrder"][catId] then addon.db["buffTrackerOrder"][catId] = {} end
-	local list = addon.db["buffTrackerOrder"][catId]
-	local oldIndex
-	for i, v in ipairs(list) do
-		if v == id then
-			oldIndex = i
-			break
-		end
-	end
-	if not oldIndex then
-		table.insert(list, id)
-		oldIndex = #list
-	end
-
-	local newIndex = math.max(1, math.min(#list, oldIndex + direction))
-	table.remove(list, oldIndex)
-	table.insert(list, newIndex, id)
-end
-
-local openedFrames = {}
-
-local function openBuffConfig(catId, id)
-	local frame = AceGUI:Create("Frame")
-	frame:SetTitle(L["BuffTracker"])
-	frame:SetWidth(400)
-	frame:SetHeight(300)
-	frame:SetLayout("Fill")
-	frame:SetCallback("OnClose", function(widget)
-		AceGUI:Release(widget)
-		openedFrames[catId][id] = nil
-	end)
-	openedFrames[catId] = openedFrames[catId] or {}
-	openedFrames[catId][id] = true
-
-	local scroll = addon.functions.createContainer("ScrollFrame", "List")
-	scroll:SetFullWidth(true)
-	scroll:SetFullHeight(true)
-	frame:AddChild(scroll)
-
-	local wrapper = addon.functions.createContainer("SimpleGroup", "List")
-	scroll:AddChild(wrapper)
-
-	local function rebuild()
-		wrapper:ReleaseChildren()
-
-		local buff = addon.db["buffTrackerCategories"][catId]["buffs"][id]
-
-		local label = AceGUI:Create("Label")
-		local name = buff.name
-		label:SetText((name or "") .. " (" .. id .. ")")
-		wrapper:AddChild(label)
-
-		addon.db["buffTrackerSounds"][catId] = addon.db["buffTrackerSounds"][catId] or {}
-		addon.db["buffTrackerSoundsEnabled"][catId] = addon.db["buffTrackerSoundsEnabled"][catId] or {}
-
-		local cbElement = addon.functions.createCheckboxAce(
-			L["buffTrackerSoundsEnabled"],
-			addon.db["buffTrackerSoundsEnabled"][catId][id],
-			function(_, _, val) addon.db["buffTrackerSoundsEnabled"][catId][id] = val end
-		)
-		wrapper:AddChild(cbElement)
-
-		local soundList = {}
-		for sname in pairs(addon.Aura.sounds or {}) do
-			soundList[sname] = sname
-		end
-		local list, order = addon.functions.prepareListForDropdown(soundList)
-		local dropSound = addon.functions.createDropdownAce(L["SoundFile"], list, order, function(self, _, val)
-			addon.db["buffTrackerSounds"][catId][id] = val
-			self:SetValue(val)
-			local file = addon.Aura.sounds and addon.Aura.sounds[val]
-			if file then PlaySoundFile(file, "Master") end
-		end)
-		dropSound:SetValue(addon.db["buffTrackerSounds"][catId][id])
-
-		wrapper:AddChild(dropSound)
-
-		local cbMissing, cbAlways
-		cbMissing = addon.functions.createCheckboxAce(L["buffTrackerShowWhenMissing"], buff.showWhenMissing, function(_, _, val)
-			buff.showWhenMissing = val
-			if val then
-				buff.showAlways = false
-				if cbAlways then cbAlways:SetValue(false) end
-			end
-			scanBuffs()
-		end)
-		wrapper:AddChild(cbMissing)
-
-		cbAlways = addon.functions.createCheckboxAce(L["buffTrackerAlwaysShow"], buff.showAlways, function(_, _, val)
-			buff.showAlways = val
-			if val then
-				buff.showWhenMissing = false
-				if cbMissing then cbMissing:SetValue(false) end
-			end
-			scanBuffs()
-		end)
-		wrapper:AddChild(cbAlways)
-
-		local cbGlow = addon.functions.createCheckboxAce(L["buffTrackerGlow"], buff.glow, function(_, _, val)
-			buff.glow = val
-			scanBuffs()
-		end)
-		wrapper:AddChild(cbGlow)
-
-		if IsSpellKnown(id) or IsSpellKnownOrOverridesKnown(id) then
-			local cbCast = addon.functions.createCheckboxAce(L["buffTrackerCastOnClick"], buff.castOnClick, function(_, _, val)
-				buff.castOnClick = val
-				scanBuffs()
-			end)
-			wrapper:AddChild(cbCast)
-		end
-
-		-- alternative spell ids
-		buff.altIDs = buff.altIDs or {}
-		for _, altId in ipairs(buff.altIDs) do
-			local row = addon.functions.createContainer("SimpleGroup", "Flow")
-			row:SetFullWidth(true)
-			local lbl = AceGUI:Create("Label")
-			local altInfo = C_Spell.GetSpellInfo(altId)
-			if altInfo then
-				lbl:SetText(L["AltSpellIDs"] .. ": " .. altInfo.name .. " (" .. altId .. ")")
-			else
-				lbl:SetText(L["AltSpellIDs"] .. ": " .. altId)
-			end
-			lbl:SetRelativeWidth(0.7)
-			row:AddChild(lbl)
-
-			local removeIcon = AceGUI:Create("Icon")
-			removeIcon:SetLabel("")
-			removeIcon:SetImage("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
-			removeIcon:SetImageSize(16, 16)
-			removeIcon:SetRelativeWidth(0.3)
-			removeIcon:SetHeight(16)
-			removeIcon:SetCallback("OnClick", function()
-				for i, v in ipairs(buff.altIDs) do
-					if v == altId then
-						table.remove(buff.altIDs, i)
-						break
-					end
-				end
-				rebuild()
-			end)
-			row:AddChild(removeIcon)
-
-			wrapper:AddChild(row)
-		end
-
-		local altEdit = addon.functions.createEditboxAce(L["AddAltSpellID"], nil, function(self, _, text)
-			local alt = tonumber(text)
-			if alt then
-				if not tContains(buff.altIDs, alt) then table.insert(buff.altIDs, alt) end
-				self:SetText("")
-				rebuild()
-			end
-		end)
-		wrapper:AddChild(altEdit)
-
-		wrapper:AddChild(addon.functions.createSpacerAce())
-		scroll:DoLayout()
-		wrapper:DoLayout()
-	end
-
-	rebuild()
-end
 
 local function addBuff(catId, id)
 	-- get spell name and icon once
@@ -583,7 +545,19 @@ local function addBuff(catId, id)
 	local cat = getCategory(catId)
 	if not cat then return end
 
-	cat.buffs[id] = { name = spellData.name, icon = spellData.iconID, altIDs = {}, showWhenMissing = false, showAlways = false, glow = false, castOnClick = false }
+	cat.buffs[id] = {
+		name = spellData.name,
+		icon = spellData.iconID,
+		altIDs = {},
+		showWhenMissing = false,
+		showAlways = false,
+		glow = false,
+		castOnClick = false,
+		trackType = "BUFF",
+		allowedSpecs = {},
+		allowedClasses = {},
+		allowedRoles = {},
+	}
 
 	if nil == addon.db["buffTrackerOrder"][catId] then addon.db["buffTrackerOrder"][catId] = {} end
 	if not tContains(addon.db["buffTrackerOrder"][catId], id) then table.insert(addon.db["buffTrackerOrder"][catId], id) end
@@ -591,6 +565,7 @@ local function addBuff(catId, id)
 	-- make sure the buff is not hidden
 	addon.db["buffTrackerHidden"][id] = nil
 
+	rebuildAltMapping()
 	scanBuffs()
 end
 
@@ -611,24 +586,104 @@ local function removeBuff(catId, id)
 		activeBuffFrames[catId][id]:Hide()
 		activeBuffFrames[catId][id] = nil
 	end
+	rebuildAltMapping()
 	scanBuffs()
 end
 
-local function getCategoryTabs()
-	local tabs = {}
-	for id, cat in pairs(addon.db["buffTrackerCategories"]) do
-		table.insert(tabs, { value = id, text = cat.name })
+local treeGroup
+
+local function getCategoryTree()
+	local tree = {}
+	for catId, cat in pairs(addon.db["buffTrackerCategories"]) do
+		local text = cat.name
+		if addon.db["buffTrackerEnabled"] and addon.db["buffTrackerEnabled"][catId] == false then text = "|cff808080" .. text .. "|r" end
+		local node = { value = catId, text = text, children = {} }
+		local buffs = {}
+		for id, data in pairs(cat.buffs) do
+			table.insert(buffs, { id = id, name = data.name })
+		end
+		if nil == addon.db["buffTrackerOrder"][catId] then addon.db["buffTrackerOrder"][catId] = {} end
+		local orderIndex = {}
+		for idx, bid in ipairs(addon.db["buffTrackerOrder"][catId]) do
+			orderIndex[bid] = idx
+		end
+		table.sort(buffs, function(a, b)
+			local ia = orderIndex[a.id] or math.huge
+			local ib = orderIndex[b.id] or math.huge
+			if ia ~= ib then return ia < ib end
+			return a.name < b.name
+		end)
+		for _, info in ipairs(buffs) do
+			table.insert(node.children, { value = catId .. "\001" .. info.id, text = info.name, icon = info.icon or (C_Spell.GetSpellInfo(info.id)).iconID })
+		end
+		table.insert(tree, node)
 	end
-	table.sort(tabs, function(a, b) return a.value < b.value end)
-	return tabs
+	table.sort(tree, function(a, b) return a.value < b.value end)
+	-- pseudo‑node for adding new categories
+	table.insert(tree, {
+		value = "ADD_CATEGORY",
+		text = "|cff00ff00+ " .. (L["Add Category"] or "Add Category ..."),
+	})
+	return tree
 end
 
-function addon.Aura.functions.buildCategoryOptions(tabContainer, catId, groupTabs, scroll)
-	local cat = getCategory(catId)
-	local core = addon.functions.createContainer("InlineGroup", "Flow")
-	tabContainer:AddChild(core)
+local function refreshTree(selectValue)
+	if not treeGroup then return end
+	treeGroup:SetTree(getCategoryTree())
+end
 
-	local enableCB = addon.functions.createCheckboxAce(L["EnableBuffTracker"], addon.db["buffTrackerEnabled"][catId], function(self, _, val)
+local function handleDragDrop(src, dst)
+	if not src or not dst then return end
+
+	local sCat, _, sBuff = strsplit("\001", src)
+	local dCat, _, dBuff = strsplit("\001", dst)
+	sCat = tonumber(sCat)
+	dCat = tonumber(dCat)
+	if not sBuff then return end
+	sBuff = tonumber(sBuff)
+	if dBuff then dBuff = tonumber(dBuff) end
+
+	local srcCat = addon.db["buffTrackerCategories"][sCat]
+	local dstCat = addon.db["buffTrackerCategories"][dCat]
+	if not srcCat or not dstCat then return end
+
+	local buffData = srcCat.buffs[sBuff]
+	if not buffData then return end
+
+	srcCat.buffs[sBuff] = nil
+	addon.db["buffTrackerOrder"][sCat] = addon.db["buffTrackerOrder"][sCat] or {}
+	for i, v in ipairs(addon.db["buffTrackerOrder"][sCat]) do
+		if v == sBuff then
+			table.remove(addon.db["buffTrackerOrder"][sCat], i)
+			break
+		end
+	end
+
+	dstCat.buffs[sBuff] = buffData
+	addon.db["buffTrackerOrder"][dCat] = addon.db["buffTrackerOrder"][dCat] or {}
+	local insertPos = #addon.db["buffTrackerOrder"][dCat] + 1
+	if dBuff then
+		for i, v in ipairs(addon.db["buffTrackerOrder"][dCat]) do
+			if v == dBuff then
+				insertPos = i
+				break
+			end
+		end
+	end
+	table.insert(addon.db["buffTrackerOrder"][dCat], insertPos, sBuff)
+
+	rebuildAltMapping()
+	refreshTree(selectedCategory)
+	scanBuffs()
+end
+
+function addon.Aura.functions.buildCategoryOptions(container, catId)
+	local cat = getCategory(catId)
+	if not cat then return end
+	local core = addon.functions.createContainer("InlineGroup", "Flow")
+	container:AddChild(core)
+
+	local enableCB = addon.functions.createCheckboxAce(L["EnableBuffTracker"]:format(cat.name), addon.db["buffTrackerEnabled"][catId], function(self, _, val)
 		addon.db["buffTrackerEnabled"][catId] = val
 		for id, anchor in pairs(anchors) do
 			if addon.db["buffTrackerEnabled"][id] then
@@ -637,6 +692,9 @@ function addon.Aura.functions.buildCategoryOptions(tabContainer, catId, groupTab
 				anchor:Hide()
 			end
 		end
+		applyLockState()
+		scanBuffs()
+		refreshTree(selectedCategory)
 	end)
 	core:AddChild(enableCB)
 
@@ -648,8 +706,7 @@ function addon.Aura.functions.buildCategoryOptions(tabContainer, catId, groupTab
 
 	local nameEdit = addon.functions.createEditboxAce(L["CategoryName"], cat.name, function(self, _, text)
 		if text ~= "" then cat.name = text end
-		groupTabs:SetTabs(getCategoryTabs())
-		groupTabs:SelectTab(catId)
+		refreshTree(catId)
 	end)
 	core:AddChild(nameEdit)
 
@@ -668,261 +725,292 @@ function addon.Aura.functions.buildCategoryOptions(tabContainer, catId, groupTab
 	dirDrop:SetRelativeWidth(0.4)
 	core:AddChild(dirDrop)
 
-	local typeDrop = addon.functions.createDropdownAce(L["TrackType"], { BUFF = L["Buff"], DEBUFF = L["Debuff"] }, nil, function(self, _, val)
-		cat.trackType = val
-		if activeBuffFrames[catId] then
-			for _, frame in pairs(activeBuffFrames[catId]) do
-				frame:Hide()
-			end
-		end
-		scanBuffs()
-	end)
-	typeDrop:SetValue(cat.trackType or "BUFF")
-	typeDrop:SetRelativeWidth(0.4)
-	core:AddChild(typeDrop)
-
-	local specDrop = addon.functions.createDropdownAce(L["ShowForSpec"], specNames, nil, function(self, event, key, checked)
-		cat.allowedSpecs = cat.allowedSpecs or {}
-		cat.allowedSpecs[key] = checked or nil
-		scanBuffs()
-	end)
-	specDrop:SetMultiselect(true)
-	for specID, val in pairs(cat.allowedSpecs or {}) do
-		if val then specDrop:SetItemValue(specID, true) end
-	end
-	specDrop:SetRelativeWidth(0.5)
-	core:AddChild(specDrop)
-
-	local classDrop = addon.functions.createDropdownAce(L["ShowForClass"], classNames, nil, function(self, event, key, checked)
-		cat.allowedClasses = cat.allowedClasses or {}
-		cat.allowedClasses[key] = checked or nil
-		scanBuffs()
-	end)
-	classDrop:SetMultiselect(true)
-	for c, val in pairs(cat.allowedClasses or {}) do
-		if val then classDrop:SetItemValue(c, true) end
-	end
-	classDrop:SetRelativeWidth(0.5)
-	core:AddChild(classDrop)
-
-	local roleDrop = addon.functions.createDropdownAce(L["ShowForRole"], roleNames, nil, function(self, event, key, checked)
-		cat.allowedRoles = cat.allowedRoles or {}
-		cat.allowedRoles[key] = checked or nil
-		scanBuffs()
-	end)
-	roleDrop:SetMultiselect(true)
-	for r, val in pairs(cat.allowedRoles or {}) do
-		if val then roleDrop:SetItemValue(r, true) end
-	end
-	roleDrop:SetRelativeWidth(0.5)
-	core:AddChild(roleDrop)
-
-	local spellEdit = addon.functions.createEditboxAce(L["SpellID"], nil, function(self, _, text)
+	local spellEdit = addon.functions.createEditboxAce(L["AddSpellID"], nil, function(self, _, text)
 		local id = tonumber(text)
 		if id then
 			addBuff(catId, id)
-			tabContainer:ReleaseChildren()
-			addon.Aura.functions.buildTabContent(tabContainer, catId, scroll, groupTabs)
-			scroll:DoLayout()
+			refreshTree(catId)
+			container:ReleaseChildren()
+			addon.Aura.functions.buildCategoryOptions(container, catId)
 		end
 		self:SetText("")
 	end)
+	spellEdit:SetRelativeWidth(0.6)
 	core:AddChild(spellEdit)
 
 	local delBtn = addon.functions.createButtonAce(L["DeleteCategory"], 150, function()
-		addon.db["buffTrackerCategories"][catId] = nil
-		addon.db["buffTrackerOrder"][catId] = nil
-		if anchors[catId] then
-			anchors[catId]:Hide()
-			anchors[catId] = nil
+		local catName = addon.db["buffTrackerCategories"][catId].name or ""
+		StaticPopupDialogs["EQOL_DELETE_CATEGORY"] = StaticPopupDialogs["EQOL_DELETE_CATEGORY"]
+			or {
+				text = L["DeleteCategoryConfirm"],
+				button1 = YES,
+				button2 = CANCEL,
+				timeout = 0,
+				whileDead = true,
+				hideOnEscape = true,
+				preferredIndex = 3,
+			}
+		StaticPopupDialogs["EQOL_DELETE_CATEGORY"].OnAccept = function()
+			addon.db["buffTrackerCategories"][catId] = nil
+			addon.db["buffTrackerOrder"][catId] = nil
+			if anchors[catId] then
+				anchors[catId]:Hide()
+				anchors[catId] = nil
+			end
+			selectedCategory = next(addon.db["buffTrackerCategories"]) or 1
+			rebuildAltMapping()
+			refreshTree(selectedCategory)
 		end
-		selectedCategory = next(addon.db["buffTrackerCategories"]) or 1
-		groupTabs:SetTabs(getCategoryTabs())
-		groupTabs:SelectTab(selectedCategory)
+		StaticPopup_Show("EQOL_DELETE_CATEGORY", catName)
 	end)
 	core:AddChild(delBtn)
 
 	return core
 end
 
-function addon.Aura.functions.buildTabContent(tabContainer, catId, scroll, groupTabs)
-	local listGroup = addon.functions.createContainer("InlineGroup", "List")
-	listGroup:SetTitle(L["TrackedBuffs"])
+function addon.Aura.functions.buildBuffOptions(container, catId, buffId)
+	local buff = addon.db["buffTrackerCategories"][catId]["buffs"][buffId]
+	if not buff then return end
 
-	tabContainer:AddChild(listGroup)
+	local groupCore = addon.functions.createContainer("InlineGroup", "List")
+	container:AddChild(groupCore)
 
-	local buffData = {}
-	local cat = getCategory(catId)
-	if cat then
-		for id, data in pairs(cat.buffs) do
-			table.insert(buffData, { id = id, name = data.name, icon = data.icon })
+	local wrapper = addon.functions.createContainer("SimpleGroup", "List")
+	groupCore:AddChild(wrapper)
+	wrapper:SetFullWidth(true)
+	wrapper:SetFullHeight(true)
+
+	local label = AceGUI:Create("Label")
+	label:SetText((buff.name or "") .. " (" .. buffId .. ")")
+	wrapper:AddChild(label)
+
+	addon.db["buffTrackerSounds"][catId] = addon.db["buffTrackerSounds"][catId] or {}
+	addon.db["buffTrackerSoundsEnabled"][catId] = addon.db["buffTrackerSoundsEnabled"][catId] or {}
+
+	local cbElement = addon.functions.createCheckboxAce(L["buffTrackerSoundsEnabled"], addon.db["buffTrackerSoundsEnabled"][catId][buffId], function(_, _, val)
+		addon.db["buffTrackerSoundsEnabled"][catId][buffId] = val
+		container:ReleaseChildren()
+		addon.Aura.functions.buildBuffOptions(container, catId, buffId)
+	end)
+	wrapper:AddChild(cbElement)
+
+	if addon.db["buffTrackerSoundsEnabled"][catId][buffId] then
+		local soundList = {}
+		for sname in pairs(addon.Aura.sounds or {}) do
+			soundList[sname] = sname
 		end
-	end
-	if nil == addon.db["buffTrackerOrder"][catId] then addon.db["buffTrackerOrder"][catId] = {} end
-	local orderIndex = {}
-	for idx, bid in ipairs(addon.db["buffTrackerOrder"][catId]) do
-		orderIndex[bid] = idx
+		local list, order = addon.functions.prepareListForDropdown(soundList)
+		local dropSound = addon.functions.createDropdownAce(L["SoundFile"], list, order, function(self, _, val)
+			addon.db["buffTrackerSounds"][catId][buffId] = val
+			self:SetValue(val)
+			local file = addon.Aura.sounds and addon.Aura.sounds[val]
+			if file then PlaySoundFile(file, "Master") end
+		end)
+		dropSound:SetValue(addon.db["buffTrackerSounds"][catId][buffId])
+		wrapper:AddChild(dropSound)
+		wrapper:AddChild(addon.functions.createSpacerAce())
 	end
 
-	table.sort(buffData, function(a, b)
-		local idxA = orderIndex[a.id] or math.huge
-		local idxB = orderIndex[b.id] or math.huge
-		if idxA ~= idxB then return idxA < idxB end
-		return a.name < b.name
+	local cbMissing, cbAlways
+	cbMissing = addon.functions.createCheckboxAce(L["buffTrackerShowWhenMissing"], buff.showWhenMissing, function(_, _, val)
+		buff.showWhenMissing = val
+		if val then
+			buff.showAlways = false
+			if cbAlways then cbAlways:SetValue(false) end
+		end
+		scanBuffs()
+	end)
+	wrapper:AddChild(cbMissing)
+
+	cbAlways = addon.functions.createCheckboxAce(L["buffTrackerAlwaysShow"], buff.showAlways, function(_, _, val)
+		buff.showAlways = val
+		if val then
+			buff.showWhenMissing = false
+			if cbMissing then cbMissing:SetValue(false) end
+		end
+		scanBuffs()
+	end)
+	wrapper:AddChild(cbAlways)
+
+	local cbGlow = addon.functions.createCheckboxAce(L["buffTrackerGlow"], buff.glow, function(_, _, val)
+		buff.glow = val
+		scanBuffs()
+	end)
+	wrapper:AddChild(cbGlow)
+
+	local typeDrop = addon.functions.createDropdownAce(L["TrackType"], { BUFF = L["Buff"], DEBUFF = L["Debuff"] }, nil, function(self, _, val)
+		buff.trackType = val
+		scanBuffs()
+	end)
+	typeDrop:SetValue(buff.trackType or "BUFF")
+	typeDrop:SetRelativeWidth(0.4)
+	wrapper:AddChild(typeDrop)
+	wrapper:AddChild(addon.functions.createSpacerAce())
+
+	local roleDrop = addon.functions.createDropdownAce(L["ShowForRole"], roleNames, nil, function(self, event, key, checked)
+		buff.allowedRoles = buff.allowedRoles or {}
+		buff.allowedRoles[key] = checked or nil
+		scanBuffs()
+	end)
+	roleDrop:SetMultiselect(true)
+	for r, val in pairs(buff.allowedRoles or {}) do
+		if val then roleDrop:SetItemValue(r, true) end
+	end
+	roleDrop:SetRelativeWidth(0.7)
+	wrapper:AddChild(roleDrop)
+	wrapper:AddChild(addon.functions.createSpacerAce())
+
+	local classDrop = addon.functions.createDropdownAce(L["ShowForClass"], classNames, nil, function(self, event, key, checked)
+		buff.allowedClasses = buff.allowedClasses or {}
+		buff.allowedClasses[key] = checked or nil
+		scanBuffs()
+	end)
+	classDrop:SetMultiselect(true)
+	for c, val in pairs(buff.allowedClasses or {}) do
+		if val then classDrop:SetItemValue(c, true) end
+	end
+	classDrop:SetRelativeWidth(0.7)
+	wrapper:AddChild(classDrop)
+	wrapper:AddChild(addon.functions.createSpacerAce())
+
+	local specDrop = addon.functions.createDropdownAce(L["ShowForSpec"], specNames, specOrder, function(self, event, key, checked)
+		buff.allowedSpecs = buff.allowedSpecs or {}
+		buff.allowedSpecs[key] = checked or nil
+		scanBuffs()
 	end)
 
-	for _, info in ipairs(buffData) do
+	specDrop:SetMultiselect(true)
+	for specID, val in pairs(buff.allowedSpecs or {}) do
+		if val then specDrop:SetItemValue(specID, true) end
+	end
+	specDrop:SetRelativeWidth(0.7)
+	wrapper:AddChild(specDrop)
+	wrapper:AddChild(addon.functions.createSpacerAce())
+
+	-- if IsSpellKnown(buffId) or IsSpellKnownOrOverridesKnown(buffId) then
+	-- 	local cbCast = addon.functions.createCheckboxAce(L["buffTrackerCastOnClick"], buff.castOnClick, function(_, _, val)
+	-- 		buff.castOnClick = val
+	-- 		scanBuffs()
+	-- 	end)
+	-- 	wrapper:AddChild(cbCast)
+	-- end
+
+	buff.altIDs = buff.altIDs or {}
+	for _, altId in ipairs(buff.altIDs) do
 		local row = addon.functions.createContainer("SimpleGroup", "Flow")
-
 		row:SetFullWidth(true)
-
-		local spellIconTexture = info.icon
-		if not spellIconTexture then
-			local spellData = C_Spell.GetSpellInfo(info.id)
-			info.icon = spellData.iconID
-		end
-
-		listGroup:AddChild(row)
-
-		local cbSpell = addon.functions.createCheckboxAce(info.name .. " (" .. info.id .. ")", not addon.db["buffTrackerHidden"][info.id], function(self, _, val)
-			addon.db["buffTrackerHidden"][info.id] = not val
-			if val then
-				updateBuff(catId, info.id)
-			elseif activeBuffFrames[catId] and activeBuffFrames[catId][info.id] then
-				activeBuffFrames[catId][info.id]:Hide()
-				updatePositions(catId)
-			end
-		end)
-		if spellIconTexture then cbSpell:SetImage(spellIconTexture) end
-		cbSpell:SetRelativeWidth(0.6)
-		cbSpell.frame:HookScript("OnEnter", function()
-			GameTooltip:SetOwner(cbSpell.frame, "ANCHOR_RIGHT")
-			GameTooltip:SetSpellByID(info.id)
-			GameTooltip:Show()
-		end)
-		cbSpell.frame:HookScript("OnLeave", function() GameTooltip:Hide() end)
-		row:AddChild(cbSpell)
-
-		local upIcon = AceGUI:Create("Icon")
-		upIcon:SetLabel("")
-		upIcon:SetImage("Interface\\AddOns\\" .. addonName .. "\\Textures\\up.blp")
-		upIcon:SetImageSize(20, 20)
-		upIcon:SetRelativeWidth(0.05)
-		upIcon:SetHeight(20)
-		if #buffData > 1 and info ~= buffData[1] then
-			upIcon:SetCallback("OnClick", function()
-				moveTrackedBuff(catId, info.id, -1)
-				tabContainer:ReleaseChildren()
-				addon.Aura.functions.buildTabContent(tabContainer, catId, scroll, groupTabs)
-				scroll:DoLayout()
-			end)
+		local lbl = AceGUI:Create("Label")
+		local altInfo = C_Spell.GetSpellInfo(altId)
+		if altInfo then
+			lbl:SetText(L["AltSpellIDs"] .. ": " .. altInfo.name .. " (" .. altId .. ")")
 		else
-			upIcon:SetDisabled(true)
+			lbl:SetText(L["AltSpellIDs"] .. ": " .. altId)
 		end
-		row:AddChild(upIcon)
-
-		local downIcon = AceGUI:Create("Icon")
-		downIcon:SetLabel("")
-		downIcon:SetImage("Interface\\AddOns\\" .. addonName .. "\\Textures\\down.blp")
-		downIcon:SetImageSize(20, 20)
-		downIcon:SetRelativeWidth(0.05)
-		downIcon:SetHeight(20)
-		if #buffData > 1 and info ~= buffData[#buffData] then
-			downIcon:SetCallback("OnClick", function()
-				moveTrackedBuff(catId, info.id, 1)
-				tabContainer:ReleaseChildren()
-				addon.Aura.functions.buildTabContent(tabContainer, catId, scroll, groupTabs)
-				scroll:DoLayout()
-			end)
-		else
-			downIcon:SetDisabled(true)
-		end
-		row:AddChild(downIcon)
-
-		local gearIcon = AceGUI:Create("Icon")
-		gearIcon:SetLabel("")
-		gearIcon:SetImage("Interface\\Icons\\INV_Misc_Gear_01")
-		gearIcon:SetImageSize(16, 16)
-		gearIcon:SetRelativeWidth(0.1)
-		gearIcon:SetHeight(16)
-		gearIcon:SetCallback("OnClick", function()
-			if openedFrames[catId] and openedFrames[catId][info.id] then return end
-			openBuffConfig(catId, info.id)
-		end)
-		row:AddChild(gearIcon)
+		lbl:SetRelativeWidth(0.7)
+		row:AddChild(lbl)
 
 		local removeIcon = AceGUI:Create("Icon")
 		removeIcon:SetLabel("")
 		removeIcon:SetImage("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
 		removeIcon:SetImageSize(16, 16)
-		removeIcon:SetRelativeWidth(0.1)
+		removeIcon:SetRelativeWidth(0.3)
 		removeIcon:SetHeight(16)
 		removeIcon:SetCallback("OnClick", function()
-			removeBuff(catId, info.id)
-			tabContainer:ReleaseChildren()
-			addon.Aura.functions.buildTabContent(tabContainer, catId, scroll, groupTabs)
-			scroll:DoLayout()
+			for i, v in ipairs(buff.altIDs) do
+				if v == altId then
+					table.remove(buff.altIDs, i)
+					break
+				end
+			end
+			rebuildAltMapping()
+			container:ReleaseChildren()
+			addon.Aura.functions.buildBuffOptions(container, catId, buffId)
 		end)
 		row:AddChild(removeIcon)
+		wrapper:AddChild(row)
 	end
 
-	addon.Aura.functions.buildCategoryOptions(tabContainer, catId, groupTabs, scroll)
+	local altEdit = addon.functions.createEditboxAce(L["AddAltSpellID"], nil, function(self, _, text)
+		local alt = tonumber(text)
+		if alt then
+			if not tContains(buff.altIDs, alt) then table.insert(buff.altIDs, alt) end
+			rebuildAltMapping()
+			self:SetText("")
+			container:ReleaseChildren()
+			addon.Aura.functions.buildBuffOptions(container, catId, buffId)
+		end
+	end)
+	wrapper:AddChild(altEdit)
 
-	tabContainer:DoLayout()
-	scroll:DoLayout()
+	wrapper:AddChild(addon.functions.createSpacerAce())
+
+	local delBtn = addon.functions.createButtonAce(L["DeleteAura"], 150, function()
+		removeBuff(catId, buffId)
+		refreshTree(catId)
+	end)
+	wrapper:AddChild(delBtn)
 end
 
 function addon.Aura.functions.addBuffTrackerOptions(container)
-	local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
-	scroll:SetFullWidth(true)
-	scroll:SetFullHeight(true)
-	container:AddChild(scroll)
-
 	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
-	scroll:AddChild(wrapper)
+	wrapper:SetFullHeight(true)
+	container:AddChild(wrapper)
 
-	local groupHeader = addon.functions.createContainer("SimpleGroup", "Flow")
-	groupHeader:SetFullWidth(true)
-	wrapper:AddChild(groupHeader)
+	local left = addon.functions.createContainer("SimpleGroup", "Flow")
+	left:SetWidth(300)
+	left:SetFullHeight(true)
+	wrapper:AddChild(left)
 
-	local groupTabs = addon.functions.createContainer("TabGroup", "Flow")
-	groupTabs:SetTabs(getCategoryTabs())
-	groupTabs:SetCallback("OnGroupSelected", function(tabContainer, event, group)
-		selectedCategory = group
-		addon.db["buffTrackerSelectedCategory"] = group
-		tabContainer:ReleaseChildren()
-		addon.Aura.functions.buildTabContent(tabContainer, group, scroll, groupTabs)
+	treeGroup = AceGUI:Create("EQOL_DragTreeGroup")
+	treeGroup:SetFullHeight(true)
+	treeGroup:SetFullWidth(true)
+	treeGroup:SetTreeWidth(200, true)
+	treeGroup:SetTree(getCategoryTree())
+	treeGroup:SetCallback("OnGroupSelected", function(widget, _, value)
+		-- Handle click on pseudo‑node for adding new categories
+		if value == "ADD_CATEGORY" then
+			-- create a new category with default settings
+			local newId = (#addon.db["buffTrackerCategories"] or 0) + 1
+			addon.db["buffTrackerCategories"][newId] = {
+				name = L["NewCategoryName"] or "New",
+				point = "CENTER",
+				x = 0,
+				y = 0,
+				size = 36,
+				direction = "RIGHT",
+				buffs = {},
+			}
+			ensureAnchor(newId)
+			refreshTree(newId) -- rebuild tree and select new node
+			return -- don’t build options for pseudo‑node
+		end
+
+		local catId, _, buffId = strsplit("\001", value)
+		catId = tonumber(catId)
+		selectedCategory = catId
+		addon.db["buffTrackerSelectedCategory"] = catId
+		widget:ReleaseChildren()
+
+		local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
+		scroll:SetFullWidth(true)
+		scroll:SetFullHeight(true)
+		widget:AddChild(scroll)
+
+		if buffId then
+			addon.Aura.functions.buildBuffOptions(scroll, catId, tonumber(buffId))
+		else
+			addon.Aura.functions.buildCategoryOptions(scroll, catId)
+		end
 	end)
-	groupTabs:SetRelativeWidth(0.9)
-	groupHeader:AddChild(groupTabs)
+	treeGroup:SetCallback("OnDragDrop", function(_, _, src, dst) handleDragDrop(src, dst) end)
+	left:AddChild(treeGroup)
 
-	local addIcon = AceGUI:Create("Icon")
-	addIcon:SetImage("Interface\\Buttons\\UI-PlusButton-Up")
-	addIcon:SetImageSize(24, 24)
-	addIcon:SetRelativeWidth(0.1)
-	addIcon:SetCallback("OnClick", function()
-		local newId = (#addon.db["buffTrackerCategories"] or 0) + 1
-		addon.db["buffTrackerCategories"][newId] = {
-			name = "New",
-			point = "CENTER",
-			x = 0,
-			y = 0,
-			size = 36,
-			direction = "RIGHT",
-			trackType = "BUFF",
-			allowedSpecs = {},
-			allowedClasses = {},
-			allowedRoles = {},
-			buffs = {},
-		}
-		ensureAnchor(newId)
-		groupTabs:SetTabs(getCategoryTabs())
-		groupTabs:SelectTab(newId)
-	end)
-	groupHeader:AddChild(addIcon)
-
-	groupTabs:SelectTab(selectedCategory)
-	scroll:DoLayout()
+	local ok = treeGroup:SelectByValue(tostring(selectedCategory))
+	if not ok then
+		-- fallback: pick first root node from current tree
+		local tree = treeGroup.tree
+		if tree and tree[1] and tree[1].value then treeGroup:SelectByValue(tree[1].value) end
+	end
 end
 
 for id in pairs(addon.db["buffTrackerCategories"]) do

@@ -12,6 +12,7 @@
 
 Init.lua
 locales.xml
+..\EnhanceQoL\widgets\DragTreeGroup.lua
 
 #DetailsSkin.lua
 EnhanceQoLAura.lua
