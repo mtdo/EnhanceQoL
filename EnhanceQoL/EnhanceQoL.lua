@@ -1376,22 +1376,6 @@ local function addUnitFrame(container)
 	groupCore:AddChild(sliderName)
 
 	groupCore:AddChild(addon.functions.createSpacerAce())
-
-	local sliderScale
-	local cbScale = addon.functions.createCheckboxAce(L["unitFrameScaleEnable"], addon.db.unitFrameScaleEnabled, function(self, _, v)
-		addon.db.unitFrameScaleEnabled = v
-		if sliderScale then sliderScale:SetDisabled(not v) end
-		addon.functions.updateUnitFrameScale()
-	end)
-	groupCore:AddChild(cbScale)
-
-	sliderScale = addon.functions.createSliderAce(L["unitFrameScale"] .. ": " .. addon.db.unitFrameScale, addon.db.unitFrameScale, 0.5, 2, 0.05, function(self, _, val)
-		addon.db.unitFrameScale = val
-		self:SetLabel(L["unitFrameScale"] .. ": " .. string.format("%.2f", val))
-		addon.functions.updateUnitFrameScale()
-	end)
-	sliderScale:SetDisabled(not addon.db.unitFrameScaleEnabled)
-	groupCore:AddChild(sliderScale)
 end
 
 local function addDynamicFlightFrame(container)
@@ -3193,8 +3177,6 @@ local function initUnitFrame()
 	addon.functions.InitDBValue("hideRaidFrameBuffs", false)
 	addon.functions.InitDBValue("unitFrameTruncateNames", false)
 	addon.functions.InitDBValue("unitFrameMaxNameLength", addon.variables.unitFrameMaxNameLength)
-	addon.functions.InitDBValue("unitFrameScaleEnabled", false)
-	addon.functions.InitDBValue("unitFrameScale", addon.variables.unitFrameScale)
 	if addon.db["hideHitIndicatorPlayer"] then PlayerFrame.PlayerFrameContent.PlayerFrameContentMain.HitIndicator:Hide() end
 
 	if PetHitIndicator then hooksecurefunc(PetHitIndicator, "Show", function(self)
@@ -3236,49 +3218,11 @@ local function initUnitFrame()
 		end
 	end
 
-	local function ApplyFrameSettings(cuf)
-		if addon.db["unitFrameScaleEnabled"] and addon.db["unitFrameScale"] then
-			local scale = addon.db["unitFrameScale"]
-			if not cuf.eqolOrigWidth then
-				cuf.eqolOrigWidth = cuf:GetWidth()
-				cuf.eqolOrigHeight = cuf:GetHeight()
-			end
-			cuf:SetScale(scale)
-			if cuf.eqolOrigWidth and cuf.eqolOrigHeight then cuf:SetSize(cuf.eqolOrigWidth * scale, cuf.eqolOrigHeight * scale) end
-		end
-		TruncateFrameName(cuf)
-	end
+	local function ApplyFrameSettings(cuf) TruncateFrameName(cuf) end
 
 	if CompactUnitFrame_UpdateName then hooksecurefunc("CompactUnitFrame_UpdateName", TruncateFrameName) end
 
 	if DefaultCompactUnitFrameSetup then hooksecurefunc("DefaultCompactUnitFrameSetup", ApplyFrameSettings) end
-
-	function addon.functions.updateUnitFrameScale()
-		if not addon.db["unitFrameScaleEnabled"] then return end
-		local scale = addon.db["unitFrameScale"]
-		for i = 1, 5 do
-			local f = _G["CompactPartyFrameMember" .. i]
-			if f then
-				if not f.eqolOrigWidth then
-					f.eqolOrigWidth = f:GetWidth()
-					f.eqolOrigHeight = f:GetHeight()
-				end
-				f:SetScale(scale)
-				if f.eqolOrigWidth and f.eqolOrigHeight then f:SetSize(f.eqolOrigWidth * scale, f.eqolOrigHeight * scale) end
-			end
-		end
-		for i = 1, 40 do
-			local f = _G["CompactRaidFrame" .. i]
-			if f then
-				if not f.eqolOrigWidth then
-					f.eqolOrigWidth = f:GetWidth()
-					f.eqolOrigHeight = f:GetHeight()
-				end
-				f:SetScale(scale)
-				if f.eqolOrigWidth and f.eqolOrigHeight then f:SetSize(f.eqolOrigWidth * scale, f.eqolOrigHeight * scale) end
-			end
-		end
-	end
 
 	function addon.functions.updateUnitFrameNames()
 		if not addon.db["unitFrameTruncateNames"] then return end
@@ -3303,7 +3247,6 @@ local function initUnitFrame()
 	end
 
 	if addon.db["hideRaidFrameBuffs"] then addon.functions.updateRaidFrameBuffs() end
-	if addon.db["unitFrameScaleEnabled"] then addon.functions.updateUnitFrameScale() end
 	if addon.db["unitFrameTruncateNames"] then addon.functions.updateUnitFrameNames() end
 
 	for _, cbData in ipairs(addon.variables.unitFrameNames) do

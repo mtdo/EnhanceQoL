@@ -516,7 +516,6 @@ addon.variables.durabilityIcon = 136241 -- Anvil Symbol
 addon.variables.durabilityCount = 0
 addon.variables.hookedOrderHall = false
 addon.variables.unitFrameMaxNameLength = 6 -- default truncation length
-addon.variables.unitFrameScale = 1 -- default compact frame scale
 addon.variables.maxLevel = GetMaxLevelForPlayerExpansion()
 addon.variables.statusTable = { groups = {} }
 
