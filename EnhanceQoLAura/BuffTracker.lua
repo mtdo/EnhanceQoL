@@ -168,6 +168,7 @@ local function evaluateGroup(group, aura)
 	if not group then return true end
 	local join = group.join or "AND"
 	local children = group.conditions or {}
+	if #children == 0 then return true end
 	if join == "AND" then
 		for _, child in ipairs(children) do
 			local ok = child.join and evaluateGroup(child, aura) or evaluateCondition(child, aura)
@@ -189,6 +190,18 @@ local function hasMissingCondition(group)
 		if child.join then
 			if hasMissingCondition(child) then return true end
 		elseif child.type == "missing" then
+			return true
+		end
+	end
+	return false
+end
+
+local function hasTimeCondition(group)
+	if not group then return false end
+	for _, child in ipairs(group.conditions or {}) do
+		if child.join then
+			if hasTimeCondition(child) then return true end
+		elseif child.type == "time" then
 			return true
 		end
 	end
@@ -403,7 +416,7 @@ local function updateBuff(catId, id, changedId)
 	local buff = cat and cat.buffs and cat.buffs[id]
 	local key = catId .. ":" .. id
 	local before = timedAuras[key] ~= nil
-	if buff and buff.timeOp and buff.timeVal then
+	if buff and hasTimeCondition(buff.conditions) then
 		timedAuras[key] = { catId = catId, buffId = id }
 	else
 		timedAuras[key] = nil
@@ -1040,6 +1053,11 @@ function addon.Aura.functions.buildBuffOptions(container, catId, buffId)
 				row:SetFullWidth(true)
 				local typeDrop = addon.functions.createDropdownAce(nil, { missing = L["ConditionMissing"], stack = L["ConditionStacks"], time = L["ConditionTime"] }, nil, function(_, _, val)
 					child.type = val
+					if val ~= "missing" and (child.value == nil or type(child.value) ~= "number") then
+						child.value = 0
+					elseif val == "missing" and type(child.value) ~= "boolean" then
+						child.value = true
+					end
 					container:ReleaseChildren()
 					addon.Aura.functions.buildBuffOptions(container, catId, buffId)
 					scanBuffs()
