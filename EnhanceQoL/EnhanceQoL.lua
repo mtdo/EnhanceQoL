@@ -3229,12 +3229,23 @@ local function initUnitFrame()
 		if not addon.db["unitFrameMaxNameLength"] then return end
 		if cuf and cuf.name and cuf.name:GetText() then
 			local name = cuf.name:GetText()
-			if #name > addon.db["unitFrameMaxNameLength"] then cuf.name:SetText(strsub(name, 1, addon.db["unitFrameMaxNameLength"])) end
+			-- Remove server names before truncation
+			local shortName = strsplit("-", name)
+			if #shortName > addon.db["unitFrameMaxNameLength"] then shortName = strsub(shortName, 1, addon.db["unitFrameMaxNameLength"]) end
+			if shortName ~= name then cuf.name:SetText(shortName) end
 		end
 	end
 
 	local function ApplyFrameSettings(cuf)
-		if addon.db["unitFrameScaleEnabled"] and addon.db["unitFrameScale"] then cuf:SetScale(addon.db["unitFrameScale"]) end
+		if addon.db["unitFrameScaleEnabled"] and addon.db["unitFrameScale"] then
+			local scale = addon.db["unitFrameScale"]
+			if not cuf.eqolOrigWidth then
+				cuf.eqolOrigWidth = cuf:GetWidth()
+				cuf.eqolOrigHeight = cuf:GetHeight()
+			end
+			cuf:SetScale(scale)
+			if cuf.eqolOrigWidth and cuf.eqolOrigHeight then cuf:SetSize(cuf.eqolOrigWidth * scale, cuf.eqolOrigHeight * scale) end
+		end
 		TruncateFrameName(cuf)
 	end
 
@@ -3244,13 +3255,28 @@ local function initUnitFrame()
 
 	function addon.functions.updateUnitFrameScale()
 		if not addon.db["unitFrameScaleEnabled"] then return end
+		local scale = addon.db["unitFrameScale"]
 		for i = 1, 5 do
 			local f = _G["CompactPartyFrameMember" .. i]
-			if f then f:SetScale(addon.db["unitFrameScale"]) end
+			if f then
+				if not f.eqolOrigWidth then
+					f.eqolOrigWidth = f:GetWidth()
+					f.eqolOrigHeight = f:GetHeight()
+				end
+				f:SetScale(scale)
+				if f.eqolOrigWidth and f.eqolOrigHeight then f:SetSize(f.eqolOrigWidth * scale, f.eqolOrigHeight * scale) end
+			end
 		end
 		for i = 1, 40 do
 			local f = _G["CompactRaidFrame" .. i]
-			if f then f:SetScale(addon.db["unitFrameScale"]) end
+			if f then
+				if not f.eqolOrigWidth then
+					f.eqolOrigWidth = f:GetWidth()
+					f.eqolOrigHeight = f:GetHeight()
+				end
+				f:SetScale(scale)
+				if f.eqolOrigWidth and f.eqolOrigHeight then f:SetSize(f.eqolOrigWidth * scale, f.eqolOrigHeight * scale) end
+			end
 		end
 	end
 
