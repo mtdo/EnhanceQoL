@@ -3173,34 +3173,28 @@ local function initUnitFrame()
 	end)
 	addon.functions.togglePlayerFrame(addon.db["hidePlayerFrame"])
 
-	local function handleRaidFrameBuffs(frame)
-		if type(frame) ~= "table" or type(frame.GetName) ~= "function" then return end
-
-		local ok, frameName = pcall(frame.GetName, frame)
-		if not ok or not frameName then return end
-
-		for i = 1, 8 do
-			local buffFrame = _G[frameName .. "Buff" .. i]
-			if buffFrame then buffFrame:SetShown(not addon.db["hideRaidFrameBuffs"]) end
+	local function DisableBlizzBuffs(cuf)
+		if addon.db["hideRaidFrameBuffs"] then
+			if not cuf.optionTable then return end
+			if cuf.optionTable.displayBuffs then
+				cuf.optionTable.displayBuffs = false
+				CompactUnitFrame_UpdateAuras(cuf) -- entfernt sofort bestehende Buff-Buttons
+			end
 		end
 	end
-
+	hooksecurefunc("CompactUnitFrame_SetUpFrame", DisableBlizzBuffs)
 	function addon.functions.updateRaidFrameBuffs()
 		for i = 1, 5 do
 			local f = _G["CompactPartyFrameMember" .. i]
-			if f then handleRaidFrameBuffs(f) end
+			if f then DisableBlizzBuffs(f) end
 		end
 		for i = 1, 40 do
 			local f = _G["CompactRaidFrame" .. i]
-			if f then handleRaidFrameBuffs(f) end
+			if f then DisableBlizzBuffs(f) end
 		end
 	end
 
-	if addon.db["hideRaidFrameBuffs"] then
-		if DefaultCompactUnitFrameSetup then hooksecurefunc("DefaultCompactUnitFrameSetup", handleRaidFrameBuffs) end
-		if CompactUnitFrame_UpdateAuras then hooksecurefunc("CompactUnitFrame_UpdateAuras", handleRaidFrameBuffs) end
-		addon.functions.updateRaidFrameBuffs()
-	end
+	if addon.db["hideRaidFrameBuffs"] then addon.functions.updateRaidFrameBuffs() end
 
 	for _, cbData in ipairs(addon.variables.unitFrameNames) do
 		if cbData.var and cbData.name then
