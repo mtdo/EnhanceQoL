@@ -31,12 +31,12 @@ local function ensureIcon(frame, tracker, index)
 		tex:SetAllPoints(iconFrame)
 		iconFrame.icon = tex
 
-                local cd = CreateFrame("Cooldown", nil, iconFrame, "CooldownFrameTemplate")
-                cd:SetAllPoints(iconFrame)
-                cd:SetDrawEdge(false)
-                cd:SetDrawBling(false)
-                cd:SetHideCountdownNumbers(true)
-                iconFrame.cd = cd
+		local cd = CreateFrame("Cooldown", nil, iconFrame, "CooldownFrameTemplate")
+		cd:SetAllPoints(iconFrame)
+		cd:SetDrawEdge(false)
+		cd:SetDrawBling(false)
+		cd:SetHideCountdownNumbers(true)
+		iconFrame.cd = cd
 
 		local timer = iconFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 		timer:SetPoint("BOTTOMRIGHT", iconFrame, "BOTTOMRIGHT", -1, 1)
@@ -46,16 +46,16 @@ local function ensureIcon(frame, tracker, index)
 
 		pool[index] = iconFrame
 	end
-        local size = addon.db.unitFrameAuraIconSize or ICON_SIZE
-        pool[index]:SetSize(size, size)
-        pool[index].time:SetFont(addon.variables.defaultFont, size * 0.6, "OUTLINE")
-        if addon.db.unitFrameAuraShowSwipe then
-                pool[index].cd:SetDrawSwipe(true)
-                pool[index].cd:SetSwipeColor(0, 0, 0, 0.6)
-        else
-                pool[index].cd:SetDrawSwipe(false)
-        end
-        return pool[index]
+	local size = addon.db.unitFrameAuraIconSize or ICON_SIZE
+	pool[index]:SetSize(size, size)
+	pool[index].time:SetFont(addon.variables.defaultFont, size * 0.6, "OUTLINE")
+	if addon.db.unitFrameAuraShowSwipe then
+		pool[index].cd:SetDrawSwipe(true)
+		pool[index].cd:SetSwipeColor(0, 0, 0, 0.6)
+	else
+		pool[index].cd:SetDrawSwipe(false)
+	end
+	return pool[index]
 end
 
 local function hideUnusedIcons(frame, tracker, used)
@@ -161,42 +161,42 @@ local function updateFrameTimes(frame)
 	end
 end
 
-local function manageTicker()
-	if timeTicker then
-		timeTicker:Cancel()
-		timeTicker = nil
-	end
+-- local function manageTicker()
+-- 	if timeTicker then
+-- 		timeTicker:Cancel()
+-- 		timeTicker = nil
+-- 	end
 
-	local needTicker = addon.db.unitFrameAuraShowTime
-	if not needTicker then
-		for _, tracker in pairs(addon.db.unitFrameAuraTrackers or {}) do
-			for _, data in pairs(tracker.spells or {}) do
-				if data.showTimer then
-					needTicker = true
-					break
-				end
-			end
-			if needTicker then break end
-		end
-	end
+-- 	local needTicker = addon.db.unitFrameAuraShowTime
+-- 	if not needTicker then
+-- 		for _, tracker in pairs(addon.db.unitFrameAuraTrackers or {}) do
+-- 			for _, data in pairs(tracker.spells or {}) do
+-- 				if data.showTimer then
+-- 					needTicker = true
+-- 					break
+-- 				end
+-- 			end
+-- 			if needTicker then break end
+-- 		end
+-- 	end
 
-	if needTicker then
-		timeTicker = C_Timer.NewTicker(1, function()
-			if CompactRaidFrameContainer and CompactRaidFrameContainer.GetFrames then
-				for frame in CompactRaidFrameContainer:GetFrames() do
-					updateFrameTimes(frame)
-				end
-			end
-			for i = 1, 5 do
-				local f = _G["CompactPartyFrameMember" .. i]
-				if f then updateFrameTimes(f) end
-			end
-		end)
-	end
-end
+-- 	if needTicker then
+-- 		timeTicker = C_Timer.NewTicker(1, function()
+-- 			if CompactRaidFrameContainer and CompactRaidFrameContainer.GetFrames then
+-- 				for frame in CompactRaidFrameContainer:GetFrames() do
+-- 					updateFrameTimes(frame)
+-- 				end
+-- 			end
+-- 			for i = 1, 5 do
+-- 				local f = _G["CompactPartyFrameMember" .. i]
+-- 				if f then updateFrameTimes(f) end
+-- 			end
+-- 		end)
+-- 	end
+-- end
 
 local function RefreshAll()
-	manageTicker()
+	-- manageTicker()
 	if CompactRaidFrameContainer and CompactRaidFrameContainer.GetFrames then
 		for frame in CompactRaidFrameContainer:GetFrames() do
 			UpdateTrackedBuffs(frame, frame.unit)
@@ -216,7 +216,7 @@ hooksecurefunc("CompactUnitFrame_UpdateAuras", function(frame)
 	local unit = frame and frame.displayedUnit or frame.unit
 	if unit then UpdateTrackedBuffs(frame, unit) end
 end)
-manageTicker()
+-- manageTicker()
 
 local function addSpell(tId, spellId)
 	local info = C_Spell.GetSpellInfo(spellId)
@@ -328,9 +328,9 @@ local function getTrackerTree()
 end
 
 function refreshTree(selectValue)
-        if not trackerTreeGroup then return end
-        trackerTreeGroup:SetTree(getTrackerTree())
-        if selectValue then trackerTreeGroup:SelectByValue(tostring(selectValue)) end
+	if not trackerTreeGroup then return end
+	trackerTreeGroup:SetTree(getTrackerTree())
+	if selectValue then trackerTreeGroup:SelectByValue(tostring(selectValue)) end
 end
 
 local function buildTrackerOptions(container, id)
@@ -369,10 +369,24 @@ local function buildTrackerOptions(container, id)
 	dirDrop:SetValue(tracker.direction or "RIGHT")
 	core:AddChild(dirDrop)
 
-       local function refresh()
-               RefreshAll()
-               refreshTree(id)
-       end
+	local function refresh()
+		RefreshAll()
+		refreshTree(id)
+	end
+
+	local sizeSlider = addon.functions.createSliderAce(
+		L["buffTrackerIconSizeHeadline"] .. ": " .. (addon.db.unitFrameAuraIconSize or ICON_SIZE),
+		addon.db.unitFrameAuraIconSize or ICON_SIZE,
+		8,
+		64,
+		1,
+		function(self, _, val)
+			addon.db.unitFrameAuraIconSize = val
+			self:SetLabel(L["buffTrackerIconSizeHeadline"] .. ": " .. val)
+			RefreshAll()
+		end
+	)
+	core:AddChild(sizeSlider)
 
 	local edit = addon.functions.createEditboxAce(L["AddSpellID"], nil, function(self, _, text)
 		local sid = tonumber(text)
@@ -383,7 +397,6 @@ local function buildTrackerOptions(container, id)
 		self:SetText("")
 	end)
 	core:AddChild(edit)
-
 
 	local nameEdit = addon.functions.createEditboxAce(L["TrackerName"], tracker.name, function(_, _, text)
 		if text ~= "" then tracker.name = text end
@@ -415,31 +428,37 @@ local function buildSpellOptions(container, tId, spellId)
 
 	local cb = addon.functions.createCheckboxAce(L["ShowTimeRemaining"], info.showTimer == nil and addon.db.unitFrameAuraShowTime or info.showTimer, function(_, _, val)
 		info.showTimer = val
-		manageTicker()
+		-- manageTicker()
 		RefreshAll()
 	end)
 	core:AddChild(cb)
 
-       local delBtn = addon.functions.createButtonAce(L["DeleteAura"], 150, function()
-               local auraName = info.name or tostring(spellId)
-               StaticPopupDialogs["EQOL_DELETE_UNITFRAME_AURA"] = StaticPopupDialogs["EQOL_DELETE_UNITFRAME_AURA"]
-                       or {
-                               text = L["DeleteAuraConfirm"],
-                               button1 = YES,
-                               button2 = CANCEL,
-                               timeout = 0,
-                               whileDead = true,
-                               hideOnEscape = true,
-                               preferredIndex = 3,
-                       }
-               StaticPopupDialogs["EQOL_DELETE_UNITFRAME_AURA"].OnAccept = function()
-                       removeSpell(tId, spellId)
-                       refreshTree(tId)
-                       container:ReleaseChildren()
-               end
-               StaticPopup_Show("EQOL_DELETE_UNITFRAME_AURA", auraName)
-       end)
-       core:AddChild(delBtn)
+	local swipeCB = addon.functions.createCheckboxAce(L["ShowCooldownSwipe"], addon.db.unitFrameAuraShowSwipe, function(_, _, val)
+		info.showSwipe = val
+		RefreshAll()
+	end)
+	core:AddChild(swipeCB)
+
+	local delBtn = addon.functions.createButtonAce(L["DeleteAura"], 150, function()
+		local auraName = info.name or tostring(spellId)
+		StaticPopupDialogs["EQOL_DELETE_UNITFRAME_AURA"] = StaticPopupDialogs["EQOL_DELETE_UNITFRAME_AURA"]
+			or {
+				text = L["DeleteAuraConfirm"],
+				button1 = YES,
+				button2 = CANCEL,
+				timeout = 0,
+				whileDead = true,
+				hideOnEscape = true,
+				preferredIndex = 3,
+			}
+		StaticPopupDialogs["EQOL_DELETE_UNITFRAME_AURA"].OnAccept = function()
+			removeSpell(tId, spellId)
+			refreshTree(tId)
+			container:ReleaseChildren()
+		end
+		StaticPopup_Show("EQOL_DELETE_UNITFRAME_AURA", auraName)
+	end)
+	core:AddChild(delBtn)
 end
 
 function addon.Aura.functions.addUnitFrameAuraOptions(container)
@@ -482,36 +501,6 @@ function addon.Aura.functions.addUnitFrameAuraOptions(container)
 	trackerTreeGroup:SetCallback("OnDragDrop", function(_, _, src, dst) handleDragDrop(src, dst) end)
 
 	wrapper:AddChild(trackerTreeGroup)
-
-	local global = addon.functions.createContainer("InlineGroup", "Flow")
-	wrapper:AddChild(global)
-
-	local sizeSlider = addon.functions.createSliderAce(
-		L["buffTrackerIconSizeHeadline"] .. ": " .. (addon.db.unitFrameAuraIconSize or ICON_SIZE),
-		addon.db.unitFrameAuraIconSize or ICON_SIZE,
-		8,
-		64,
-		1,
-		function(self, _, val)
-			addon.db.unitFrameAuraIconSize = val
-			self:SetLabel(L["buffTrackerIconSizeHeadline"] .. ": " .. val)
-			RefreshAll()
-		end
-	)
-	global:AddChild(sizeSlider)
-
-        local timeCB = addon.functions.createCheckboxAce(L["ShowTimeRemaining"], addon.db.unitFrameAuraShowTime, function(_, _, val)
-                addon.db.unitFrameAuraShowTime = val
-                manageTicker()
-                RefreshAll()
-        end)
-        global:AddChild(timeCB)
-
-        local swipeCB = addon.functions.createCheckboxAce(L["ShowCooldownSwipe"], addon.db.unitFrameAuraShowSwipe, function(_, _, val)
-                addon.db.unitFrameAuraShowSwipe = val
-                RefreshAll()
-        end)
-        global:AddChild(swipeCB)
 
 	trackerTreeGroup:SelectByValue(tostring(selectedTracker))
 end
