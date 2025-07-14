@@ -128,6 +128,7 @@ addon.functions.InitDBValue("unitFrameAuraAnchor", "CENTER")
 addon.functions.InitDBValue("unitFrameAuraDirection", "RIGHT")
 addon.functions.InitDBValue("unitFrameAuraIconSize", 20)
 addon.functions.InitDBValue("unitFrameAuraShowTime", false)
+addon.functions.InitDBValue("unitFrameAuraShowSwipe", true)
 addon.functions.InitDBValue("unitFrameAuraTrackers", nil)
 addon.functions.InitDBValue("unitFrameAuraSelectedTracker", 1)
 

@@ -31,12 +31,12 @@ local function ensureIcon(frame, tracker, index)
 		tex:SetAllPoints(iconFrame)
 		iconFrame.icon = tex
 
-		local cd = CreateFrame("Cooldown", nil, iconFrame, "CooldownFrameTemplate")
-		cd:SetAllPoints(iconFrame)
-		cd:SetDrawEdge(false)
-		cd:SetDrawBling(false)
-		cd:SetSwipeColor(0, 0, 0, 0.6)
-		iconFrame.cd = cd
+                local cd = CreateFrame("Cooldown", nil, iconFrame, "CooldownFrameTemplate")
+                cd:SetAllPoints(iconFrame)
+                cd:SetDrawEdge(false)
+                cd:SetDrawBling(false)
+                cd:SetHideCountdownNumbers(true)
+                iconFrame.cd = cd
 
 		local timer = iconFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 		timer:SetPoint("BOTTOMRIGHT", iconFrame, "BOTTOMRIGHT", -1, 1)
@@ -46,8 +46,16 @@ local function ensureIcon(frame, tracker, index)
 
 		pool[index] = iconFrame
 	end
-	pool[index]:SetSize(addon.db.unitFrameAuraIconSize or ICON_SIZE, addon.db.unitFrameAuraIconSize or ICON_SIZE)
-	return pool[index]
+        local size = addon.db.unitFrameAuraIconSize or ICON_SIZE
+        pool[index]:SetSize(size, size)
+        pool[index].time:SetFont(addon.variables.defaultFont, size * 0.6, "OUTLINE")
+        if addon.db.unitFrameAuraShowSwipe then
+                pool[index].cd:SetDrawSwipe(true)
+                pool[index].cd:SetSwipeColor(0, 0, 0, 0.6)
+        else
+                pool[index].cd:SetDrawSwipe(false)
+        end
+        return pool[index]
 end
 
 local function hideUnusedIcons(frame, tracker, used)
@@ -492,11 +500,18 @@ function addon.Aura.functions.addUnitFrameAuraOptions(container)
 	)
 	global:AddChild(sizeSlider)
 
-	local timeCB = addon.functions.createCheckboxAce(L["ShowTimeRemaining"], addon.db.unitFrameAuraShowTime, function(_, _, val)
-		addon.db.unitFrameAuraShowTime = val
-		RefreshAll()
-	end)
-	global:AddChild(timeCB)
+        local timeCB = addon.functions.createCheckboxAce(L["ShowTimeRemaining"], addon.db.unitFrameAuraShowTime, function(_, _, val)
+                addon.db.unitFrameAuraShowTime = val
+                manageTicker()
+                RefreshAll()
+        end)
+        global:AddChild(timeCB)
+
+        local swipeCB = addon.functions.createCheckboxAce(L["ShowCooldownSwipe"], addon.db.unitFrameAuraShowSwipe, function(_, _, val)
+                addon.db.unitFrameAuraShowSwipe = val
+                RefreshAll()
+        end)
+        global:AddChild(swipeCB)
 
 	trackerTreeGroup:SelectByValue(tostring(selectedTracker))
 end
