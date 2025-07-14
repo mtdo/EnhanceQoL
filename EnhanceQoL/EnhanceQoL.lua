@@ -1427,6 +1427,7 @@ local function addUnitFrame(container)
 		end, nil)
 		groupCoreUF:AddChild(cbHidePlayerFrame)
 	end
+	scroll:DoLayout()
 end
 
 local function addDynamicFlightFrame(container)
