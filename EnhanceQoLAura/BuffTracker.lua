@@ -443,7 +443,7 @@ local function updateBuff(catId, id, changedId)
 
 	local condOk = evaluateGroup(buff and buff.conditions, aura)
 	if aura == nil and not hasMissingCondition(buff and buff.conditions) then condOk = false end
-	if not condOk then aura = nil end
+	local displayAura = condOk and aura or nil
 
 	activeBuffFrames[catId] = activeBuffFrames[catId] or {}
 	local frame = activeBuffFrames[catId][id]
@@ -491,8 +491,8 @@ local function updateBuff(catId, id, changedId)
 		end
 		frame:Show()
 	elseif condOk then
-		if aura then
-			local icon = buff and buff.icon or aura.icon
+		if displayAura then
+			local icon = buff and buff.icon or displayAura.icon
 			local showTimer = buff and buff.showTimerText
 			if showTimer == nil then showTimer = addon.db["buffTrackerShowTimerText"] end
 			if showTimer == nil then showTimer = true end
@@ -505,8 +505,8 @@ local function updateBuff(catId, id, changedId)
 			frame.icon:SetTexture(icon)
 			frame.icon:SetDesaturated(false)
 			frame.icon:SetAlpha(1)
-			if aura.duration and aura.duration > 0 then
-				frame.cd:SetCooldown(aura.expirationTime - aura.duration, aura.duration)
+			if displayAura.duration and displayAura.duration > 0 then
+				frame.cd:SetCooldown(displayAura.expirationTime - displayAura.duration, displayAura.duration)
 			else
 				frame.cd:Clear()
 			end
@@ -548,39 +548,10 @@ local function updateBuff(catId, id, changedId)
 			frame:Show()
 		end
 	else
-		if aura then
-			local icon = buff and buff.icon or aura.icon
-			local showTimer = buff and buff.showTimerText
-			if showTimer == nil then showTimer = addon.db["buffTrackerShowTimerText"] end
-			if showTimer == nil then showTimer = true end
-			if not frame then
-				frame = createBuffFrame(icon, ensureAnchor(catId), getCategory(catId).size, false, id, showTimer)
-				activeBuffFrames[catId][id] = frame
-			else
-				frame.cd:SetHideCountdownNumbers(not showTimer)
-			end
-			frame.icon:SetTexture(icon)
-			frame.icon:SetDesaturated(false)
-			frame.icon:SetAlpha(1)
-			if aura.duration and aura.duration > 0 then
-				frame.cd:SetCooldown(aura.expirationTime - aura.duration, aura.duration)
-			else
-				frame.cd:Clear()
-			end
-			if not wasShown then playBuffSound(catId, id, triggeredId) end
-			frame.isActive = true
-			if buff.glow then
-				ActionButton_ShowOverlayGlow(frame)
-			else
-				ActionButton_HideOverlayGlow(frame)
-			end
-			frame:Show()
-		else
-			if frame then
-				frame.isActive = false
-				ActionButton_HideOverlayGlow(frame)
-				frame:Hide()
-			end
+		if frame then
+			frame.isActive = false
+			ActionButton_HideOverlayGlow(frame)
+			frame:Hide()
 		end
 	end
 
