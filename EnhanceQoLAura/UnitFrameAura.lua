@@ -82,7 +82,7 @@ local function getMergedAuraIDs()
 	local merged = {}
 	for id, name in pairs(addon.Aura.defaults.defensiveSpellIDs or {}) do
 		local info = C_Spell.GetSpellInfo(id)
-		merged[id] = string.format("%s (%d)", info or name or "Spell", id)
+		merged[id] = string.format("%s (%d)", info.name or name or "Spell", id)
 	end
 	for id, val in pairs(addon.db.unitFrameAuraIDs or {}) do
 		merged[id] = val
