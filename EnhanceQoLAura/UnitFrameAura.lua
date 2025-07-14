@@ -15,7 +15,7 @@ local trackerTreeGroup
 local selectedTracker = addon.db.unitFrameAuraSelectedTracker or 1
 
 local ICON_SIZE = 20
-local ICON_SPACING = 2
+local ICON_SPACING = 0
 local timeTicker
 
 local function formatTimeShort(sec)
