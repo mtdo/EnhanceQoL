@@ -50,7 +50,7 @@ local function UpdateTrackedBuffs(frame, unit)
 
 	local index = 0
 	AuraUtil.ForEachAura(unit, "HELPFUL", nil, function(_, icon, _, _, _, _, _, _, _, spellId)
-		if addon.db.unitFrameAuraIDs[spellId] then
+		if addon.db.unitFrameAuraIDs[spellId] or addon.Aura.defaults.defensiveSpellIDs[spellId] then
 			index = index + 1
 			local iconFrame = ensureIcon(frame, index)
 			iconFrame.icon:SetTexture(icon)
@@ -78,6 +78,18 @@ end
 
 addon.Aura.unitFrame.RefreshAll = RefreshAll
 
+local function getMergedAuraIDs()
+	local merged = {}
+	for id, name in pairs(addon.Aura.defaults.defensiveSpellIDs or {}) do
+		local info = C_Spell.GetSpellInfo(id)
+		merged[id] = string.format("%s (%d)", info or name or "Spell", id)
+	end
+	for id, val in pairs(addon.db.unitFrameAuraIDs or {}) do
+		merged[id] = val
+	end
+	return merged
+end
+
 -- Hook the global update function once; Blizzard calls this for every CompactUnitFrame
 hooksecurefunc("CompactUnitFrame_UpdateAuras", function(frame)
 	-- 'displayedUnit' is the unit token Blizzard uses; fall back to frame.unit
@@ -92,7 +104,7 @@ function addon.Aura.functions.addUnitFrameAuraOptions(container)
 
 	local drop
 	local function refresh()
-		local list, order = addon.functions.prepareListForDropdown(addon.db.unitFrameAuraIDs)
+		local list, order = addon.functions.prepareListForDropdown(getMergedAuraIDs())
 		drop:SetList(list, order)
 		drop:SetValue(nil)
 		RefreshAll()
@@ -111,7 +123,7 @@ function addon.Aura.functions.addUnitFrameAuraOptions(container)
 	end)
 	wrapper:AddChild(edit)
 
-	local list, order = addon.functions.prepareListForDropdown(addon.db.unitFrameAuraIDs)
+	local list, order = addon.functions.prepareListForDropdown(getMergedAuraIDs())
 	drop = addon.functions.createDropdownAce(L["TrackedAuras"], list, order, nil)
 	wrapper:AddChild(drop)
 

@@ -12,6 +12,38 @@ addon.Aura.variables = {}
 addon.Aura.sounds = {}
 addon.LAura = {} -- Locales for aura
 
+-- Default defensive abilities tracked on unit frames
+addon.Aura.defaults = {}
+-- IDs here are placeholders and should be replaced with actual spell IDs
+addon.Aura.defaults.defensiveSpellIDs = {
+	-- Warrior
+	[999001] = "Shield Wall",
+	-- Paladin
+	[999002] = "Divine Shield",
+	-- Death Knight
+	[999003] = "Icebound Fortitude",
+	-- Druid
+	[999004] = "Barkskin",
+	-- Demon Hunter
+	[999005] = "Blur",
+	-- Evoker
+	[999006] = "Obsidian Scales",
+	-- Hunter
+	[999007] = "Survival of the Fittest",
+	-- Mage
+	[999008] = "Ice Block",
+	-- Monk
+	[999009] = "Fortifying Brew",
+	-- Priest
+	[999010] = "Dispersion",
+	-- Rogue
+	[999011] = "Evasion",
+	-- Shaman
+	[999012] = "Astral Shift",
+	-- Warlock
+	[999013] = "Unending Resolve",
+}
+
 addon.functions.InitDBValue("AuraCooldownTrackerBarHeight", 30)
 addon.functions.InitDBValue("AuraSafedZones", {})
 addon.functions.InitDBValue("personalResourceBarHealth", {})
