@@ -24,7 +24,9 @@ local function ensureIcon(frame, tracker, index)
 	local pool = frame.EQOLTrackedAura[tracker]
 	if not pool[index] then
 		local iconFrame = CreateFrame("Frame", nil, frame)
-		iconFrame:SetSize(addon.db.unitFrameAuraIconSize or ICON_SIZE, addon.db.unitFrameAuraIconSize or ICON_SIZE)
+		local trackerData = addon.db.unitFrameAuraTrackers and addon.db.unitFrameAuraTrackers[tracker] or {}
+		local size = trackerData.iconSize or addon.db.unitFrameAuraIconSize or ICON_SIZE
+		iconFrame:SetSize(size, size)
 		iconFrame:SetFrameLevel(frame:GetFrameLevel() + 10)
 
 		local tex = iconFrame:CreateTexture(nil, "OVERLAY")
@@ -46,15 +48,10 @@ local function ensureIcon(frame, tracker, index)
 
 		pool[index] = iconFrame
 	end
-	local size = addon.db.unitFrameAuraIconSize or ICON_SIZE
+	local trackerData = addon.db.unitFrameAuraTrackers and addon.db.unitFrameAuraTrackers[tracker] or {}
+	local size = trackerData.iconSize or addon.db.unitFrameAuraIconSize or ICON_SIZE
 	pool[index]:SetSize(size, size)
 	pool[index].time:SetFont(addon.variables.defaultFont, size * 0.6, "OUTLINE")
-	if addon.db.unitFrameAuraShowSwipe then
-		pool[index].cd:SetDrawSwipe(true)
-		pool[index].cd:SetSwipeColor(0, 0, 0, 0.6)
-	else
-		pool[index].cd:SetDrawSwipe(false)
-	end
 	return pool[index]
 end
 
@@ -67,8 +64,8 @@ end
 
 local function layoutIcons(frame, tracker, count)
 	if not frame.EQOLTrackedAura or not frame.EQOLTrackedAura[tracker] then return end
-	local size = addon.db.unitFrameAuraIconSize or ICON_SIZE
 	local trackerData = addon.db.unitFrameAuraTrackers and addon.db.unitFrameAuraTrackers[tracker] or {}
+	local size = trackerData.iconSize or addon.db.unitFrameAuraIconSize or ICON_SIZE
 	local anchor = trackerData.anchor or "CENTER"
 	local dir = trackerData.direction or "RIGHT"
 	local step = size + ICON_SPACING
@@ -123,14 +120,15 @@ local function UpdateTrackedBuffs(frame, unit)
 
 				local showTime = data.showTimer
 				if showTime == nil then showTime = addon.db.unitFrameAuraShowTime end
+				iconFrame.cd:SetHideCountdownNumbers(not showTime)
 				iconFrame.showTimer = showTime
-				if showTime and aura.expirationTime and aura.duration and aura.duration > 0 then
-					local remain = math.floor(aura.expirationTime - GetTime())
-					iconFrame.time:SetText(remain)
-					iconFrame.time:Show()
-				else
-					iconFrame.time:Hide()
-				end
+				if iconFrame.time then iconFrame.time:Hide() end
+
+				local showSwipe = data.showSwipe
+				if showSwipe == nil then showSwipe = addon.db.unitFrameAuraShowSwipe end
+				iconFrame.cd:SetDrawSwipe(showSwipe)
+				if showSwipe then iconFrame.cd:SetSwipeColor(0, 0, 0, 0.6) end
+
 				iconFrame:Show()
 			end
 		end, true)
@@ -375,13 +373,13 @@ local function buildTrackerOptions(container, id)
 	end
 
 	local sizeSlider = addon.functions.createSliderAce(
-		L["buffTrackerIconSizeHeadline"] .. ": " .. (addon.db.unitFrameAuraIconSize or ICON_SIZE),
-		addon.db.unitFrameAuraIconSize or ICON_SIZE,
+		L["buffTrackerIconSizeHeadline"] .. ": " .. (tracker.iconSize or addon.db.unitFrameAuraIconSize or ICON_SIZE),
+		tracker.iconSize or addon.db.unitFrameAuraIconSize or ICON_SIZE,
 		8,
 		64,
 		1,
 		function(self, _, val)
-			addon.db.unitFrameAuraIconSize = val
+			tracker.iconSize = val
 			self:SetLabel(L["buffTrackerIconSizeHeadline"] .. ": " .. val)
 			RefreshAll()
 		end
@@ -428,12 +426,11 @@ local function buildSpellOptions(container, tId, spellId)
 
 	local cb = addon.functions.createCheckboxAce(L["ShowTimeRemaining"], info.showTimer == nil and addon.db.unitFrameAuraShowTime or info.showTimer, function(_, _, val)
 		info.showTimer = val
-		-- manageTicker()
 		RefreshAll()
 	end)
 	core:AddChild(cb)
 
-	local swipeCB = addon.functions.createCheckboxAce(L["ShowCooldownSwipe"], addon.db.unitFrameAuraShowSwipe, function(_, _, val)
+	local swipeCB = addon.functions.createCheckboxAce(L["ShowCooldownSwipe"], info.showSwipe == nil and addon.db.unitFrameAuraShowSwipe or info.showSwipe, function(_, _, val)
 		info.showSwipe = val
 		RefreshAll()
 	end)
@@ -474,7 +471,13 @@ function addon.Aura.functions.addUnitFrameAuraOptions(container)
 	trackerTreeGroup:SetCallback("OnGroupSelected", function(widget, _, value)
 		if value == "ADD_TRACKER" then
 			local newId = (#addon.db.unitFrameAuraTrackers or 0) + 1
-			addon.db.unitFrameAuraTrackers[newId] = { name = "Tracker " .. newId, anchor = "CENTER", direction = "RIGHT", spells = {} }
+			addon.db.unitFrameAuraTrackers[newId] = {
+				name = "Tracker " .. newId,
+				anchor = "CENTER",
+				direction = "RIGHT",
+				iconSize = addon.db.unitFrameAuraIconSize or ICON_SIZE,
+				spells = {},
+			}
 			selectedTracker = newId
 			addon.db.unitFrameAuraSelectedTracker = newId
 			refreshTree(newId)

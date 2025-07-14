@@ -1,9 +1,9 @@
 local parentAddonName = "EnhanceQoL"
 local addonName, addon = ...
 if _G[parentAddonName] then
-        addon = _G[parentAddonName]
+	addon = _G[parentAddonName]
 else
-        error(parentAddonName .. " is not loaded")
+	error(parentAddonName .. " is not loaded")
 end
 
 -- Ensure the order table exists before we manipulate it later
@@ -15,6 +15,7 @@ if not addon.db["unitFrameAuraTrackers"] then
 			name = "Default",
 			anchor = addon.db.unitFrameAuraAnchor or "CENTER",
 			direction = addon.db.unitFrameAuraDirection or "RIGHT",
+			iconSize = addon.db.unitFrameAuraIconSize or 20,
 			spells = addon.db.unitFrameAuraIDs or { -- [235313] = "Blazing Barrier", -- Mage
 				[1022] = "Blessing of Protection", -- Paladin
 				[6940] = "Blessing of Sacrifice", -- Paladin
@@ -72,6 +73,7 @@ end
 for tId, tracker in pairs(addon.db["unitFrameAuraTrackers"]) do
 	if not tracker.anchor then tracker.anchor = "CENTER" end
 	if not tracker.direction then tracker.direction = "RIGHT" end
+	if not tracker.iconSize then tracker.iconSize = addon.db.unitFrameAuraIconSize or 20 end
 	if not tracker.spells then tracker.spells = {} end
 	addon.db.unitFrameAuraOrder[tId] = addon.db.unitFrameAuraOrder[tId] or {}
 	local newSpells = {}
