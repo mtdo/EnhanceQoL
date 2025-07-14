@@ -103,38 +103,42 @@ local function UpdateTrackedBuffs(frame, unit)
 	if not frame or not unit or not addon.db.unitFrameAuraTrackers then return end
 
 	for tId, tracker in pairs(addon.db.unitFrameAuraTrackers) do
-		local index = 0
-		AuraUtil.ForEachAura(unit, "HELPFUL", nil, function(aura)
-			local spellId = aura.spellId
-			local data = tracker.spells and tracker.spells[spellId]
-			if data then
-				index = index + 1
-				local iconFrame = ensureIcon(frame, tId, index)
-				iconFrame.icon:SetTexture(aura.icon)
-				iconFrame.expirationTime = aura.expirationTime
-				if aura.expirationTime and aura.duration and aura.duration > 0 then
-					iconFrame.cd:SetCooldown(aura.expirationTime - aura.duration, aura.duration)
-				else
-					iconFrame.cd:Clear()
+		if not addon.db.unitFrameAuraEnabled or addon.db.unitFrameAuraEnabled[tId] ~= false then
+			local index = 0
+			AuraUtil.ForEachAura(unit, "HELPFUL", nil, function(aura)
+				local spellId = aura.spellId
+				local data = tracker.spells and tracker.spells[spellId]
+				if data then
+					index = index + 1
+					local iconFrame = ensureIcon(frame, tId, index)
+					iconFrame.icon:SetTexture(aura.icon)
+					iconFrame.expirationTime = aura.expirationTime
+					if aura.expirationTime and aura.duration and aura.duration > 0 then
+						iconFrame.cd:SetCooldown(aura.expirationTime - aura.duration, aura.duration)
+					else
+						iconFrame.cd:Clear()
+					end
+
+					local showTime = data.showTimer
+					if showTime == nil then showTime = addon.db.unitFrameAuraShowTime end
+					iconFrame.cd:SetHideCountdownNumbers(not showTime)
+					iconFrame.showTimer = showTime
+					if iconFrame.time then iconFrame.time:Hide() end
+
+					local showSwipe = data.showSwipe
+					if showSwipe == nil then showSwipe = addon.db.unitFrameAuraShowSwipe end
+					iconFrame.cd:SetDrawSwipe(showSwipe)
+					if showSwipe then iconFrame.cd:SetSwipeColor(0, 0, 0, 0.6) end
+
+					iconFrame:Show()
 				end
+			end, true)
 
-				local showTime = data.showTimer
-				if showTime == nil then showTime = addon.db.unitFrameAuraShowTime end
-				iconFrame.cd:SetHideCountdownNumbers(not showTime)
-				iconFrame.showTimer = showTime
-				if iconFrame.time then iconFrame.time:Hide() end
-
-				local showSwipe = data.showSwipe
-				if showSwipe == nil then showSwipe = addon.db.unitFrameAuraShowSwipe end
-				iconFrame.cd:SetDrawSwipe(showSwipe)
-				if showSwipe then iconFrame.cd:SetSwipeColor(0, 0, 0, 0.6) end
-
-				iconFrame:Show()
-			end
-		end, true)
-
-		hideUnusedIcons(frame, tId, index)
-		if index > 0 then layoutIcons(frame, tId, index) end
+			hideUnusedIcons(frame, tId, index)
+			if index > 0 then layoutIcons(frame, tId, index) end
+		else
+			hideUnusedIcons(frame, tId, 0)
+		end
 	end
 end
 
@@ -292,7 +296,9 @@ end
 local function getTrackerTree()
 	local tree = {}
 	for id, tracker in pairs(addon.db.unitFrameAuraTrackers or {}) do
-		local node = { value = id, text = tracker.name or ("Tracker " .. id), children = {} }
+		local text = tracker.name or ("Tracker " .. id)
+		if addon.db.unitFrameAuraEnabled and addon.db.unitFrameAuraEnabled[id] == false then text = "|cff808080" .. text .. "|r" end
+		local node = { value = id, text = text, children = {} }
 
 		local spells = {}
 		for sid, info in pairs(tracker.spells or {}) do
@@ -337,6 +343,13 @@ local function buildTrackerOptions(container, id)
 
 	local core = addon.functions.createContainer("InlineGroup", "Flow")
 	container:AddChild(core)
+
+	local enableCB = addon.functions.createCheckboxAce(L["EnableBuffTracker"]:format(tracker.name), addon.db.unitFrameAuraEnabled[id] ~= false, function(_, _, val)
+		addon.db.unitFrameAuraEnabled[id] = val
+		RefreshAll()
+		refreshTree(id)
+	end)
+	core:AddChild(enableCB)
 
 	local anchorDrop = addon.functions.createDropdownAce(
 		L["AnchorPoint"],
@@ -404,6 +417,7 @@ local function buildTrackerOptions(container, id)
 
 	local delBtn = addon.functions.createButtonAce(L["DeleteTracker"], 150, function()
 		addon.db.unitFrameAuraTrackers[id] = nil
+		addon.db.unitFrameAuraEnabled[id] = nil
 		selectedTracker = next(addon.db.unitFrameAuraTrackers) or 1
 		addon.db.unitFrameAuraSelectedTracker = selectedTracker
 		refreshTree(selectedTracker)
@@ -452,6 +466,7 @@ local function buildSpellOptions(container, tId, spellId)
 			removeSpell(tId, spellId)
 			refreshTree(tId)
 			container:ReleaseChildren()
+			RefreshAll()
 		end
 		StaticPopup_Show("EQOL_DELETE_UNITFRAME_AURA", auraName)
 	end)
@@ -478,6 +493,7 @@ function addon.Aura.functions.addUnitFrameAuraOptions(container)
 				iconSize = addon.db.unitFrameAuraIconSize or ICON_SIZE,
 				spells = {},
 			}
+			addon.db.unitFrameAuraEnabled[newId] = true
 			selectedTracker = newId
 			addon.db.unitFrameAuraSelectedTracker = newId
 			refreshTree(newId)

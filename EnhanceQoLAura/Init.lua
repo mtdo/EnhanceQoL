@@ -87,6 +87,7 @@ for tId, tracker in pairs(addon.db["unitFrameAuraTrackers"]) do
 		if not tContains(addon.db.unitFrameAuraOrder[tId], id) then table.insert(addon.db.unitFrameAuraOrder[tId], id) end
 	end
 	tracker.spells = newSpells
+	if addon.db.unitFrameAuraEnabled[tId] == nil then addon.db.unitFrameAuraEnabled[tId] = true end
 end
 
 addon.Aura = {}
@@ -133,6 +134,7 @@ addon.functions.InitDBValue("unitFrameAuraShowTime", false)
 addon.functions.InitDBValue("unitFrameAuraShowSwipe", true)
 addon.functions.InitDBValue("unitFrameAuraTrackers", nil)
 addon.functions.InitDBValue("unitFrameAuraSelectedTracker", 1)
+addon.functions.InitDBValue("unitFrameAuraEnabled", {})
 
 if type(addon.db["buffTrackerSelectedCategory"]) ~= "number" then addon.db["buffTrackerSelectedCategory"] = 1 end
 
