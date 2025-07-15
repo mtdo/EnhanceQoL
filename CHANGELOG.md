@@ -1,6 +1,6 @@
 # Changelog
 
-## [3.29.0] – 2025-07-20
+## [3.29.0] – 2025-07-15
 ### ✨ Added
 - **Hide Boss-Kill Banner**  
   Automatically suppresses the victory/loot banner that appears after a boss kill.
