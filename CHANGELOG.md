@@ -6,6 +6,11 @@
   Automatically suppresses the victory/loot banner that appears after a boss kill.
 - **Feature Descriptions**  
   Added concise in-UI descriptions for several existing options to make them easier to understand.
+- **Full support for the new bank UI (11.2)**  
+  All bank-related features work with the updated interface on patch 11.2.
+### 🐛 Fixed
+- Fixed a Lua error when opening the bank on PTR 11.2.  
+- Fixed a Lua error in item tooltips on PTR 11.2.
 
 ## [3.28.1] – 2025-07-14
 ### 🔄 Changed
