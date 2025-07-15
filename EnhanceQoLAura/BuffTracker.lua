@@ -966,6 +966,7 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 			rebuildAltMapping()
 			refreshTree(selectedCategory)
 			if treeGroup then treeGroup:SelectByValue(tostring(selectedCategory)) end
+			container:ReleaseChildren()
 		end
 		StaticPopup_Show("EQOL_DELETE_CATEGORY", catName)
 	end)
