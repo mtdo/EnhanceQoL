@@ -8,6 +8,7 @@
 - **Aura Tracker** – newly created auras are now automatically selected after you add their category.
 - **Aura Tracker** – deleting a category immediately clears the right-hand options panel.
 - **Aura Tracker** – glow effect now scales correctly when you change the icon size.
+- **Aura Tracker** - fixed a missing Tooltip for *Alt spell IDs*
 
 ## [3.28.0] – 2025-07-14
 ### ✨ Added
