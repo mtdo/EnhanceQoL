@@ -829,6 +829,7 @@ end
 local function refreshTree(selectValue)
 	if not treeGroup then return end
 	treeGroup:SetTree(getCategoryTree())
+	if selectValue then treeGroup:SelectByValue(tostring(selectValue)) end
 end
 
 local function handleDragDrop(src, dst)
@@ -969,7 +970,6 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 			selectedCategory = next(addon.db["buffTrackerCategories"]) or 1
 			rebuildAltMapping()
 			refreshTree(selectedCategory)
-			if treeGroup then treeGroup:SelectByValue(tostring(selectedCategory)) end
 			container:ReleaseChildren()
 		end
 		StaticPopup_Show("EQOL_DELETE_CATEGORY", catName)
@@ -1323,7 +1323,6 @@ function addon.Aura.functions.addBuffTrackerOptions(container)
 			addon.db["buffTrackerLocked"][newId] = false
 			ensureAnchor(newId)
 			refreshTree(newId)
-			if treeGroup then treeGroup:SelectByValue(tostring(newId)) end
 			return -- don’t build options for pseudo‑node
 		end
 
