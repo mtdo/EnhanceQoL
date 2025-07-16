@@ -9,6 +9,7 @@
     One click opens the import dialog and pulls the auras in.
 ### 🐛 Fixed
 - **Aura Tracker** – resolved a rare database mismatch that could cause errors.
+- **Instance Difficulty** - Some string like MC 40 player were wrong
 
 ## [3.29.0] – 2025-07-15
 ### ✨ Added
