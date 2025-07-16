@@ -10,6 +10,7 @@ local UIParent = _G.UIParent
 ]]
 
 local Type, Version = "EQOL_DragTreeGroup", 3
+local DRAG_DELAY = 0.2 -- seconds to hold before drag starts
 
 local function Constructor()
 	local tree = AceGUI:Create("TreeGroup")
@@ -53,12 +54,18 @@ local function Constructor()
 		local oldLeave = btn:GetScript("OnLeave")
 
 		btn:SetScript("OnMouseDown", function(frame, button)
-			if button == "LeftButton" then --and IsAltKeyDown() then
+			if button == "LeftButton" then
 				frame.obj.dragSource = frame.uniquevalue
-				frame.obj.dragging = true
 				frame.obj.dragButton = frame
-				frame:LockHighlight()
-				if frame.icon then showDragIcon(frame.icon:GetTexture()) end
+				frame.obj.dragStartPending = true
+				frame.obj.dragTimer = C_Timer.NewTimer(DRAG_DELAY, function()
+					if frame.obj.dragStartPending and frame.obj.dragButton == frame then
+						frame.obj.dragging = true
+						frame.obj.dragStartPending = nil
+						frame:LockHighlight()
+						if frame.icon then showDragIcon(frame.icon:GetTexture()) end
+					end
+				end)
 			elseif oldMouseDown then
 				oldMouseDown(frame, button)
 			end
@@ -71,6 +78,10 @@ local function Constructor()
 
 		btn:SetScript("OnMouseUp", function(frame, button)
 			local obj = frame.obj
+			if obj.dragTimer then
+				obj.dragTimer:Cancel()
+				obj.dragTimer = nil
+			end
 			if obj.dragging then
 				obj.dragging = nil
 				if obj.dragButton then
@@ -82,6 +93,10 @@ local function Constructor()
 				obj.dragSource = nil
 				local target = findTarget(obj)
 				if src and target and src ~= target then obj:Fire("OnDragDrop", src, target) end
+			else
+				obj.dragSource = nil
+				obj.dragButton = nil
+				obj.dragStartPending = nil
 			end
 			if oldMouseUp then oldMouseUp(frame, button) end
 		end)

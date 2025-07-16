@@ -90,6 +90,7 @@ Fully configurable per context (combat, dungeon, friendly/enemy): items, item co
 * **Enhanced Ignore List** – organise ignored players in a searchable window, highlight them in group finder and block unwanted requests. Toggle with `/eil`.
 * **Instant Messenger** – mini whisper window with tabs, message history and optional fade. Toggle with `/eim`.
 * **Gem-Socket Helper** – shows socketable gems below the socket UI.
+* **Aura Tracker** – track buffs and debuffs in custom categories. Categories can be exported and imported for easy sharing.
 
 # Help
 For a full list of configuration checkboxes see [docs/OptionsReference.md](docs/OptionsReference.md).

@@ -10,6 +10,8 @@ end
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Aura")
 local AceGUI = addon.AceGUI
 
+-- luacheck: globals ChatFrame_OpenChat
+
 local selectedCategory = addon.db["buffTrackerSelectedCategory"] or 1
 
 for _, cat in pairs(addon.db["buffTrackerCategories"]) do
@@ -238,6 +240,14 @@ local function rebuildAltMapping()
 			end
 		end
 	end
+end
+
+local function getNextCategoryId()
+	local max = 0
+	for id in pairs(addon.db["buffTrackerCategories"]) do
+		if type(id) == "number" and id > max then max = id end
+	end
+	return max + 1
 end
 
 local function ensureAnchor(id)
@@ -774,6 +784,7 @@ local function removeBuff(catId, id)
 	cat.buffs[id] = nil
 	addon.db["buffTrackerHidden"][id] = nil
 	addon.db["buffTrackerSounds"][catId][id] = nil
+	if addon.db["buffTrackerSoundsEnabled"] and addon.db["buffTrackerSoundsEnabled"][catId] then addon.db["buffTrackerSoundsEnabled"][catId][id] = nil end
 	if nil == addon.db["buffTrackerOrder"][catId] then addon.db["buffTrackerOrder"][catId] = {} end
 	for i, v in ipairs(addon.db["buffTrackerOrder"][catId]) do
 		if v == id then
@@ -787,6 +798,118 @@ local function removeBuff(catId, id)
 	end
 	rebuildAltMapping()
 	scanBuffs()
+end
+
+local function sanitiseCategory(cat)
+	if not cat then return end
+	cat.allowedSpecs = nil
+	cat.allowedClasses = nil
+	cat.allowedRoles = nil
+	for _, buff in pairs(cat.buffs or {}) do
+		if not buff.altIDs then buff.altIDs = {} end
+		if buff.showAlways == nil then buff.showAlways = false end
+		if buff.glow == nil then buff.glow = false end
+		if buff.castOnClick == nil then buff.castOnClick = false end
+		if not buff.trackType then buff.trackType = "BUFF" end
+		if not buff.allowedSpecs then buff.allowedSpecs = {} end
+		if not buff.allowedClasses then buff.allowedClasses = {} end
+		if not buff.allowedRoles then buff.allowedRoles = {} end
+		if not buff.conditions then buff.conditions = { join = "AND", conditions = {} } end
+		if buff.showStacks == nil then
+			local def = addon.db["buffTrackerShowStacks"]
+			if def == nil then def = true end
+			buff.showStacks = def
+		end
+		if buff.showTimerText == nil then
+			local def = addon.db["buffTrackerShowTimerText"]
+			if def == nil then def = true end
+			buff.showTimerText = def
+		end
+	end
+end
+
+-- encodeMode = "chat" | "addon" | nil
+-- forward declaration so luacheck sees ShareCategory below
+local ShareCategory
+
+local function exportCategory(catId, encodeMode)
+	local cat = addon.db["buffTrackerCategories"][catId]
+	if not cat then return end
+	local data = {
+		category = cat,
+		order = addon.db["buffTrackerOrder"][catId] or {},
+		sounds = addon.db["buffTrackerSounds"][catId] or {},
+		soundsEnabled = addon.db["buffTrackerSoundsEnabled"][catId] or {},
+		version = 1,
+	}
+	local serializer = LibStub("AceSerializer-3.0")
+	local deflate = LibStub("LibDeflate")
+	local serialized = serializer:Serialize(data)
+	local compressed = deflate:CompressDeflate(serialized)
+	if encodeMode == "chat" then
+		return deflate:EncodeForWoWChatChannel(compressed)
+	elseif encodeMode == "addon" then
+		return deflate:EncodeForWoWAddonChannel(compressed)
+	end
+	return deflate:EncodeForPrint(compressed)
+end
+
+local function importCategory(encoded)
+	if type(encoded) ~= "string" or encoded == "" then return end
+	local deflate = LibStub("LibDeflate")
+	local serializer = LibStub("AceSerializer-3.0")
+	local decoded = deflate:DecodeForPrint(encoded) or deflate:DecodeForWoWChatChannel(encoded) or deflate:DecodeForWoWAddonChannel(encoded)
+	if not decoded then return end
+	local decompressed = deflate:DecompressDeflate(decoded)
+	if not decompressed then return end
+	local ok, data = serializer:Deserialize(decompressed)
+	if not ok or type(data) ~= "table" then return end
+	local cat = data.category or data.cat or data
+	if type(cat) ~= "table" then return end
+	sanitiseCategory(cat)
+	local newId = getNextCategoryId()
+	addon.db["buffTrackerCategories"][newId] = cat
+	addon.db["buffTrackerOrder"][newId] = data.order or {}
+	addon.db["buffTrackerEnabled"][newId] = true
+	addon.db["buffTrackerLocked"][newId] = false
+
+	addon.db["buffTrackerSounds"][newId] = {}
+	addon.db["buffTrackerSoundsEnabled"][newId] = {}
+	local missing = {}
+	if type(data.sounds) == "table" and type(data.soundsEnabled) == "table" then
+		for id, sound in pairs(data.sounds) do
+			if addon.Aura.sounds[sound] then
+				addon.db["buffTrackerSounds"][newId][id] = sound
+				if data.soundsEnabled[id] then addon.db["buffTrackerSoundsEnabled"][newId][id] = true end
+			else
+				table.insert(missing, tostring(sound))
+			end
+		end
+	end
+	ensureAnchor(newId)
+	rebuildAltMapping()
+	scanBuffs()
+	if #missing > 0 then print((L["ImportCategoryMissingSounds"] or "Missing sounds: %s"):format(table.concat(missing, ", "))) end
+	return newId
+end
+
+local function previewImportCategory(encoded)
+	if type(encoded) ~= "string" or encoded == "" then return end
+	local deflate = LibStub("LibDeflate")
+	local serializer = LibStub("AceSerializer-3.0")
+	local decoded = deflate:DecodeForPrint(encoded) or deflate:DecodeForWoWChatChannel(encoded) or deflate:DecodeForWoWAddonChannel(encoded)
+	if not decoded then return end
+	local decompressed = deflate:DecompressDeflate(decoded)
+	if not decompressed then return end
+	local ok, data = serializer:Deserialize(decompressed)
+	if not ok or type(data) ~= "table" then return end
+	local cat = data.category or data.cat or data
+	if type(cat) ~= "table" then return end
+	local count = 0
+	for _ in pairs(cat.buffs or {}) do
+		count = count + 1
+	end
+	return cat.name or "", count
 end
 
 local treeGroup
@@ -822,6 +945,10 @@ local function getCategoryTree()
 	table.insert(tree, {
 		value = "ADD_CATEGORY",
 		text = "|cff00ff00+ " .. (L["Add Category"] or "Add Category ..."),
+	})
+	table.insert(tree, {
+		value = "IMPORT_CATEGORY",
+		text = "|cff00ccff+ " .. (L["ImportCategory"] or "Import Category ..."),
 	})
 	return tree
 end
@@ -953,6 +1080,33 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 	spellEdit:SetRelativeWidth(0.6)
 	core:AddChild(spellEdit)
 
+	local exportBtn = addon.functions.createButtonAce(L["ExportCategory"], 150, function()
+		local data = exportCategory(catId)
+		if not data then return end
+		StaticPopupDialogs["EQOL_EXPORT_CATEGORY"] = StaticPopupDialogs["EQOL_EXPORT_CATEGORY"]
+			or {
+				text = L["ExportCategory"],
+				button1 = CLOSE,
+				hasEditBox = true,
+				editBoxWidth = 320,
+				timeout = 0,
+				whileDead = true,
+				hideOnEscape = true,
+				preferredIndex = 3,
+			}
+		StaticPopupDialogs["EQOL_EXPORT_CATEGORY"].OnShow = function(self)
+			self:SetFrameStrata("FULLSCREEN_DIALOG")
+			self.editBox:SetText(data)
+			self.editBox:HighlightText()
+			self.editBox:SetFocus()
+		end
+		StaticPopup_Show("EQOL_EXPORT_CATEGORY")
+	end)
+	core:AddChild(exportBtn)
+
+	local shareBtn = addon.functions.createButtonAce(L["ShareCategory"] or "Share Category", 150, function() ShareCategory(catId) end)
+	core:AddChild(shareBtn)
+
 	local delBtn = addon.functions.createButtonAce(L["DeleteCategory"], 150, function()
 		local catName = addon.db["buffTrackerCategories"][catId].name or ""
 		StaticPopupDialogs["EQOL_DELETE_CATEGORY"] = StaticPopupDialogs["EQOL_DELETE_CATEGORY"]
@@ -965,9 +1119,18 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 				hideOnEscape = true,
 				preferredIndex = 3,
 			}
+		StaticPopupDialogs["EQOL_DELETE_CATEGORY"].OnShow = function(self) self:SetFrameStrata("FULLSCREEN_DIALOG") end
 		StaticPopupDialogs["EQOL_DELETE_CATEGORY"].OnAccept = function()
+			-- clean up all buff data for this category
+			for buffId in pairs(addon.db["buffTrackerCategories"][catId].buffs or {}) do
+				addon.db["buffTrackerHidden"][buffId] = nil
+			end
 			addon.db["buffTrackerCategories"][catId] = nil
 			addon.db["buffTrackerOrder"][catId] = nil
+			addon.db["buffTrackerSounds"][catId] = nil
+			addon.db["buffTrackerSoundsEnabled"][catId] = nil
+			addon.db["buffTrackerEnabled"][catId] = nil
+			addon.db["buffTrackerLocked"][catId] = nil
 			if anchors[catId] then
 				anchors[catId]:Hide()
 				anchors[catId] = nil
@@ -1314,7 +1477,7 @@ function addon.Aura.functions.addBuffTrackerOptions(container)
 		-- Handle click on pseudo‑node for adding new categories
 		if value == "ADD_CATEGORY" then
 			-- create a new category with default settings
-			local newId = (#addon.db["buffTrackerCategories"] or 0) + 1
+			local newId = getNextCategoryId()
 			addon.db["buffTrackerCategories"][newId] = {
 				name = L["NewCategoryName"] or "New",
 				point = "CENTER",
@@ -1326,9 +1489,49 @@ function addon.Aura.functions.addBuffTrackerOptions(container)
 			}
 			addon.db["buffTrackerEnabled"][newId] = true
 			addon.db["buffTrackerLocked"][newId] = false
+			addon.db["buffTrackerSounds"][newId] = {}
+			addon.db["buffTrackerSoundsEnabled"][newId] = {}
 			ensureAnchor(newId)
 			refreshTree(newId)
 			return -- don’t build options for pseudo‑node
+		elseif value == "IMPORT_CATEGORY" then
+			StaticPopupDialogs["EQOL_IMPORT_CATEGORY"] = StaticPopupDialogs["EQOL_IMPORT_CATEGORY"]
+				or {
+					text = L["ImportCategory"],
+					button1 = ACCEPT,
+					button2 = CANCEL,
+					hasEditBox = true,
+					editBoxWidth = 320,
+					timeout = 0,
+					whileDead = true,
+					hideOnEscape = true,
+					preferredIndex = 3,
+				}
+			StaticPopupDialogs["EQOL_IMPORT_CATEGORY"].OnShow = function(self)
+				self.editBox:SetText("")
+				self.editBox:SetFocus()
+				self.text:SetText(L["ImportCategory"])
+			end
+			StaticPopupDialogs["EQOL_IMPORT_CATEGORY"].EditBoxOnTextChanged = function(editBox)
+				local frame = editBox:GetParent()
+				local name, count = previewImportCategory(editBox:GetText())
+				if name then
+					frame.text:SetFormattedText("%s\n%s", L["ImportCategory"], (L["ImportCategoryPreview"] or "Category: %s (%d auras)"):format(name, count))
+				else
+					frame.text:SetText(L["ImportCategory"])
+				end
+			end
+			StaticPopupDialogs["EQOL_IMPORT_CATEGORY"].OnAccept = function(self)
+				local text = self.editBox:GetText()
+				local id = importCategory(text)
+				if id then
+					refreshTree(id)
+				else
+					print(L["ImportCategoryError"] or "Invalid string")
+				end
+			end
+			StaticPopup_Show("EQOL_IMPORT_CATEGORY")
+			return
 		end
 
 		local catId, _, buffId = strsplit("\001", value)
@@ -1365,3 +1568,117 @@ for id in pairs(addon.db["buffTrackerCategories"]) do
 end
 applyLockState()
 applyTimerText()
+
+-- ---------------------------------------------------------------------------
+-- Share Aura-Category via Chat & Addon-Channel
+-- ---------------------------------------------------------------------------
+local COMM_PREFIX = "EQOLBTSHARE"
+local AceComm = LibStub("AceComm-3.0")
+
+local incoming = {}
+local pending = {}
+
+local function getCatName(catId)
+	local cat = addon.db["buffTrackerCategories"][catId]
+	return cat and cat.name or tostring(catId)
+end
+
+ShareCategory = function(catId, targetPlayer)
+	local addonEncoded = exportCategory(catId, "addon")
+	if not addonEncoded then return end
+
+	local label = ("%s - %s"):format(UnitName("player"), getCatName(catId))
+	local placeholder = ("[EQOL: %s]"):format(label)
+	ChatFrame_OpenChat(placeholder)
+
+	local pktID = tostring(time() * 1000):gsub("%D", "")
+	pending[label] = pktID
+
+	local dist, target = "WHISPER", targetPlayer
+	if not targetPlayer then
+		if IsInRaid(LE_PARTY_CATEGORY_HOME) then
+			dist = "RAID"
+		elseif IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then
+			dist = "INSTANCE_CHAT"
+		elseif IsInGroup() then
+			dist = "PARTY"
+		elseif IsInGuild() then
+			dist = "GUILD"
+		else
+			target = UnitName("player")
+		end
+	end
+
+	AceComm:SendCommMessage(COMM_PREFIX, ("<%s>%s"):format(pktID, addonEncoded), dist, target, "BULK")
+end
+
+local PATTERN = "%[EQOL: ([^%]]+)%]"
+
+local function EQOL_ChatFilter(_, _, msg, ...)
+	local newMsg, hits = msg:gsub(PATTERN, function(label) return ("|Hgarrmission:eqolaura:%s|h|cff00ff88[%s]|h|r"):format(label, label) end)
+	if hits > 0 then return false, newMsg, ... end
+end
+
+for _, ev in ipairs({
+	"CHAT_MSG_INSTANCE_CHAT",
+	"CHAT_MSG_INSTANCE_CHAT_LEADER",
+	"CHAT_MSG_SAY",
+	"CHAT_MSG_PARTY",
+	"CHAT_MSG_PARTY_LEADER",
+	"CHAT_MSG_RAID",
+	"CHAT_MSG_RAID_LEADER",
+	"CHAT_MSG_GUILD",
+	"CHAT_MSG_OFFICER",
+	"CHAT_MSG_WHISPER",
+	"CHAT_MSG_WHISPER_INFORM",
+}) do
+	ChatFrame_AddMessageEventFilter(ev, EQOL_ChatFilter)
+end
+
+local origSetItemRef = SetItemRef
+function SetItemRef(link, text, button, frame, ...)
+	local label = link:match("^garrmission:eqolaura:(.+)")
+	if label then
+		local pktID = pending[label]
+		if pktID and incoming[pktID] then
+			StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"] = StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"]
+				or {
+					text = L["ImportCategory"],
+					button1 = ACCEPT,
+					button2 = CANCEL,
+					timeout = 0,
+					whileDead = true,
+					hideOnEscape = true,
+					preferredIndex = 3,
+					OnAccept = function(_, data)
+						local encoded = incoming[data]
+						incoming[data] = nil
+						pending[label] = nil
+						local newId = importCategory(encoded)
+						if newId then refreshTree(newId) end
+					end,
+				}
+			StaticPopupDialogs["EQOL_IMPORT_FROM_SHARE"].OnShow = function(self, data)
+				local encoded = incoming[data]
+				local name, count = previewImportCategory(encoded or "")
+				if name then
+					self.text:SetFormattedText("%s\n%s", L["ImportCategory"], (L["ImportCategoryPreview"] or "Category: %s (%d auras)"):format(name, count))
+				else
+					self.text:SetText(L["ImportCategory"])
+				end
+			end
+			StaticPopup_Show("EQOL_IMPORT_FROM_SHARE", nil, nil, pktID)
+			return
+		end
+	end
+	origSetItemRef(link, text, button, frame, ...)
+end
+
+local function OnComm(prefix, message, dist, sender)
+	if prefix ~= COMM_PREFIX then return end
+	local pktID, payload = message:match("^<(%d+)>(.+)")
+	if not pktID then return end
+	incoming[pktID] = payload
+end
+
+AceComm:RegisterComm(COMM_PREFIX, OnComm)
