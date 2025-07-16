@@ -25,4 +25,5 @@ Init.lua
 ..\EnhanceQoL\widgets\DragTreeGroup.lua
 
 EnhanceQoLAura.lua
+ResourceBars.lua
 BuffTracker.lua
