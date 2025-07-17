@@ -224,6 +224,7 @@ local function addResourceFrame(container)
 					local cfg = dbSpec[real]
 					local label = _G[real] or real
 					local cb = addon.functions.createCheckboxAce(label, cfg.enabled, function(self, _, val)
+						if cfg.enabled and not val then addon.Aura.ResourceBars.DetachAnchorsFrom(real, specIndex) end
 						cfg.enabled = val
 						addon.Aura.ResourceBars.Refresh()
 						tabGroup:ReleaseChildren()
@@ -259,16 +260,14 @@ local function addResourceFrame(container)
 						end)
 						container:AddChild(sFont)
 
-                                                local frames = {}
-                                                for k, v in pairs(baseFrameList) do
-                                                        frames[k] = v
-                                                end
-                                                frames.EQOLHealthBar = "EQOLHealthBar"
-                                                for _, t in ipairs(addon.Aura.ResourceBars.classPowerTypes) do
-                                                        if t ~= real and dbSpec[t] and dbSpec[t].enabled ~= false then
-                                                                frames["EQOL" .. t .. "Bar"] = "EQOL" .. t .. "Bar"
-                                                        end
-                                                end
+						local frames = {}
+						for k, v in pairs(baseFrameList) do
+							frames[k] = v
+						end
+						frames.EQOLHealthBar = "EQOLHealthBar"
+						for _, t in ipairs(addon.Aura.ResourceBars.classPowerTypes) do
+							if t ~= real and dbSpec[t] and dbSpec[t].enabled ~= false then frames["EQOL" .. t .. "Bar"] = "EQOL" .. t .. "Bar" end
+						end
 
 						addAnchorOptions(real, container, cfg.anchor, frames)
 					end

@@ -518,6 +518,36 @@ function ResourceBars.DisableResourceBars()
 	powerbar = {}
 end
 
+local function getFrameName(pType)
+	if pType == "HEALTH" then return "EQOLHealthBar" end
+	return "EQOL" .. pType .. "Bar"
+end
+
+function ResourceBars.DetachAnchorsFrom(disabledType, specIndex)
+	local class = addon.variables.unitClass
+	local spec = specIndex or addon.variables.unitSpec
+
+	if not addon.db.personalResourceBarSettings or not addon.db.personalResourceBarSettings[class] or not addon.db.personalResourceBarSettings[class][spec] then return end
+
+	local specCfg = addon.db.personalResourceBarSettings[class][spec]
+	local targetName = getFrameName(disabledType)
+
+	for pType, cfg in pairs(specCfg) do
+		if pType ~= disabledType and cfg.anchor and cfg.anchor.relativeFrame == targetName then
+			local frame = _G[getFrameName(pType)]
+			if frame then
+				cfg.anchor.point = "BOTTOMLEFT"
+				cfg.anchor.relativeFrame = "UIParent"
+				cfg.anchor.relativePoint = "BOTTOMLEFT"
+				cfg.anchor.x = frame:GetLeft() or 0
+				cfg.anchor.y = frame:GetBottom() or 0
+			else
+				cfg.anchor.relativeFrame = "UIParent"
+			end
+		end
+	end
+end
+
 function ResourceBars.SetHealthBarSize(w, h)
 	if healthBar then healthBar:SetSize(w, h) end
 end
