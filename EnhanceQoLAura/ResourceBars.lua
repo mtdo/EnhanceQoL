@@ -384,15 +384,15 @@ local function eventHandler(self, event, unit, arg1)
        elseif event == "PLAYER_ENTERING_WORLD" then
                updateHealthBar()
                setPowerbars()
-	elseif event == "UNIT_MAXHEALTH" or event == "UNIT_HEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED" then
-		updateHealthBar()
-	elseif event == "UNIT_POWER_UPDATE" and powerbar[arg1] and not powerfrequent[arg1] then
-		updatePowerBar(arg1)
-	elseif event == "UNIT_POWER_FREQUENT" and powerbar[arg1] and powerfrequent[arg1] then
-		updatePowerBar(arg1)
-	elseif event == "UNIT_MAXPOWER" and powerbar[arg1] then
-		updatePowerBar(arg1)
-	end
+       elseif (event == "UNIT_MAXHEALTH" or event == "UNIT_HEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED") and healthBar and healthBar:IsShown() then
+               updateHealthBar()
+       elseif event == "UNIT_POWER_UPDATE" and powerbar[arg1] and powerbar[arg1]:IsShown() and not powerfrequent[arg1] then
+               updatePowerBar(arg1)
+       elseif event == "UNIT_POWER_FREQUENT" and powerbar[arg1] and powerbar[arg1]:IsShown() and powerfrequent[arg1] then
+               updatePowerBar(arg1)
+       elseif event == "UNIT_MAXPOWER" and powerbar[arg1] and powerbar[arg1]:IsShown() then
+               updatePowerBar(arg1)
+       end
 end
 
 function ResourceBars.EnableResourceBars()
@@ -414,15 +414,30 @@ function ResourceBars.EnableResourceBars()
 end
 
 function ResourceBars.DisableResourceBars()
-	if frameAnchor then
-		frameAnchor:UnregisterAllEvents()
-		frameAnchor:SetScript("OnEvent", nil)
-	end
-	if mainFrame then mainFrame:Hide() end
-	if healthBar then healthBar:Hide() end
-	for _, bar in pairs(powerbar) do
-		if bar then bar:Hide() end
-	end
+       if frameAnchor then
+               frameAnchor:UnregisterAllEvents()
+               frameAnchor:SetScript("OnEvent", nil)
+               frameAnchor = nil
+               addon.Aura.anchorFrame = nil
+       end
+       if mainFrame then
+               mainFrame:Hide()
+               mainFrame:SetParent(nil)
+               mainFrame = nil
+       end
+       if healthBar then
+               healthBar:Hide()
+               healthBar:SetParent(nil)
+               healthBar = nil
+       end
+       for pType, bar in pairs(powerbar) do
+               if bar then
+                       bar:Hide()
+                       bar:SetParent(nil)
+               end
+               powerbar[pType] = nil
+       end
+       powerbar = {}
 end
 
 function ResourceBars.SetHealthBarSize(w, h)
