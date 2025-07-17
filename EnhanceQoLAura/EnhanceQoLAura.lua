@@ -203,6 +203,7 @@ local function addResourceFrame(container)
 							width = addon.db["personalResourceBarManaWidth"],
 							height = addon.db["personalResourceBarManaHeight"],
 							textStyle = real == "MANA" and "PERCENT" or "CURMAX",
+							fontSize = 16,
 						}
 					dbSpec[real].anchor = dbSpec[real].anchor or {}
 
@@ -233,6 +234,12 @@ local function addResourceFrame(container)
 					end)
 					drop:SetValue(cfg.textStyle)
 					container:AddChild(drop)
+
+					local sFont = addon.functions.createSliderAce("Text Size", cfg.fontSize or 16, 6, 64, 1, function(self, _, val)
+						cfg.fontSize = val
+						addon.Aura.ResourceBars.Refresh()
+					end)
+					container:AddChild(sFont)
 
 					local frames = {}
 					for k, v in pairs(baseFrameList) do

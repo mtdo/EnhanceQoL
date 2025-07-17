@@ -16,6 +16,7 @@ local mainFrame
 local healthBar
 local powerbar = {}
 local powerfrequent = {}
+local getBarSettings
 
 local function getPowerBarColor(type)
 	local powerKey = string.upper(type)
@@ -113,8 +114,11 @@ local function createHealthBar()
 	})
 	healthBar:SetBackdropColor(0, 0, 0, 0.8)
 	healthBar:SetBackdropBorderColor(0, 0, 0, 0)
+	local settings = getBarSettings("HEALTH")
+	local fontSize = settings and settings.fontSize or 16
+
 	healthBar.text = healthBar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	healthBar.text:SetFont(addon.variables.defaultFont, 16, "OUTLINE")
+	healthBar.text:SetFont(addon.variables.defaultFont, fontSize, "OUTLINE")
 	healthBar.text:SetPoint("CENTER", healthBar, "CENTER", 3, 0)
 
 	healthBar:SetMovable(true)
@@ -233,7 +237,7 @@ local classPowerTypes = {
 ResourceBars.powertypeClasses = powertypeClasses
 ResourceBars.classPowerTypes = classPowerTypes
 
-local function getBarSettings(pType)
+function getBarSettings(pType)
 	local class = addon.variables.unitClass
 	local spec = addon.variables.unitSpec
 	if addon.db.personalResourceBarSettings and addon.db.personalResourceBarSettings[class] and addon.db.personalResourceBarSettings[class][spec] then
@@ -305,8 +309,10 @@ local function createPowerBar(type, anchor)
 	})
 	bar:SetBackdropColor(0, 0, 0, 0.8)
 	bar:SetBackdropBorderColor(0, 0, 0, 0)
+	local fontSize = settings and settings.fontSize or 16
+
 	bar.text = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	bar.text:SetFont(addon.variables.defaultFont, 16, "OUTLINE")
+	bar.text:SetFont(addon.variables.defaultFont, fontSize, "OUTLINE")
 	bar.text:SetPoint("CENTER", bar, "CENTER", 3, 0)
 	bar:SetStatusBarColor(getPowerBarColor(type))
 
