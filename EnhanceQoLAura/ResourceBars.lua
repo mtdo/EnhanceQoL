@@ -11,8 +11,6 @@ addon.Aura = addon.Aura or {}
 local ResourceBars = {}
 addon.Aura.ResourceBars = ResourceBars
 
-local sUI = false
-
 local frameAnchor
 local mainFrame
 local healthBar
@@ -257,15 +255,11 @@ local function createPowerBar(type, anchor)
 	local a = getAnchor(type)
 	if a.point then
 		bar:SetPoint(a.point, _G[a.relativeFrame] or UIParent, a.relativePoint or a.point, a.x or 0, a.y or 0)
-	elseif anchor then
-		if sUI and anchor.specIcon then
-			bar:SetPoint("LEFT", anchor.specIcon, "RIGHT", 0, 0)
-		else
-			bar:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, 0)
-		end
-	else
-		bar:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -40)
-	end
+       elseif anchor then
+               bar:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, 0)
+       else
+               bar:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -40)
+       end
 	bar:SetBackdrop({
 		bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
 		edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -301,20 +295,6 @@ local function createPowerBar(type, anchor)
 	updatePowerBar(type)
 end
 
-local function createSpecIcon(anchor)
-	if not sUI then return end
-	local specID = GetSpecialization()
-	if not specID or not anchor then return end
-	local _, _, _, iconPath = GetSpecializationInfo(specID)
-
-	if anchor.specIcon then anchor.specIcon:Hide() end
-	local specIcon = anchor:CreateTexture(nil, "OVERLAY")
-	specIcon:SetSize(72, 72)
-	specIcon:SetTexture("Interface\\AddOns\\EnhanceQoLAura\\Textures\\Classes\\" .. addon.variables.unitClass .. "_" .. specID .. ".tga" or iconPath)
-
-	anchor.specIcon = specIcon
-	specIcon:SetPoint("LEFT", anchor, "RIGHT", 0, 0)
-end
 
 local eventsToRegister = {
 	"UNIT_HEALTH",
@@ -397,15 +377,13 @@ end
 local function eventHandler(self, event, unit, arg1)
 	if event == "UNIT_DISPLAYPOWER" and unit == "player" then
 		setPowerbars()
-	elseif event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED" then
-		C_Timer.After(0.2, function()
-			setPowerbars()
-			createSpecIcon(EQOLHealthBar)
-		end)
-	elseif event == "PLAYER_ENTERING_WORLD" then
-		updateHealthBar()
-		setPowerbars()
-		createSpecIcon(EQOLHealthBar)
+       elseif event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED" then
+               C_Timer.After(0.2, function()
+                       setPowerbars()
+               end)
+       elseif event == "PLAYER_ENTERING_WORLD" then
+               updateHealthBar()
+               setPowerbars()
 	elseif event == "UNIT_MAXHEALTH" or event == "UNIT_HEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED" then
 		updateHealthBar()
 	elseif event == "UNIT_POWER_UPDATE" and powerbar[arg1] and not powerfrequent[arg1] then
@@ -431,9 +409,8 @@ function ResourceBars.EnableResourceBars()
 	frameAnchor:SetScript("OnEvent", eventHandler)
 	frameAnchor:Hide()
 
-	createHealthBar()
-	createSpecIcon(EQOLHealthBar)
-	setPowerbars()
+       createHealthBar()
+       setPowerbars()
 end
 
 function ResourceBars.DisableResourceBars()
