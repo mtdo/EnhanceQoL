@@ -15,6 +15,14 @@ local hasMoreItems = false
 local function updateSellMoreButton()
 	if not sellMoreButton then return end
 	if addon.db["vendorOnly12Items"] and hasMoreItems and MerchantFrame:IsShown() then
+		sellMoreButton:ClearAllPoints()
+		if MerchantRepairItemButton and MerchantRepairItemButton:IsShown() then
+			sellMoreButton:SetPoint("TOPLEFT", MerchantRepairItemButton, "BOTTOMLEFT", 5, -5)
+		elseif MerchantSellAllJunkButton and MerchantSellAllJunkButton:IsShown() then
+			sellMoreButton:SetPoint("TOPRIGHT", MerchantSellAllJunkButton, "BOTTOMLEFT", -5, -5)
+		else
+			sellMoreButton:SetPoint("BOTTOMLEFT", MerchantFrame, "BOTTOMLEFT", 60, 60)
+		end
 		sellMoreButton:Show()
 	else
 		sellMoreButton:Hide()
@@ -168,13 +176,7 @@ local function createSellMoreButton()
 	if sellMoreButton then return end
 	sellMoreButton = CreateFrame("Button", nil, MerchantFrame, "GameMenuButtonTemplate")
 	sellMoreButton:SetSize(120, 25)
-	if MerchantRepairItemButton and MerchantRepairItemButton:IsShown() then
-		sellMoreButton:SetPoint("TOPLEFT", MerchantRepairItemButton, "BOTTOMLEFT", 5, -5)
-	elseif MerchantSellAllJunkButton and MerchantSellAllJunkButton:IsShown() then
-		sellMoreButton:SetPoint("TOPRIGHT", MerchantSellAllJunkButton, "BOTTOMLEFT", -5, -5)
-	else
-		sellMoreButton:SetPoint("BOTTOMLEFT", MerchantFrame, "BOTTOMLEFT", 60, 60)
-	end
+
 	sellMoreButton:SetText(L["vendorSellNext"])
 	sellMoreButton:SetScript("OnClick", function(self)
 		checkItem()
