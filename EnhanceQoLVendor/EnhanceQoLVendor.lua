@@ -465,6 +465,11 @@ local function addGeneralFrame(container)
 				if MerchantRepairItemButton and MerchantRepairItemButton:IsShown() then createSellMoreButton() end
 			end,
 		},
+		{
+			text = L["vendorAltClickInclude"],
+			desc = L["vendorAltClickIncludeDesc"],
+			var = "vendorAltClickInclude",
+		},
 	}
 	table.sort(data, function(a, b) return a.text < b.text end)
 
@@ -515,3 +520,36 @@ function addon.Vendor.functions.treeCallback(container, group)
 		addGeneralFrame(container)
 	end
 end
+
+local function AltClickHook(self, button)
+	if not addon.db["vendorAltClickInclude"] then return end
+	if not IsAltKeyDown() or not (button == "LeftButton" or button == "RightButton") then return end
+	local slot, bag = self:GetSlotAndBagID()
+	if slot and bag then
+		local eItem = Item:CreateFromBagAndSlot(bag, slot)
+		if eItem and not eItem:IsItemEmpty() then
+			eItem:ContinueOnItemLoad(function()
+				local name = eItem:GetItemName()
+				local id = eItem:GetItemID()
+				if not name or not id then return end
+				if button == "LeftButton" then
+					if not addon.db["vendorIncludeSellList"][id] then
+						addon.db["vendorIncludeSellList"][id] = name
+						print(ADD .. ":", id, name)
+						if MerchantFrame and MerchantFrame:IsShown() then
+							hasMoreItems = true
+							updateSellMoreButton()
+						end
+					end
+				elseif button == "RightButton" then
+					if addon.db["vendorIncludeSellList"][id] then
+						addon.db["vendorIncludeSellList"][id] = nil
+						print(REMOVE .. ":", id, name)
+					end
+				end
+			end)
+		end
+	end
+end
+
+hooksecurefunc(_G.ContainerFrameItemButtonMixin, "OnModifiedClick", AltClickHook)
