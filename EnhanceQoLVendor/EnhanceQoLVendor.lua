@@ -61,9 +61,7 @@ local function sellItems(items)
 	sellNextItem()
 end
 
-local function checkItem()
-	hasMoreItems = false
-	updateSellMoreButton()
+local function lookupItems()
 	local _, avgItemLevelEquipped = GetAverageItemLevel()
 	local itemsToSell = {}
 	for bag = 0, NUM_TOTAL_EQUIPPED_BAG_SLOTS do
@@ -158,6 +156,15 @@ local function checkItem()
 			end
 		end
 	end
+	return itemsToSell
+end
+
+local function checkItem()
+	hasMoreItems = false
+	updateSellMoreButton()
+	local _, avgItemLevelEquipped = GetAverageItemLevel()
+	local itemsToSell = lookupItems() or {}
+
 	if #itemsToSell > 0 then
 		if addon.db["vendorOnly12Items"] then
 			if #itemsToSell > 12 then hasMoreItems = true end
@@ -553,3 +560,8 @@ local function AltClickHook(self, button)
 end
 
 hooksecurefunc(_G.ContainerFrameItemButtonMixin, "OnModifiedClick", AltClickHook)
+
+hooksecurefunc(ContainerFrameCombinedBags, "UpdateItems", function() local items = lookupItems() end)
+for _, frame in ipairs(ContainerFrameContainer.ContainerFrames) do
+	hooksecurefunc(frame, "UpdateItems", function() local items = lookupItems() end)
+end
