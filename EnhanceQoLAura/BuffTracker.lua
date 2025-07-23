@@ -31,6 +31,7 @@ end
 local anchors = {}
 local activeBuffFrames = {}
 local auraInstanceMap = {}
+local buffInstances = {}
 local altToBase = {}
 local spellToCat = {}
 local chargeSpells = {}
@@ -532,7 +533,8 @@ local function updateBuff(catId, id, changedId, firstScan)
 
 	activeBuffFrames[catId] = activeBuffFrames[catId] or {}
 	local frame = activeBuffFrames[catId][id]
-	local prevInst = frame and frame.auraInstanceID
+	local keyInst = catId .. ":" .. id
+	local prevInst = buffInstances[keyInst]
 	if prevInst then auraInstanceMap[prevInst] = nil end
 	local wasShown = frame and frame:IsShown()
 	local wasActive = frame and frame.isActive
@@ -683,13 +685,11 @@ local function updateBuff(catId, id, changedId, firstScan)
 		end
 	end
 
+	buffInstances[keyInst] = aura and aura.auraInstanceID or nil
+	if aura then auraInstanceMap[aura.auraInstanceID] = { catId = catId, buffId = id } end
+
 	if frame then
-		if aura then
-			frame.auraInstanceID = aura.auraInstanceID
-			auraInstanceMap[aura.auraInstanceID] = { catId = catId, buffId = id }
-		else
-			frame.auraInstanceID = nil
-		end
+		frame.auraInstanceID = buffInstances[keyInst]
 
 		local showStacks = buff and buff.showStacks
 		if showStacks == nil then showStacks = addon.db["buffTrackerShowStacks"] end
@@ -752,6 +752,8 @@ end
 
 local function scanBuffs()
 	wipe(timedAuras)
+	wipe(buffInstances)
+	wipe(auraInstanceMap)
 	for catId, cat in pairs(addon.db["buffTrackerCategories"]) do
 		if addon.db["buffTrackerEnabled"][catId] and categoryAllowed(cat) then
 			for id in pairs(cat.buffs) do
@@ -783,6 +785,10 @@ local function collectActiveAuras()
 		while aura do
 			local base = altToBase[aura.spellId] or aura.spellId
 			auraInstanceMap[aura.auraInstanceID] = { buffId = base }
+			for catId in pairs(spellToCat[base] or {}) do
+				local key = catId .. ":" .. base
+				buffInstances[key] = aura.auraInstanceID
+			end
 			i = i + 1
 			aura = C_UnitAuras.GetAuraDataByIndex("player", i, filter)
 		end
@@ -794,26 +800,26 @@ addon.Aura.scanBuffs = scanBuffs
 
 local eventFrame = CreateFrame("Frame")
 eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
-        if event == "PLAYER_LOGIN" or event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED" or event == "PLAYER_ENTERING_WORLD" then
-                for id, anchor in pairs(anchors) do
-                        local cat = getCategory(id)
-                        if addon.db["buffTrackerEnabled"][id] and categoryAllowed(cat) then
-                                anchor:Show()
-                        else
-                                anchor:Hide()
-                        end
-                end
-                if event == "PLAYER_LOGIN" then
-                        addon.Aura.functions.BuildSoundTable()
-                        rebuildAltMapping()
-                end
-                if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
-                        collectActiveAuras()
-                        firstScan = true
-                        C_Timer.After(1, scanBuffs)
-                        return
-                end
-        end
+	if event == "PLAYER_LOGIN" or event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED" or event == "PLAYER_ENTERING_WORLD" then
+		for id, anchor in pairs(anchors) do
+			local cat = getCategory(id)
+			if addon.db["buffTrackerEnabled"][id] and categoryAllowed(cat) then
+				anchor:Show()
+			else
+				anchor:Hide()
+			end
+		end
+		if event == "PLAYER_LOGIN" then
+			addon.Aura.functions.BuildSoundTable()
+			rebuildAltMapping()
+		end
+		if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
+			collectActiveAuras()
+			firstScan = true
+			C_Timer.After(1, scanBuffs)
+			return
+		end
+	end
 
 	if event == "UNIT_AURA" and unit == "player" then
 		local eventInfo = ...
@@ -1001,6 +1007,11 @@ local function removeBuff(catId, id)
 	if activeBuffFrames[catId] and activeBuffFrames[catId][id] then
 		activeBuffFrames[catId][id]:Hide()
 		activeBuffFrames[catId][id] = nil
+	end
+	local instKey = catId .. ":" .. id
+	if buffInstances[instKey] then
+		auraInstanceMap[buffInstances[instKey]] = nil
+		buffInstances[instKey] = nil
 	end
 	rebuildAltMapping()
 	scanBuffs()
