@@ -2250,12 +2250,14 @@ local function addMiscFrame(container, d)
 			parent = "",
 			var = "autoRepair",
 			type = "CheckBox",
+			desc = L["autoRepairDesc"],
 			callback = function(self, _, value) addon.db["autoRepair"] = value end,
 		},
 		{
 			parent = "",
 			var = "sellAllJunk",
 			type = "CheckBox",
+			desc = L["sellAllJunkDesc"],
 			callback = function(self, _, value)
 				addon.db["sellAllJunk"] = value
 				if value then checkBagIgnoreJunk() end
@@ -2266,6 +2268,7 @@ local function addMiscFrame(container, d)
 			var = "deleteItemFillDialog",
 			text = L["deleteItemFillDialog"]:format(DELETE_ITEM_CONFIRM_STRING),
 			type = "CheckBox",
+			desc = L["deleteItemFillDialogDesc"],
 			callback = function(self, _, value) addon.db["deleteItemFillDialog"] = value end,
 		},
 		{
@@ -2273,12 +2276,14 @@ local function addMiscFrame(container, d)
 			var = "confirmPatronOrderDialog",
 			text = (L["confirmPatronOrderDialog"]):format(PROFESSIONS_CRAFTER_ORDER_TAB_NPC),
 			type = "CheckBox",
+			desc = L["confirmPatronOrderDialogDesc"],
 			callback = function(self, _, value) addon.db["confirmPatronOrderDialog"] = value end,
 		},
 		{
 			parent = "",
 			var = "confirmTimerRemovalTrade",
 			type = "CheckBox",
+			desc = L["confirmTimerRemovalTradeDesc"],
 			callback = function(self, _, value) addon.db["confirmTimerRemovalTrade"] = value end,
 		},
 
@@ -2292,12 +2297,14 @@ local function addMiscFrame(container, d)
 			parent = "",
 			var = "autoCancelCinematic",
 			type = "CheckBox",
+			desc = L["autoCancelCinematicDesc"] .. "\n" .. L["interruptWithShift"],
 			callback = function(self, _, value) addon.db["autoCancelCinematic"] = value end,
 		},
 		{
 			parent = "",
 			var = "instantCatalystEnabled",
 			type = "CheckBox",
+			desc = L["instantCatalystEnabledDesc"],
 			callback = function(self, _, value)
 				addon.db["instantCatalystEnabled"] = value
 				addon.functions.toggleInstantCatalystButton(value)
