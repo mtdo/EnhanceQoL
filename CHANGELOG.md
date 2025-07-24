@@ -4,11 +4,18 @@
 ### ✨ Added
 - **Delve-O-Bot 7001**
   - The teleport item is now listed in the *Dungeon Compendium*.
-- **Quick-loot only while holding SHIFT**
-  - New option: quick-loot triggers only when the **Shift** key is held.
+- **Quick-loot only while holding Shift**
+  - New option: quick-loot triggers only when the **Shift** key is held.  
+- **Option tooltips**
+  - Added concise UI descriptions for several settings.
 ### 🔄 Changed
 - **Portal Compendium**
   - Favourites now have a fixed maximum number of buttons per row, so the window no longer stretches too wide.
+### 🐛 Fixed
+- **Instant Messenger**
+  - Special characters no longer break message history.
+
+---
 
 ## [3.32.0] – 2025-07-23
 ### ✨ Added
@@ -23,16 +30,22 @@
 - **Aura Tracker**
   - Fixed a rare issue where some auras marked **“show when missing”** were not visible on login
 
+---
+
 ## [3.31.0] – 2025-07-16
 ### ✨ Added
 - **Quick vendor include-list management**
   - **Alt + Left-Click**: add the item to the include list (auto-sell)
   - **Alt + Right-Click**: remove the item from the include list
 
+---
+
 ## [3.30.1] – 2025-07-16
 ### 🐛 Fixed
 - **Aura Tracker on Login without Duration**
   - Fallback condition added when sometimes Timer-Texts are missing during login
+
+---
 
 ## [3.30.0] – 2025-07-16
 ### ✨ Added
@@ -47,6 +60,8 @@
 - **Aura Tracker** – rare database mismatch on startup.
 - **Instance difficulty** – corrected several mislabeled difficulties (e.g. “MC 40 player”).
 - **Aura Tracker** – auras visible at login but not tracked later are now handled correctly.
+
+---
 
 ## [3.29.0] – 2025-07-15
 ### ✨ Added
@@ -63,6 +78,8 @@
 - Fixed a Lua error in item tooltips on PTR 11.2.
 - Filtering for *Equipment* still showed *Bags* and *Profession Tools*
 
+---
+
 ## [3.28.1] – 2025-07-14
 ### 🔄 Changed
 - **Aura Tracker** – Some Buttons were moved
@@ -72,6 +89,8 @@
 - **Aura Tracker** – deleting a category immediately clears the right-hand options panel.
 - **Aura Tracker** – glow effect now scales correctly when you change the icon size.
 - **Aura Tracker** - fixed a missing Tooltip for *Alt spell IDs*
+
+---
 
 ## [3.28.0] – 2025-07-14
 ### ✨ Added
@@ -90,6 +109,8 @@
 - Performance issue when *Hide buffs on raid-style frames* was enabled.
 - Error in TOC-Files
 
+---
+
 ## [3.27.0] – 2025-07-11
 ### ✨ Added
 - **Teleport Favorites in the Compendium**
@@ -100,10 +121,14 @@
 ### 🐛 Fixed
 - *Sell Next* button was sometimes behind the frame on non repair merchants
 
+---
+
 ## [3.26.0] – 2025-07-10
 ### ✨ Added
 - **Alternative Difficulty Indicator**
   - New toggle that replaces the default icon with a clear text label, making the current dungeon difficulty easier to read at a glance.
+
+---
 
 ## [3.25.0] – 2025-07-07
 ### ✨ Added
@@ -118,10 +143,14 @@
 - **Vendor – Sell Next**
   - When *Only sell 12 items* is enabled, a **Sell Next** button appears in the merchant window to unload the next batch.
 
+---
+
 ## [3.24.0] – 2025-07-02
 ### ✨ Added
 - **Vendoring**
   - New per-rarity option that lets you choose which crafting materials (grouped by expansion) are automatically sold.
+
+---
 
 ## [3.23.0] – 2025-06-27
 ### ✨ Added
@@ -139,11 +168,15 @@
     - Emotes
 - **Drink Macro** - Added Recuperate (Heal) as an Option for the macro when there is no mana food available
 
+---
+
 ## [3.22.1] – 2025-06-25
 ### 🐛 Fixed
 - Fixed a rare Lua error that occurred when joining instances and **hovering over currencies**.
 - Upgrading items sometimes **resulted** in a Lua error when **Instant Catalyst** was enabled.
 - While visiting a merchant, **incorrect item-level information** was occasionally displayed.
+
+---
 
 ## [3.22.0] – 2025-06-24
 ### ✨ Added
@@ -158,6 +191,8 @@
 - Mega-dungeon teleports work for **both halves** of split dungeons
 - Fixed errors when visiting merchants that sell items for **currency**
 
+---
+
 ## [3.21.0] – 2025-06-17
 ### ✨ Added  
 - **Bag-Filter Reset**  
@@ -167,9 +202,13 @@
 - Reduced some required libs
 - Updated TOC for 11.1.7
 
+---
+
 ## [3.20.1] – 2025-06-12
 ### 🐛 Fixed
 - Fixed an issue in groups with **Hide buffs on raid frames**
+
+---
 
 ## [3.20.0] – 2025-06-12  
 ### ✨ Added  
@@ -185,10 +224,14 @@
   - The `/way` slash command now **accepts TomTom-style syntax**, e.g.  
     `/way #2403 47.6 74.5 …`
 
+---
+
 ## [3.19.0] – 2025-06-09
 ### 🔁 Changed
 - **Shared Media**
   - Changed ChatIM sounds to LibSharedMedia to have more sounds available
+
+---
 
 ## [3.18.0] – 2025-06-01
 ### ✨ Added
@@ -211,6 +254,8 @@
 - `/r` and **Shift + R** no longer broke when ChatIM was enabled.
 - Inspect now shows the correct item level for scaling items (heirlooms, artifacts).
 
+---
+
 ## [3.17.0] – 2025-05-29
 ### ✨ Added  
 - **Instant Messenger** – Option to show incoming **and** outgoing whispers in a compact IM-style window.
@@ -219,9 +264,13 @@
   - Persistent history stores up to **1,000 messages per player**
     - History can be cleared per player or wiped entirely via the options panel.
 
+---
+
 ## [3.16.0] – 2025-05-26
 ### ✨ Added
 - **Gem-Socket Helper** – New Option under General->Character: Shows all socketable gems in a panel below the socket UI.
+
+---
 
 ## [3.15.0] – 2025-05-26
 ### ✨ Added
@@ -246,6 +295,8 @@
 - Miscellaneous internal clean-up for improved stability.
 - ButtonSink now correctly captures the minimap button of a specific add-on.
 
+---
+
 ## [3.13.0] – 2025-05-14
 ### ✨ Added
 - **Support for Talent Loadout Ex** – Talent Reminder now supports loadouts created with Talent Loadout Ex.
@@ -263,6 +314,8 @@
 
 ### 🐛 Fixed
 - Tooltip did not appear on player, target, or boss frames when **Mouse‑over Hide** was enabled.
+
+---
 
 ## [3.11.0] – 2025‑05‑06
 ### ✨ Added
