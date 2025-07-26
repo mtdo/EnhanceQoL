@@ -4,12 +4,15 @@
 ### ✨ Added
 - **Umbral Essentia**
   - Shadowmelt Potion added
+- **Fiber Socket**
+  - New Socket type for Legendary Cloak added
 ### 🔄 Changed
 - Sell all Junk API changed to a newer and more reliant one
 - **Talent Reminder behaviour for mega dungeon**
   - Mega-Dungeons like Tazavash now work seperately for Talent reminder
 - **Talent Reminder first load performance**
 ### 🐛 Fixed
+- Name truncation in solo dungeon content fixed
 
 ## [3.33.1] – 2025-07-25
 ### 🐛 Fixed

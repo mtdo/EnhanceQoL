@@ -13,6 +13,7 @@ GEM_TYPE_INFO["Prismatic"] = 10
 GEM_TYPE_INFO["SingingThunder"] = 9
 GEM_TYPE_INFO["SingingWind"] = 9
 GEM_TYPE_INFO["SingingSea"] = 9
+GEM_TYPE_INFO["Fiber"] = 9
 
 local frame = CreateFrame("Frame")
 

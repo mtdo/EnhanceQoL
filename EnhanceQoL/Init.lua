@@ -620,6 +620,7 @@ addon.variables.allowedSockets = {
 	["EMPTY_SOCKET_SINGINGSEA"] = true,
 	["EMPTY_SOCKET_SINGINGTHUNDER"] = true,
 	["EMPTY_SOCKET_SINGINGWIND"] = true,
+	["EMPTY_SOCKET_FIBER"] = true,
 }
 
 addon.variables.allowBagIlvlClassID = { [2] = true, [4] = true }
