@@ -195,22 +195,25 @@ end
 local ShareCategory
 
 local function exportCategory(catId, encodeMode)
-	local cat = addon.db.castTrackerCategories and addon.db.castTrackerCategories[catId]
-	if not cat then return end
-	local data = {
-		category = cat,
-		order = addon.db.castTrackerOrder and addon.db.castTrackerOrder[catId] or {},
-		version = 1,
-	}
+        local cat = addon.db.castTrackerCategories and addon.db.castTrackerCategories[catId]
+        if not cat then return end
+        local oldSound = cat.sound
+        cat.sound = nil
+        local data = {
+                category = cat,
+                order = addon.db.castTrackerOrder and addon.db.castTrackerOrder[catId] or {},
+                version = 1,
+        }
 	local serializer = LibStub("AceSerializer-3.0")
 	local deflate = LibStub("LibDeflate")
-	local serialized = serializer:Serialize(data)
-	local compressed = deflate:CompressDeflate(serialized)
-	if encodeMode == "chat" then
-		return deflate:EncodeForWoWChatChannel(compressed)
-	elseif encodeMode == "addon" then
-		return deflate:EncodeForWoWAddonChannel(compressed)
-	end
+        local serialized = serializer:Serialize(data)
+        local compressed = deflate:CompressDeflate(serialized)
+        cat.sound = oldSound
+        if encodeMode == "chat" then
+                return deflate:EncodeForWoWChatChannel(compressed)
+        elseif encodeMode == "addon" then
+                return deflate:EncodeForWoWAddonChannel(compressed)
+        end
 	return deflate:EncodeForPrint(compressed)
 end
 
@@ -229,19 +232,23 @@ local function importCategory(encoded)
 	cat.anchor = cat.anchor or { point = "CENTER", x = 0, y = 0 }
 	cat.width = cat.width or addon.db.castTrackerBarWidth or 200
 	cat.height = cat.height or addon.db.castTrackerBarHeight or 20
-	cat.color = cat.color or addon.db.castTrackerBarColor or { 1, 0.5, 0, 1 }
-	if cat.duration == nil then cat.duration = 0 end
-	if cat.sound == nil then cat.sound = addon.db.castTrackerBarSound or SOUNDKIT.ALARM_CLOCK_WARNING_3 end
-	cat.direction = cat.direction or addon.db.castTrackerBarDirection or "DOWN"
-	if cat.direction ~= "UP" and cat.direction ~= "DOWN" then cat.direction = "DOWN" end
-	cat.spells = cat.spells or {}
-	for sid, sp in pairs(cat.spells) do
-		if type(sp) ~= "table" then
-			cat.spells[sid] = { altIDs = {} }
-		else
-			sp.altIDs = sp.altIDs or {}
-		end
-	end
+        cat.color = cat.color or addon.db.castTrackerBarColor or { 1, 0.5, 0, 1 }
+        if cat.duration == nil then cat.duration = 0 end
+        cat.direction = cat.direction or addon.db.castTrackerBarDirection or "DOWN"
+        if cat.direction ~= "UP" and cat.direction ~= "DOWN" then cat.direction = "DOWN" end
+        cat.spells = cat.spells or {}
+        for sid, sp in pairs(cat.spells) do
+                if type(sp) ~= "table" then
+                        cat.spells[sid] = { altIDs = {} }
+                        sp = cat.spells[sid]
+                else
+                        sp.altIDs = sp.altIDs or {}
+                end
+                if sp.sound == nil then sp.sound = cat.sound or addon.db.castTrackerBarSound end
+                if sp.customTextEnabled == nil then sp.customTextEnabled = false end
+                if sp.customText == nil then sp.customText = "" end
+        end
+        cat.sound = nil
 	local newId = getNextCategoryId()
 	addon.db.castTrackerCategories[newId] = cat
 	addon.db.castTrackerOrder[newId] = data.order or {}
@@ -427,21 +434,7 @@ local function buildCategoryOptions(container, catId)
 	dirDrop:SetRelativeWidth(0.4)
 	container:AddChild(dirDrop)
 
-	local soundList = {}
-	for sname in pairs(addon.Aura.sounds or {}) do
-		soundList[sname] = sname
-	end
-	local list, order = addon.functions.prepareListForDropdown(soundList)
-	local dropSound = addon.functions.createDropdownAce(L["SoundFile"], list, order, function(self, _, val)
-		db.sound = val
-		self:SetValue(val)
-		local file = addon.Aura.sounds and addon.Aura.sounds[val]
-		if file then PlaySoundFile(file, "Master") end
-	end)
-	dropSound:SetValue(db.sound)
-	container:AddChild(dropSound)
-
-	container:AddChild(addon.functions.createSpacerAce())
+        container:AddChild(addon.functions.createSpacerAce())
 
 	local groupSpells = addon.functions.createContainer("InlineGroup", "Flow")
 	groupSpells:SetTitle(L["CastTrackerSpells"])
@@ -449,13 +442,18 @@ local function buildCategoryOptions(container, catId)
 
 	local addEdit = addon.functions.createEditboxAce(L["AddSpellID"], nil, function(self, _, text)
 		local id = tonumber(text)
-		if id then
-			db.spells[id] = { altIDs = {} }
-			self:SetText("")
-			rebuildAltMapping()
-			refreshTree(catId)
-			container:ReleaseChildren()
-			buildCategoryOptions(container, catId)
+                if id then
+                        db.spells[id] = {
+                                altIDs = {},
+                                customTextEnabled = false,
+                                customText = "",
+                                sound = addon.db.castTrackerBarSound,
+                        }
+                        self:SetText("")
+                        rebuildAltMapping()
+                        refreshTree(catId)
+                        container:ReleaseChildren()
+                        buildCategoryOptions(container, catId)
 		end
 	end)
 	groupSpells:AddChild(addEdit)
@@ -657,10 +655,39 @@ local function buildSpellOptions(container, catId, spellId)
 		GameTooltip:SetText(L["AlternativeSpellInfo"])
 		GameTooltip:Show()
 	end)
-	infoIcon:SetCallback("OnLeave", function() GameTooltip:Hide() end)
-	wrapper:AddChild(infoIcon)
+        infoIcon:SetCallback("OnLeave", function() GameTooltip:Hide() end)
+        wrapper:AddChild(infoIcon)
 
-	wrapper:AddChild(addon.functions.createSpacerAce())
+        local soundList = {}
+        for sname in pairs(addon.Aura.sounds or {}) do
+                soundList[sname] = sname
+        end
+        local list, order = addon.functions.prepareListForDropdown(soundList)
+        local dropSound = addon.functions.createDropdownAce(L["SoundFile"], list, order, function(self, _, val)
+                spell.sound = val
+                self:SetValue(val)
+                local file = addon.Aura.sounds and addon.Aura.sounds[val]
+                if file then PlaySoundFile(file, "Master") end
+        end)
+        dropSound:SetValue(spell.sound)
+        wrapper:AddChild(dropSound)
+
+        local cbText = addon.functions.createCheckboxAce(L["castTrackerShowCustomText"], spell.customTextEnabled, function(_, _, val)
+                spell.customTextEnabled = val
+                container:ReleaseChildren()
+                buildSpellOptions(container, catId, spellId)
+        end)
+        wrapper:AddChild(cbText)
+
+        if spell.customTextEnabled then
+                local txtEdit = addon.functions.createEditboxAce(L["castTrackerCustomText"], spell.customText or "", function(self, _, text)
+                        spell.customText = text
+                        CastTracker.functions.UpdateActiveBars(catId)
+                end)
+                wrapper:AddChild(txtEdit)
+        end
+
+        wrapper:AddChild(addon.functions.createSpacerAce())
 
 	local btn = addon.functions.createButtonAce(L["Remove"], 150, function()
 		cat.spells[spellId] = nil
@@ -726,11 +753,16 @@ function CastTracker.functions.StartBar(spellId, sourceGUID, catId, overrideCast
 	bar.sourceGUID = sourceGUID
 	bar.spellId = spellId
 	bar.catId = catId
-	bar.icon:SetTexture(icon)
-	bar.text:SetText(name)
-	bar.status:SetMinMaxValues(0, castTime)
-	bar.status:SetValue(0)
-	bar.status:SetStatusBarColor(unpack(db.color or { 1, 0.5, 0, 1 }))
+        bar.icon:SetTexture(icon)
+        local spellInfo = db.spells and db.spells[spellId] or {}
+        if spellInfo.customTextEnabled and spellInfo.customText and spellInfo.customText ~= "" then
+                bar.text:SetText(spellInfo.customText)
+        else
+                bar.text:SetText(name)
+        end
+        bar.status:SetMinMaxValues(0, castTime)
+        bar.status:SetValue(0)
+        bar.status:SetStatusBarColor(unpack(db.color or { 1, 0.5, 0, 1 }))
 	bar.icon:SetSize(db.height or 20, db.height or 20)
 	bar.icon:SetPoint("RIGHT", bar, "LEFT", -2, 0)
 	bar:SetSize(db.width or 200, db.height or 20)
@@ -738,15 +770,16 @@ function CastTracker.functions.StartBar(spellId, sourceGUID, catId, overrideCast
 	bar.finish = bar.start + castTime
 	bar:SetScript("OnUpdate", BarUpdate)
 	table.insert(activeOrder[catId], bar)
-	CastTracker.functions.LayoutBars(catId)
-	if db.sound then
-		local file = addon.Aura.sounds and addon.Aura.sounds[db.sound]
-		if file then
-			PlaySoundFile(file, "Master")
-		else
-			PlaySound(db.sound)
-		end
-	end
+        CastTracker.functions.LayoutBars(catId)
+        local soundKey = spellInfo.sound
+        if soundKey then
+                local file = addon.Aura.sounds and addon.Aura.sounds[soundKey]
+                if file then
+                        PlaySoundFile(file, "Master")
+                else
+                        PlaySound(soundKey)
+                end
+        end
 end
 
 CastTracker.functions.AcquireBar = AcquireBar
@@ -868,11 +901,10 @@ function CastTracker.functions.addCastTrackerOptions(container)
 				anchor = { point = "CENTER", x = 0, y = 0 },
 				width = addon.db.castTrackerBarWidth,
 				height = addon.db.castTrackerBarHeight,
-				color = addon.db.castTrackerBarColor,
-				duration = 0,
-				sound = addon.db.castTrackerBarSound,
-				direction = addon.db.castTrackerBarDirection,
-				spells = {},
+                                color = addon.db.castTrackerBarColor,
+                                duration = 0,
+                                direction = addon.db.castTrackerBarDirection,
+                                spells = {},
 			}
 			addon.db.castTrackerEnabled[newId] = true
 			addon.db.castTrackerLocked[newId] = false
