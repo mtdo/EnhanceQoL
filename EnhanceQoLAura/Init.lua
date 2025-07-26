@@ -24,6 +24,13 @@ addon.functions.InitDBValue("personalResourceBarManaHeight", 20)
 addon.functions.InitDBValue("personalResourceBarSettings", {})
 addon.functions.InitDBValue("personalResourceBarAnchors", {})
 
+-- defaults for new cast tracker categories
+addon.functions.InitDBValue("castTrackerBarWidth", 200)
+addon.functions.InitDBValue("castTrackerBarHeight", 20)
+addon.functions.InitDBValue("castTrackerBarColor", { 1, 0.5, 0, 1 })
+addon.functions.InitDBValue("castTrackerBarSound", SOUNDKIT.ALARM_CLOCK_WARNING_3)
+addon.functions.InitDBValue("castTrackerBarDirection", "DOWN")
+
 addon.functions.InitDBValue("buffTrackerCategories", {
 	[1] = {
 		name = string.format("%s", L["Example"]),
@@ -85,16 +92,17 @@ for _, cat in pairs(addon.db["buffTrackerCategories"]) do
 end
 
 addon.functions.InitDBValue("castTrackerCategories", {
-	[1] = {
-		name = string.format("%s", L["Example"]),
-		anchor = { point = "CENTER", x = 0, y = 0 },
-		width = 200,
-		height = 20,
-		color = { 1, 0.5, 0, 1 },
-		duration = 0,
-		sound = SOUNDKIT.ALARM_CLOCK_WARNING_3,
-		spells = {},
-	},
+        [1] = {
+                name = string.format("%s", L["Example"]),
+                anchor = { point = "CENTER", x = 0, y = 0 },
+                width = addon.db.castTrackerBarWidth,
+                height = addon.db.castTrackerBarHeight,
+                color = addon.db.castTrackerBarColor,
+                duration = 0,
+                sound = addon.db.castTrackerBarSound,
+                direction = addon.db.castTrackerBarDirection,
+                spells = {},
+        },
 })
 addon.functions.InitDBValue("castTrackerEnabled", {})
 addon.functions.InitDBValue("castTrackerLocked", {})
@@ -102,29 +110,31 @@ addon.functions.InitDBValue("castTrackerOrder", {})
 addon.functions.InitDBValue("castTrackerSelectedCategory", 1)
 
 if addon.db["castTracker"] and not addon.db["castTrackerCategories"] then
-	local old = addon.db["castTracker"]
-	addon.db["castTrackerCategories"] = {
-		[1] = {
-			name = string.format("%s", L["Example"]),
-			anchor = old.anchor or { point = "CENTER", x = 0, y = 0 },
-			width = old.width or 200,
-			height = old.height or 20,
-			color = old.color or { 1, 0.5, 0, 1 },
-			duration = old.duration or 0,
-			sound = old.sound,
-			spells = old.spells or {},
-		},
-	}
-	addon.db["castTracker"] = nil
+        local old = addon.db["castTracker"]
+        addon.db["castTrackerCategories"] = {
+                [1] = {
+                        name = string.format("%s", L["Example"]),
+                        anchor = old.anchor or { point = "CENTER", x = 0, y = 0 },
+                        width = old.width or addon.db.castTrackerBarWidth,
+                        height = old.height or addon.db.castTrackerBarHeight,
+                        color = old.color or addon.db.castTrackerBarColor,
+                        duration = old.duration or 0,
+                        sound = old.sound or addon.db.castTrackerBarSound,
+                        direction = old.direction or addon.db.castTrackerBarDirection,
+                        spells = old.spells or {},
+                },
+        }
+        addon.db["castTracker"] = nil
 end
 
 for id, cat in pairs(addon.db["castTrackerCategories"] or {}) do
-	cat.anchor = cat.anchor or { point = "CENTER", x = 0, y = 0 }
-	cat.width = cat.width or 200
-	cat.height = cat.height or 20
-	cat.color = cat.color or { 1, 0.5, 0, 1 }
-	if cat.duration == nil then cat.duration = 0 end
-	if cat.sound == nil then cat.sound = SOUNDKIT.ALARM_CLOCK_WARNING_3 end
+        cat.anchor = cat.anchor or { point = "CENTER", x = 0, y = 0 }
+        cat.width = cat.width or addon.db.castTrackerBarWidth
+        cat.height = cat.height or addon.db.castTrackerBarHeight
+        cat.color = cat.color or addon.db.castTrackerBarColor
+        if cat.duration == nil then cat.duration = 0 end
+        if cat.sound == nil then cat.sound = addon.db.castTrackerBarSound end
+        cat.direction = cat.direction or addon.db.castTrackerBarDirection
         cat.spells = cat.spells or {}
         for sid, spell in pairs(cat.spells) do
                 if type(spell) ~= "table" then

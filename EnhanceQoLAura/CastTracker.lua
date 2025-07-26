@@ -212,13 +212,14 @@ local function importCategory(encoded)
 	if not ok or type(data) ~= "table" then return end
 	local cat = data.category or data.cat or data
 	if type(cat) ~= "table" then return end
-	cat.anchor = cat.anchor or { point = "CENTER", x = 0, y = 0 }
-	cat.width = cat.width or 200
-	cat.height = cat.height or 20
-	cat.color = cat.color or { 1, 0.5, 0, 1 }
-	if cat.duration == nil then cat.duration = 0 end
-	if cat.sound == nil then cat.sound = SOUNDKIT.ALARM_CLOCK_WARNING_3 end
-        cat.spells = cat.spells or {}
+       cat.anchor = cat.anchor or { point = "CENTER", x = 0, y = 0 }
+       cat.width = cat.width or addon.db.castTrackerBarWidth or 200
+       cat.height = cat.height or addon.db.castTrackerBarHeight or 20
+       cat.color = cat.color or addon.db.castTrackerBarColor or { 1, 0.5, 0, 1 }
+       if cat.duration == nil then cat.duration = 0 end
+       if cat.sound == nil then cat.sound = addon.db.castTrackerBarSound or SOUNDKIT.ALARM_CLOCK_WARNING_3 end
+       cat.direction = cat.direction or addon.db.castTrackerBarDirection or "DOWN"
+       cat.spells = cat.spells or {}
         for sid, sp in pairs(cat.spells) do
                 if type(sp) ~= "table" then
                         cat.spells[sid] = { altIDs = {} }
@@ -390,11 +391,24 @@ local function buildCategoryOptions(container, catId)
 	col:SetLabel(L["CastTrackerColor"])
 	local c = db.color or { 1, 0.5, 0, 1 }
 	col:SetColor(c[1], c[2], c[3], c[4])
-	col:SetCallback("OnValueChanged", function(_, _, r, g, b, a)
-		db.color = { r, g, b, a }
-		UpdateActiveBars(catId)
-	end)
-	container:AddChild(col)
+        col:SetCallback("OnValueChanged", function(_, _, r, g, b, a)
+                db.color = { r, g, b, a }
+                UpdateActiveBars(catId)
+        end)
+        container:AddChild(col)
+
+        local dirDrop = addon.functions.createDropdownAce(
+                L["GrowthDirection"],
+                { LEFT = "LEFT", RIGHT = "RIGHT", UP = "UP", DOWN = "DOWN" },
+                nil,
+                function(self, _, val)
+                        db.direction = val
+                        CastTracker.functions.LayoutBars(catId)
+                end
+        )
+        dirDrop:SetValue(db.direction)
+        dirDrop:SetRelativeWidth(0.4)
+        container:AddChild(dirDrop)
 
 	local soundList = {}
 	for sname in pairs(addon.Aura.sounds or {}) do
@@ -615,16 +629,36 @@ local function BarUpdate(self)
 end
 
 function CastTracker.functions.LayoutBars(catId)
-	local order = activeOrder[catId] or {}
-	local anchor = ensureAnchor(catId)
-	for i, bar in ipairs(order) do
-		bar:ClearAllPoints()
-		if i == 1 then
-			bar:SetPoint("TOPLEFT", anchor, "TOPLEFT", 0, 0)
-		else
-			bar:SetPoint("TOPLEFT", order[i - 1], "BOTTOMLEFT", 0, -2)
-		end
-	end
+       local order = activeOrder[catId] or {}
+       local anchor = ensureAnchor(catId)
+       local dir = addon.db.castTrackerCategories[catId]
+               and addon.db.castTrackerCategories[catId].direction
+               or "DOWN"
+       for i, bar in ipairs(order) do
+               bar:ClearAllPoints()
+               if i == 1 then
+                       if dir == "UP" then
+                               bar:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT", 0, 0)
+                       elseif dir == "LEFT" then
+                               bar:SetPoint("TOPRIGHT", anchor, "TOPRIGHT", 0, 0)
+                       elseif dir == "RIGHT" then
+                               bar:SetPoint("TOPLEFT", anchor, "TOPLEFT", 0, 0)
+                       else
+                               bar:SetPoint("TOPLEFT", anchor, "TOPLEFT", 0, 0)
+                       end
+               else
+                       local prev = order[i - 1]
+                       if dir == "UP" then
+                               bar:SetPoint("BOTTOMLEFT", prev, "TOPLEFT", 0, 2)
+                       elseif dir == "LEFT" then
+                               bar:SetPoint("TOPRIGHT", prev, "TOPLEFT", -2, 0)
+                       elseif dir == "RIGHT" then
+                               bar:SetPoint("TOPLEFT", prev, "TOPRIGHT", 2, 0)
+                       else
+                               bar:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -2)
+                       end
+               end
+       end
 end
 
 function CastTracker.functions.StartBar(spellId, sourceGUID, catId)
@@ -717,18 +751,19 @@ function CastTracker.functions.addCastTrackerOptions(container)
 	treeGroup:SetTreeWidth(200, true)
 	treeGroup:SetTree(getCategoryTree())
 	treeGroup:SetCallback("OnGroupSelected", function(widget, _, value)
-		if value == "ADD_CATEGORY" then
-			local newId = getNextCategoryId()
-			addon.db.castTrackerCategories[newId] = {
-				name = L["NewCategoryName"] or "New",
-				anchor = { point = "CENTER", x = 0, y = 0 },
-				width = 200,
-				height = 20,
-				color = { 1, 0.5, 0, 1 },
-				duration = 0,
-				sound = SOUNDKIT.ALARM_CLOCK_WARNING_3,
-				spells = {},
-			}
+                if value == "ADD_CATEGORY" then
+                        local newId = getNextCategoryId()
+                        addon.db.castTrackerCategories[newId] = {
+                                name = L["NewCategoryName"] or "New",
+                                anchor = { point = "CENTER", x = 0, y = 0 },
+                                width = addon.db.castTrackerBarWidth,
+                                height = addon.db.castTrackerBarHeight,
+                                color = addon.db.castTrackerBarColor,
+                                duration = 0,
+                                sound = addon.db.castTrackerBarSound,
+                                direction = addon.db.castTrackerBarDirection,
+                                spells = {},
+                        }
 			addon.db.castTrackerEnabled[newId] = true
 			addon.db.castTrackerLocked[newId] = false
 			addon.db.castTrackerOrder[newId] = {}
