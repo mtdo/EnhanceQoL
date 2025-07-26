@@ -125,10 +125,17 @@ for id, cat in pairs(addon.db["castTrackerCategories"] or {}) do
 	cat.color = cat.color or { 1, 0.5, 0, 1 }
 	if cat.duration == nil then cat.duration = 0 end
 	if cat.sound == nil then cat.sound = SOUNDKIT.ALARM_CLOCK_WARNING_3 end
-	cat.spells = cat.spells or {}
-	if addon.db["castTrackerEnabled"][id] == nil then addon.db["castTrackerEnabled"][id] = true end
-	if addon.db["castTrackerLocked"][id] == nil then addon.db["castTrackerLocked"][id] = false end
-	addon.db["castTrackerOrder"][id] = addon.db["castTrackerOrder"][id] or {}
+        cat.spells = cat.spells or {}
+        for sid, spell in pairs(cat.spells) do
+                if type(spell) ~= "table" then
+                        cat.spells[sid] = { altIDs = {} }
+                else
+                        spell.altIDs = spell.altIDs or {}
+                end
+        end
+        if addon.db["castTrackerEnabled"][id] == nil then addon.db["castTrackerEnabled"][id] = true end
+        if addon.db["castTrackerLocked"][id] == nil then addon.db["castTrackerLocked"][id] = false end
+        addon.db["castTrackerOrder"][id] = addon.db["castTrackerOrder"][id] or {}
 end
 
 if type(addon.db["castTrackerSelectedCategory"]) ~= "number" then addon.db["castTrackerSelectedCategory"] = 1 end

@@ -19,6 +19,25 @@ local ensureAnchor
 local framePools = {}
 local activeBars = {}
 local activeOrder = {}
+local altToBase = {}
+
+local function rebuildAltMapping()
+        wipe(altToBase)
+        for _, cat in pairs(addon.db.castTrackerCategories or {}) do
+                for baseId, spell in pairs(cat.spells or {}) do
+                        if type(spell) ~= "table" then
+                                cat.spells[baseId] = { altIDs = {} }
+                                spell = cat.spells[baseId]
+                        end
+                        spell.altIDs = spell.altIDs or {}
+                        spell.altHash = {}
+                        for _, altId in ipairs(spell.altIDs) do
+                                altToBase[altId] = baseId
+                                spell.altHash[altId] = true
+                        end
+                end
+        end
+end
 local selectedCategory = addon.db["castTrackerSelectedCategory"] or 1
 local treeGroup
 
@@ -175,14 +194,22 @@ local function importCategory(encoded)
 	cat.color = cat.color or { 1, 0.5, 0, 1 }
 	if cat.duration == nil then cat.duration = 0 end
 	if cat.sound == nil then cat.sound = SOUNDKIT.ALARM_CLOCK_WARNING_3 end
-	cat.spells = cat.spells or {}
-	local newId = getNextCategoryId()
-	addon.db.castTrackerCategories[newId] = cat
-	addon.db.castTrackerOrder[newId] = data.order or {}
-	addon.db.castTrackerEnabled[newId] = true
-	addon.db.castTrackerLocked[newId] = false
-	ensureAnchor(newId)
-	return newId
+        cat.spells = cat.spells or {}
+        for sid, sp in pairs(cat.spells) do
+                if type(sp) ~= "table" then
+                        cat.spells[sid] = { altIDs = {} }
+                else
+                        sp.altIDs = sp.altIDs or {}
+                end
+        end
+        local newId = getNextCategoryId()
+        addon.db.castTrackerCategories[newId] = cat
+        addon.db.castTrackerOrder[newId] = data.order or {}
+        addon.db.castTrackerEnabled[newId] = true
+        addon.db.castTrackerLocked[newId] = false
+        ensureAnchor(newId)
+        rebuildAltMapping()
+        return newId
 end
 
 local function previewImportCategory(encoded)
@@ -258,34 +285,36 @@ local function handleDragDrop(src, dst)
 	sSpell = tonumber(sSpell)
 	if dSpell then dSpell = tonumber(dSpell) end
 
-	local srcCat = addon.db.castTrackerCategories[sCat]
-	local dstCat = addon.db.castTrackerCategories[dCat]
-	if not srcCat or not dstCat then return end
-	if not srcCat.spells[sSpell] then return end
+        local srcCat = addon.db.castTrackerCategories[sCat]
+        local dstCat = addon.db.castTrackerCategories[dCat]
+        if not srcCat or not dstCat then return end
+        if not srcCat.spells[sSpell] then return end
 
-	srcCat.spells[sSpell] = nil
-	addon.db.castTrackerOrder[sCat] = addon.db.castTrackerOrder[sCat] or {}
-	for i, v in ipairs(addon.db.castTrackerOrder[sCat]) do
-		if v == sSpell then
-			table.remove(addon.db.castTrackerOrder[sCat], i)
-			break
+        local spellData = srcCat.spells[sSpell]
+        srcCat.spells[sSpell] = nil
+        addon.db.castTrackerOrder[sCat] = addon.db.castTrackerOrder[sCat] or {}
+        for i, v in ipairs(addon.db.castTrackerOrder[sCat]) do
+                if v == sSpell then
+                        table.remove(addon.db.castTrackerOrder[sCat], i)
+                        break
 		end
 	end
 
-	dstCat.spells[sSpell] = true
-	addon.db.castTrackerOrder[dCat] = addon.db.castTrackerOrder[dCat] or {}
-	local insertPos = #addon.db.castTrackerOrder[dCat] + 1
-	if dSpell then
-		for i, v in ipairs(addon.db.castTrackerOrder[dCat]) do
-			if v == dSpell then
+        dstCat.spells[sSpell] = spellData
+        addon.db.castTrackerOrder[dCat] = addon.db.castTrackerOrder[dCat] or {}
+        local insertPos = #addon.db.castTrackerOrder[dCat] + 1
+        if dSpell then
+                for i, v in ipairs(addon.db.castTrackerOrder[dCat]) do
+                        if v == dSpell then
 				insertPos = i
 				break
 			end
 		end
 	end
-	table.insert(addon.db.castTrackerOrder[dCat], insertPos, sSpell)
+        table.insert(addon.db.castTrackerOrder[dCat], insertPos, sSpell)
 
-	refreshTree(selectedCategory)
+        rebuildAltMapping()
+        refreshTree(selectedCategory)
 end
 
 local function buildCategoryOptions(container, catId)
@@ -363,16 +392,17 @@ local function buildCategoryOptions(container, catId)
 	groupSpells:SetTitle(L["CastTrackerSpells"])
 	container:AddChild(groupSpells)
 
-	local addEdit = addon.functions.createEditboxAce(L["AddSpellID"], nil, function(self, _, text)
-		local id = tonumber(text)
-		if id then
-			db.spells[id] = true
-			self:SetText("")
-			refreshTree(catId)
-			container:ReleaseChildren()
-			buildCategoryOptions(container, catId)
-		end
-	end)
+        local addEdit = addon.functions.createEditboxAce(L["AddSpellID"], nil, function(self, _, text)
+                local id = tonumber(text)
+                if id then
+                        db.spells[id] = { altIDs = {} }
+                        self:SetText("")
+                        rebuildAltMapping()
+                        refreshTree(catId)
+                        container:ReleaseChildren()
+                        buildCategoryOptions(container, catId)
+                end
+        end)
 	groupSpells:AddChild(addEdit)
 
 	for _, spellId in ipairs(addon.db.castTrackerOrder[catId] or {}) do
@@ -383,12 +413,13 @@ local function buildCategoryOptions(container, catId)
 			local label = addon.functions.createLabelAce(name .. " (" .. spellId .. ")")
 			label:SetRelativeWidth(0.7)
 			line:AddChild(label)
-			local btn = addon.functions.createButtonAce(L["Remove"], 80, function()
-				db.spells[spellId] = nil
-				refreshTree(catId)
-				container:ReleaseChildren()
-				buildCategoryOptions(container, catId)
-			end)
+                        local btn = addon.functions.createButtonAce(L["Remove"], 80, function()
+                                db.spells[spellId] = nil
+                                rebuildAltMapping()
+                                refreshTree(catId)
+                                container:ReleaseChildren()
+                                buildCategoryOptions(container, catId)
+                        end)
 			line:AddChild(btn)
 			groupSpells:AddChild(line)
 		end
@@ -396,19 +427,86 @@ local function buildCategoryOptions(container, catId)
 end
 
 local function buildSpellOptions(container, catId, spellId)
-	local cat = addon.db.castTrackerCategories[catId]
-	if not cat or not cat.spells[spellId] then return end
+        local cat = addon.db.castTrackerCategories[catId]
+        local spell = cat and cat.spells[spellId]
+        if not cat or not spell then return end
 
-	local name = GetSpellInfo(spellId) or tostring(spellId)
-	local label = addon.functions.createLabelAce(name .. " (" .. spellId .. ")")
-	container:AddChild(label)
+        local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
+        wrapper:SetFullWidth(true)
+        container:AddChild(wrapper)
 
-	local btn = addon.functions.createButtonAce(L["Remove"], 150, function()
-		cat.spells[spellId] = nil
-		refreshTree(catId)
-		container:ReleaseChildren()
-	end)
-	container:AddChild(btn)
+        local name = GetSpellInfo(spellId) or tostring(spellId)
+        local label = addon.functions.createLabelAce(name .. " (" .. spellId .. ")")
+        wrapper:AddChild(label)
+
+        spell.altIDs = spell.altIDs or {}
+        for _, altId in ipairs(spell.altIDs) do
+                local row = addon.functions.createContainer("SimpleGroup", "Flow")
+                row:SetFullWidth(true)
+                local lbl = AceGUI:Create("Label")
+                local altInfo = C_Spell.GetSpellInfo(altId)
+                if altInfo then
+                        lbl:SetText(L["AltSpellIDs"] .. ": " .. altInfo.name .. " (" .. altId .. ")")
+                else
+                        lbl:SetText(L["AltSpellIDs"] .. ": " .. altId)
+                end
+                lbl:SetRelativeWidth(0.7)
+                row:AddChild(lbl)
+
+                local removeIcon = AceGUI:Create("Icon")
+                removeIcon:SetLabel("")
+                removeIcon:SetImage("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
+                removeIcon:SetImageSize(16, 16)
+                removeIcon:SetRelativeWidth(0.3)
+                removeIcon:SetHeight(16)
+                removeIcon:SetCallback("OnClick", function()
+                        for i, v in ipairs(spell.altIDs) do
+                                if v == altId then
+                                        table.remove(spell.altIDs, i)
+                                        break
+                                end
+                        end
+                        rebuildAltMapping()
+                        container:ReleaseChildren()
+                        buildSpellOptions(container, catId, spellId)
+                end)
+                row:AddChild(removeIcon)
+                wrapper:AddChild(row)
+        end
+
+        local altEdit = addon.functions.createEditboxAce(L["AddAltSpellID"], nil, function(self, _, text)
+                local alt = tonumber(text)
+                if alt then
+                        if not tContains(spell.altIDs, alt) then table.insert(spell.altIDs, alt) end
+                        rebuildAltMapping()
+                        self:SetText("")
+                        container:ReleaseChildren()
+                        buildSpellOptions(container, catId, spellId)
+                end
+        end)
+        wrapper:AddChild(altEdit)
+
+        local infoIcon = AceGUI:Create("Icon")
+        infoIcon:SetImage("Interface\\FriendsFrame\\InformationIcon")
+        infoIcon:SetImageSize(16, 16)
+        infoIcon:SetWidth(16)
+        infoIcon:SetCallback("OnEnter", function(widget)
+                GameTooltip:SetOwner(widget.frame, "ANCHOR_RIGHT")
+                GameTooltip:SetText(L["AlternativeSpellInfo"])
+                GameTooltip:Show()
+        end)
+        infoIcon:SetCallback("OnLeave", function() GameTooltip:Hide() end)
+        wrapper:AddChild(infoIcon)
+
+        wrapper:AddChild(addon.functions.createSpacerAce())
+
+        local btn = addon.functions.createButtonAce(L["Remove"], 150, function()
+                cat.spells[spellId] = nil
+                rebuildAltMapping()
+                refreshTree(catId)
+                container:ReleaseChildren()
+        end)
+        wrapper:AddChild(btn)
 end
 
 local function BarUpdate(self)
@@ -472,31 +570,33 @@ CastTracker.functions.BarUpdate = BarUpdate
 CastTracker.functions.UpdateActiveBars = UpdateActiveBars
 
 local function HandleCLEU()
-	local _, subevent, _, sourceGUID, _, sourceFlags, _, destGUID, _, _, _, spellId = CombatLogGetCurrentEventInfo()
-	if subevent == "SPELL_CAST_START" then
-		for catId, cat in pairs(addon.db.castTrackerCategories or {}) do
-			if addon.db.castTrackerEnabled[catId] and cat.spells and cat.spells[spellId] and bit.band(sourceFlags, COMBATLOG_OBJECT_REACTION_HOSTILE) ~= 0 then
-				CastTracker.functions.StartBar(spellId, sourceGUID, catId)
-			end
-		end
-	elseif subevent == "SPELL_CAST_SUCCESS" or subevent == "SPELL_CAST_FAILED" or subevent == "SPELL_INTERRUPT" then
-		for id, bars in pairs(activeBars) do
-			local bar = bars[sourceGUID]
-			if bar and bar.spellId == spellId then ReleaseBar(id, bar) end
-		end
-	elseif subevent == "UNIT_DIED" then
-		for id, bars in pairs(activeBars) do
-			local bar = bars[destGUID]
-			if bar then ReleaseBar(id, bar) end
-		end
-	end
+        local _, subevent, _, sourceGUID, _, sourceFlags, _, destGUID, _, _, _, spellId = CombatLogGetCurrentEventInfo()
+        local baseSpell = altToBase[spellId] or spellId
+        if subevent == "SPELL_CAST_START" then
+                for catId, cat in pairs(addon.db.castTrackerCategories or {}) do
+                        if addon.db.castTrackerEnabled[catId] and cat.spells and cat.spells[baseSpell] and bit.band(sourceFlags, COMBATLOG_OBJECT_REACTION_HOSTILE) ~= 0 then
+                                CastTracker.functions.StartBar(baseSpell, sourceGUID, catId)
+                        end
+                end
+        elseif subevent == "SPELL_CAST_SUCCESS" or subevent == "SPELL_CAST_FAILED" or subevent == "SPELL_INTERRUPT" then
+                for id, bars in pairs(activeBars) do
+                        local bar = bars[sourceGUID]
+                        if bar and bar.spellId == baseSpell then ReleaseBar(id, bar) end
+                end
+        elseif subevent == "UNIT_DIED" then
+                for id, bars in pairs(activeBars) do
+                        local bar = bars[destGUID]
+                        if bar then ReleaseBar(id, bar) end
+                end
+        end
 end
 
 local eventFrame = CreateFrame("Frame")
 
 function CastTracker.functions.Refresh()
-	for id, cat in pairs(addon.db.castTrackerCategories or {}) do
-		local a = ensureAnchor(id)
+        rebuildAltMapping()
+        for id, cat in pairs(addon.db.castTrackerCategories or {}) do
+                local a = ensureAnchor(id)
 		a:ClearAllPoints()
 		a:SetPoint(cat.anchor.point, UIParent, cat.anchor.point, cat.anchor.x, cat.anchor.y)
 		UpdateActiveBars(id)
