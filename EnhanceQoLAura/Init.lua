@@ -99,7 +99,6 @@ addon.functions.InitDBValue("castTrackerCategories", {
                 height = addon.db.castTrackerBarHeight,
                 color = addon.db.castTrackerBarColor,
                 duration = 0,
-                sound = addon.db.castTrackerBarSound,
                 direction = addon.db.castTrackerBarDirection,
                 spells = {},
         },
@@ -119,7 +118,6 @@ if addon.db["castTracker"] and not addon.db["castTrackerCategories"] then
                         height = old.height or addon.db.castTrackerBarHeight,
                         color = old.color or addon.db.castTrackerBarColor,
                         duration = old.duration or 0,
-                        sound = old.sound or addon.db.castTrackerBarSound,
                         direction = old.direction or addon.db.castTrackerBarDirection,
                         spells = old.spells or {},
                 },
@@ -133,16 +131,22 @@ for id, cat in pairs(addon.db["castTrackerCategories"] or {}) do
         cat.height = cat.height or addon.db.castTrackerBarHeight
         cat.color = cat.color or addon.db.castTrackerBarColor
         if cat.duration == nil then cat.duration = 0 end
-        if cat.sound == nil then cat.sound = addon.db.castTrackerBarSound end
         cat.direction = cat.direction or addon.db.castTrackerBarDirection
         cat.spells = cat.spells or {}
         for sid, spell in pairs(cat.spells) do
                 if type(spell) ~= "table" then
                         cat.spells[sid] = { altIDs = {} }
+                        spell = cat.spells[sid]
                 else
                         spell.altIDs = spell.altIDs or {}
                 end
+                if spell.sound == nil then
+                        spell.sound = cat.sound or addon.db.castTrackerBarSound
+                end
+                if spell.customTextEnabled == nil then spell.customTextEnabled = false end
+                if spell.customText == nil then spell.customText = "" end
         end
+        cat.sound = nil
         if addon.db["castTrackerEnabled"][id] == nil then addon.db["castTrackerEnabled"][id] = true end
         if addon.db["castTrackerLocked"][id] == nil then addon.db["castTrackerLocked"][id] = false end
         addon.db["castTrackerOrder"][id] = addon.db["castTrackerOrder"][id] or {}
