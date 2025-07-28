@@ -296,6 +296,7 @@ local function importCategory(encoded)
 		end
 		if sp.customTextEnabled == nil then sp.customTextEnabled = false end
 		if sp.customText == nil then sp.customText = "" end
+		if sp.treeName == nil then sp.treeName = nil end
 	end
 	local newId = getNextCategoryId()
 	addon.db.castTrackerCategories[newId] = cat
@@ -363,9 +364,11 @@ local function getCategoryTree()
 		end)
 		for _, spellId in ipairs(spells) do
 			local info = C_Spell.GetSpellInfo(spellId)
+			local sdata = cat.spells[spellId] or {}
+			local tName = sdata.treeName
 			table.insert(node.children, {
 				value = catId .. "\001" .. spellId,
-				text = info and info.name or tostring(spellId),
+				text = tName and tName ~= "" and tName or (info and info.name or tostring(spellId)),
 				icon = info and info.iconID,
 			})
 		end
@@ -523,6 +526,7 @@ local function buildCategoryOptions(container, catId)
 				altIDs = {},
 				customTextEnabled = false,
 				customText = "",
+				treeName = "",
 			}
 			addon.db.castTrackerSounds[catId] = addon.db.castTrackerSounds[catId] or {}
 			addon.db.castTrackerSoundsEnabled[catId] = addon.db.castTrackerSoundsEnabled[catId] or {}
@@ -543,7 +547,9 @@ local function buildCategoryOptions(container, catId)
 			line:SetFullWidth(true)
 			local info = C_Spell.GetSpellInfo(spellId)
 			local name = info and info.name or tostring(spellId)
-			local label = addon.functions.createLabelAce(name .. " (" .. spellId .. ")")
+			local tName = db.spells[spellId] and db.spells[spellId].treeName
+			local display = tName and tName ~= "" and tName or name
+			local label = addon.functions.createLabelAce(display .. " (" .. spellId .. ")")
 			label:SetRelativeWidth(0.7)
 			line:AddChild(label)
 			local btn = addon.functions.createButtonAce(L["Remove"], 80, function()
@@ -690,8 +696,21 @@ local function buildSpellOptions(container, catId, spellId)
 
 	local info = C_Spell.GetSpellInfo(spellId)
 	local name = info and info.name or tostring(spellId)
-	local label = addon.functions.createLabelAce(name .. " (" .. spellId .. ")")
+	local labelName = spell.treeName or name
+	local label = addon.functions.createLabelAce(labelName .. " (" .. spellId .. ")")
 	wrapper:AddChild(label)
+
+	local treeEdit = addon.functions.createEditboxAce(L["castTrackerTreeName"], spell.treeName or "", function(self, _, text)
+		if text ~= "" then
+			spell.treeName = text
+		else
+			spell.treeName = nil
+		end
+		refreshTree(catId .. "\001" .. spellId)
+		container:ReleaseChildren()
+		buildSpellOptions(container, catId, spellId)
+	end)
+	wrapper:AddChild(treeEdit)
 
 	addon.db.castTrackerSounds[catId] = addon.db.castTrackerSounds[catId] or {}
 	addon.db.castTrackerSoundsEnabled[catId] = addon.db.castTrackerSoundsEnabled[catId] or {}
@@ -858,14 +877,12 @@ function CastTracker.functions.LayoutBars(catId)
 end
 
 function CastTracker.functions.StartBar(spellId, sourceGUID, catId, overrideCastTime, castType, suppressSound, triggerId)
-       local spellData = C_Spell.GetSpellInfo(spellId)
-       local name = spellData and spellData.name
-       local iconSpell = spellData
-       if addon.db.castTrackerUseAltSpellIcon and triggerId and triggerId ~= spellId then
-               iconSpell = C_Spell.GetSpellInfo(triggerId) or iconSpell
-       end
-       local icon = iconSpell and iconSpell.iconID
-       local castTime = spellData and spellData.castTime
+	local spellData = C_Spell.GetSpellInfo(spellId)
+	local name = spellData and spellData.name
+	local iconSpell = spellData
+	if addon.db.castTrackerUseAltSpellIcon and triggerId and triggerId ~= spellId then iconSpell = C_Spell.GetSpellInfo(triggerId) or iconSpell end
+	local icon = iconSpell and iconSpell.iconID
+	local castTime = spellData and spellData.castTime
 	castTime = (castTime or 0) / 1000
 	if overrideCastTime and overrideCastTime > 0 then castTime = overrideCastTime end
 	local db = addon.db.castTrackerCategories and addon.db.castTrackerCategories[catId] or {}
@@ -942,9 +959,9 @@ local function HandleCLEU()
 		if unit then
 			_, castTime = getCastInfo(unit)
 		end
-               for catId in pairs(cats) do
-                       if addon.db.castTrackerEnabled[catId] then CastTracker.functions.StartBar(baseSpell, sourceGUID, catId, castTime, "cast", nil, spellId) end
-               end
+		for catId in pairs(cats) do
+			if addon.db.castTrackerEnabled[catId] then CastTracker.functions.StartBar(baseSpell, sourceGUID, catId, castTime, "cast", nil, spellId) end
+		end
 	elseif subevent == "SPELL_CAST_SUCCESS" or subevent == "SPELL_CAST_FAILED" or subevent == "SPELL_INTERRUPT" then
 		local key = sourceGUID .. ":" .. baseSpell
 		for id, bars in pairs(activeBars) do
@@ -972,7 +989,7 @@ local function HandleUnitChannelStart(unit, castGUID, spellId)
 	for catId in pairs(cats) do
 		local existing = activeBars[catId] and activeBars[catId][key]
 		local suppress = existing and existing.castType == "cast"
-               if addon.db.castTrackerEnabled[catId] then CastTracker.functions.StartBar(baseSpell, sourceGUID, catId, castTime, "channel", suppress, spellId) end
+		if addon.db.castTrackerEnabled[catId] then CastTracker.functions.StartBar(baseSpell, sourceGUID, catId, castTime, "channel", suppress, spellId) end
 	end
 end
 
@@ -1034,17 +1051,13 @@ function CastTracker.functions.addCastTrackerOptions(container)
 	wrapper:SetFullHeight(true)
 	container:AddChild(wrapper)
 
-       local left = addon.functions.createContainer("SimpleGroup", "Flow")
-       left:SetWidth(300)
-       left:SetFullHeight(true)
-       wrapper:AddChild(left)
+	local left = addon.functions.createContainer("SimpleGroup", "Flow")
+	left:SetWidth(300)
+	left:SetFullHeight(true)
+	wrapper:AddChild(left)
 
-       local altIconCB = addon.functions.createCheckboxAce(
-               L["castTrackerUseAltSpellIcon"],
-               addon.db.castTrackerUseAltSpellIcon,
-               function(_, _, val) addon.db.castTrackerUseAltSpellIcon = val end
-       )
-       left:AddChild(altIconCB)
+	local altIconCB = addon.functions.createCheckboxAce(L["castTrackerUseAltSpellIcon"], addon.db.castTrackerUseAltSpellIcon, function(_, _, val) addon.db.castTrackerUseAltSpellIcon = val end)
+	left:AddChild(altIconCB)
 
 	treeGroup = AceGUI:Create("EQOL_DragTreeGroup")
 	treeGroup:SetFullHeight(true)
