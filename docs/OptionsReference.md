@@ -22,6 +22,7 @@ This document lists the checkboxes found in EnhanceQoL.lua and briefly explains 
 ## Bags & Inventory
 - **Display item level on the Merchant Frame** (Display item level on the Merchant Frame).
 - **Display ilvl on equipment in all bags** (Display ilvl on equipment in all bags).
+- **Item level label position in bags** (Choose where the item level text appears on bag icons).
 - **Enable item filter in bags** (Enable item filter in bags – drag with <kbd>Shift</kbd> to move).
 - **Enable money tracker** (Enable to track your money across all characters): track gold across all characters.
 - **Display item level on the Bank Frame** (Display item level on the Bank Frame).

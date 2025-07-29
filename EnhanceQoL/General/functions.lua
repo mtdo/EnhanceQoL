@@ -419,16 +419,26 @@ local function updateButtonInfo(itemButton, bag, slot, frameName)
 			(itemEquipLoc ~= "INVTYPE_NON_EQUIP_IGNORE" or (classID == 4 and subclassID == 0)) and not (classID == 4 and subclassID == 5) -- Cosmetic
 		then
 			if not itemButton.OverlayFilter then itemButton.OverlayFilter = itemButton:CreateFontString(nil, "ARTWORK") end
-			if not itemButton.ItemLevelText then
-				-- Create behind Blizzard's search overlay so it fades automatically
-				itemButton.ItemLevelText = itemButton:CreateFontString(nil, "ARTWORK")
-				itemButton.ItemLevelText:SetDrawLayer("ARTWORK", 1)
-				itemButton.ItemLevelText:SetFont(addon.variables.defaultFont, 13, "OUTLINE")
-				itemButton.ItemLevelText:SetPoint("TOPRIGHT", itemButton, "TOPRIGHT", 0, -2)
+                        if not itemButton.ItemLevelText then
+                                -- Create behind Blizzard's search overlay so it fades automatically
+                                itemButton.ItemLevelText = itemButton:CreateFontString(nil, "ARTWORK")
+                                itemButton.ItemLevelText:SetDrawLayer("ARTWORK", 1)
+                                itemButton.ItemLevelText:SetFont(addon.variables.defaultFont, 13, "OUTLINE")
+                                itemButton.ItemLevelText:SetShadowOffset(2, -2)
+                                itemButton.ItemLevelText:SetShadowColor(0, 0, 0, 1)
+                        end
 
-				itemButton.ItemLevelText:SetShadowOffset(2, -2)
-				itemButton.ItemLevelText:SetShadowColor(0, 0, 0, 1)
-			end
+                        itemButton.ItemLevelText:ClearAllPoints()
+                        local pos = addon.db["bagIlvlPosition"] or "TOPRIGHT"
+                        if pos == "TOPLEFT" then
+                                itemButton.ItemLevelText:SetPoint("TOPLEFT", itemButton, "TOPLEFT", 2, -2)
+                        elseif pos == "BOTTOMLEFT" then
+                                itemButton.ItemLevelText:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
+                        elseif pos == "BOTTOMRIGHT" then
+                                itemButton.ItemLevelText:SetPoint("BOTTOMRIGHT", itemButton, "BOTTOMRIGHT", 0, 2)
+                        else
+                                itemButton.ItemLevelText:SetPoint("TOPRIGHT", itemButton, "TOPRIGHT", 0, -2)
+                        end
 			if nil ~= addon.variables.allowedEquipSlotsBagIlvl[itemEquipLoc] then
 				local r, g, b = C_Item.GetItemQualityColor(itemQuality)
 				local itemLevelText = C_Item.GetDetailedItemLevelInfo(itemLink)
@@ -439,16 +449,21 @@ local function updateButtonInfo(itemButton, bag, slot, frameName)
 				itemButton.ItemLevelText:Show()
 
 				if addon.db["showBindOnBagItems"] and bType then
-					if not itemButton.ItemBoundType then
-						-- Position behind Blizzard's overlay
-						itemButton.ItemBoundType = itemButton:CreateFontString(nil, "ARTWORK")
-						itemButton.ItemBoundType:SetDrawLayer("ARTWORK", 1)
-						itemButton.ItemBoundType:SetFont(addon.variables.defaultFont, 10, "OUTLINE")
-						itemButton.ItemBoundType:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
+                                        if not itemButton.ItemBoundType then
+                                                -- Position behind Blizzard's overlay
+                                                itemButton.ItemBoundType = itemButton:CreateFontString(nil, "ARTWORK")
+                                                itemButton.ItemBoundType:SetDrawLayer("ARTWORK", 1)
+                                                itemButton.ItemBoundType:SetFont(addon.variables.defaultFont, 10, "OUTLINE")
+                                                itemButton.ItemBoundType:SetShadowOffset(2, 2)
+                                                itemButton.ItemBoundType:SetShadowColor(0, 0, 0, 1)
+                                        end
 
-						itemButton.ItemBoundType:SetShadowOffset(2, 2)
-						itemButton.ItemBoundType:SetShadowColor(0, 0, 0, 1)
-					end
+                                        itemButton.ItemBoundType:ClearAllPoints()
+                                        if addon.db["bagIlvlPosition"] == "BOTTOMLEFT" then
+                                                itemButton.ItemBoundType:SetPoint("TOPLEFT", itemButton, "TOPLEFT", 2, -2)
+                                        else
+                                                itemButton.ItemBoundType:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
+                                        end
 					itemButton.ItemBoundType:SetFormattedText(bType)
 					itemButton.ItemBoundType:Show()
 				elseif itemButton.ItemBoundType then

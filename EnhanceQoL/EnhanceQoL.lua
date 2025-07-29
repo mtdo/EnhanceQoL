@@ -409,12 +409,12 @@ local function CheckItemGems(element, itemLink, emptySocketsCount, key, pdElemen
 end
 
 local function GetUnitFromGUID(targetGUID)
-        if not targetGUID then return nil end
+	if not targetGUID then return nil end
 
-        local unit = UnitTokenFromGUID(targetGUID)
-        if unit then return unit end
+	local unit = UnitTokenFromGUID(targetGUID)
+	if unit then return unit end
 
-        return nil
+	return nil
 end
 
 local function getTooltipInfoFromLink(link)
@@ -1918,6 +1918,23 @@ local function addBagFrame(container)
 		groupCore:AddChild(cbautoChooseQuest)
 	end
 
+	local list = {
+		TOPLEFT = L["topLeft"],
+		TOPRIGHT = L["topRight"],
+		BOTTOMLEFT = L["bottomLeft"],
+		BOTTOMRIGHT = L["bottomRight"],
+	}
+	local order = { "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT" }
+	local dropIlvlPos = addon.functions.createDropdownAce(L["bagIlvlPosition"], list, order, function(self, _, value)
+		addon.db["bagIlvlPosition"] = value
+		for _, frame in ipairs(ContainerFrameContainer.ContainerFrames) do
+			if frame:IsShown() then addon.functions.updateBags(frame) end
+		end
+		if ContainerFrameCombinedBags:IsShown() then addon.functions.updateBags(ContainerFrameCombinedBags) end
+	end)
+	dropIlvlPos:SetValue(addon.db["bagIlvlPosition"])
+	groupCore:AddChild(dropIlvlPos)
+
 	if addon.db["enableMoneyTracker"] then
 		local groupMoney = addon.functions.createContainer("InlineGroup", "List")
 		groupMoney:SetTitle(MONEY)
@@ -2810,9 +2827,19 @@ local function updateBankButtonInfo()
 					if not itemButton.ItemLevelText then
 						itemButton.ItemLevelText = itemButton:CreateFontString(nil, "OVERLAY")
 						itemButton.ItemLevelText:SetFont(addon.variables.defaultFont, 16, "OUTLINE")
-						itemButton.ItemLevelText:SetPoint("TOPRIGHT", itemButton, "TOPRIGHT", 0, -2)
 						itemButton.ItemLevelText:SetShadowOffset(1, -1)
 						itemButton.ItemLevelText:SetShadowColor(0, 0, 0, 1)
+					end
+					itemButton.ItemLevelText:ClearAllPoints()
+					local pos = addon.db["bagIlvlPosition"] or "TOPRIGHT"
+					if pos == "TOPLEFT" then
+						itemButton.ItemLevelText:SetPoint("TOPLEFT", itemButton, "TOPLEFT", 2, -2)
+					elseif pos == "BOTTOMLEFT" then
+						itemButton.ItemLevelText:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
+					elseif pos == "BOTTOMRIGHT" then
+						itemButton.ItemLevelText:SetPoint("BOTTOMRIGHT", itemButton, "BOTTOMRIGHT", 0, 2)
+					else
+						itemButton.ItemLevelText:SetPoint("TOPRIGHT", itemButton, "TOPRIGHT", 0, -2)
 					end
 
 					local color = eItem:GetItemQualityColor()
@@ -2863,9 +2890,19 @@ local function updateMerchantButtonInfo()
 							if not itemButton.ItemLevelText then
 								itemButton.ItemLevelText = itemButton:CreateFontString(nil, "OVERLAY")
 								itemButton.ItemLevelText:SetFont(addon.variables.defaultFont, 16, "OUTLINE")
-								itemButton.ItemLevelText:SetPoint("TOPRIGHT", itemButton, "TOPRIGHT", -1, -1)
 								itemButton.ItemLevelText:SetShadowOffset(1, -1)
 								itemButton.ItemLevelText:SetShadowColor(0, 0, 0, 1)
+							end
+							itemButton.ItemLevelText:ClearAllPoints()
+							local pos = addon.db["bagIlvlPosition"] or "TOPRIGHT"
+							if pos == "TOPLEFT" then
+								itemButton.ItemLevelText:SetPoint("TOPLEFT", itemButton, "TOPLEFT", 2, -2)
+							elseif pos == "BOTTOMLEFT" then
+								itemButton.ItemLevelText:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
+							elseif pos == "BOTTOMRIGHT" then
+								itemButton.ItemLevelText:SetPoint("BOTTOMRIGHT", itemButton, "BOTTOMRIGHT", -1, 2)
+							else
+								itemButton.ItemLevelText:SetPoint("TOPRIGHT", itemButton, "TOPRIGHT", -1, -1)
 							end
 
 							local color = eItem:GetItemQualityColor()
@@ -2893,10 +2930,14 @@ local function updateMerchantButtonInfo()
 								if not itemButton.ItemBoundType then
 									itemButton.ItemBoundType = itemButton:CreateFontString(nil, "OVERLAY")
 									itemButton.ItemBoundType:SetFont(addon.variables.defaultFont, 10, "OUTLINE")
-									itemButton.ItemBoundType:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
-
 									itemButton.ItemBoundType:SetShadowOffset(2, 2)
 									itemButton.ItemBoundType:SetShadowColor(0, 0, 0, 1)
+								end
+								itemButton.ItemBoundType:ClearAllPoints()
+								if addon.db["bagIlvlPosition"] == "BOTTOMLEFT" then
+									itemButton.ItemBoundType:SetPoint("TOPLEFT", itemButton, "TOPLEFT", 2, -2)
+								else
+									itemButton.ItemBoundType:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
 								end
 								itemButton.ItemBoundType:SetFormattedText(bType)
 								itemButton.ItemBoundType:Show()
@@ -2943,9 +2984,19 @@ local function updateBuybackButtonInfo()
 						if not itemButton.ItemLevelText then
 							itemButton.ItemLevelText = itemButton:CreateFontString(nil, "OVERLAY")
 							itemButton.ItemLevelText:SetFont(addon.variables.defaultFont, 16, "OUTLINE")
-							itemButton.ItemLevelText:SetPoint("TOPRIGHT", itemButton, "TOPRIGHT", -1, -1)
 							itemButton.ItemLevelText:SetShadowOffset(1, -1)
 							itemButton.ItemLevelText:SetShadowColor(0, 0, 0, 1)
+						end
+						itemButton.ItemLevelText:ClearAllPoints()
+						local pos = addon.db["bagIlvlPosition"] or "TOPRIGHT"
+						if pos == "TOPLEFT" then
+							itemButton.ItemLevelText:SetPoint("TOPLEFT", itemButton, "TOPLEFT", 2, -2)
+						elseif pos == "BOTTOMLEFT" then
+							itemButton.ItemLevelText:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
+						elseif pos == "BOTTOMRIGHT" then
+							itemButton.ItemLevelText:SetPoint("BOTTOMRIGHT", itemButton, "BOTTOMRIGHT", -1, 2)
+						else
+							itemButton.ItemLevelText:SetPoint("TOPRIGHT", itemButton, "TOPRIGHT", -1, -1)
 						end
 
 						local color = eItem:GetItemQualityColor()
@@ -2973,10 +3024,14 @@ local function updateBuybackButtonInfo()
 							if not itemButton.ItemBoundType then
 								itemButton.ItemBoundType = itemButton:CreateFontString(nil, "OVERLAY")
 								itemButton.ItemBoundType:SetFont(addon.variables.defaultFont, 10, "OUTLINE")
-								itemButton.ItemBoundType:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
-
 								itemButton.ItemBoundType:SetShadowOffset(2, 2)
 								itemButton.ItemBoundType:SetShadowColor(0, 0, 0, 1)
+							end
+							itemButton.ItemBoundType:ClearAllPoints()
+							if addon.db["bagIlvlPosition"] == "BOTTOMLEFT" then
+								itemButton.ItemBoundType:SetPoint("TOPLEFT", itemButton, "TOPLEFT", 2, -2)
+							else
+								itemButton.ItemBoundType:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
 							end
 							itemButton.ItemBoundType:SetFormattedText(bType)
 							itemButton.ItemBoundType:Show()
@@ -3023,6 +3078,16 @@ local function updateFlyoutButtonInfo(button)
 					if not button.ItemLevelText then
 						button.ItemLevelText = button:CreateFontString(nil, "OVERLAY")
 						button.ItemLevelText:SetFont(addon.variables.defaultFont, 16, "OUTLINE")
+					end
+					button.ItemLevelText:ClearAllPoints()
+					local pos = addon.db["bagIlvlPosition"] or "TOPRIGHT"
+					if pos == "TOPLEFT" then
+						button.ItemLevelText:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
+					elseif pos == "BOTTOMLEFT" then
+						button.ItemLevelText:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 2, 2)
+					elseif pos == "BOTTOMRIGHT" then
+						button.ItemLevelText:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 2)
+					else
 						button.ItemLevelText:SetPoint("TOPRIGHT", button, "TOPRIGHT", -1, -1)
 					end
 
@@ -3053,10 +3118,14 @@ local function updateFlyoutButtonInfo(button)
 						if not button.ItemBoundType then
 							button.ItemBoundType = button:CreateFontString(nil, "OVERLAY")
 							button.ItemBoundType:SetFont(addon.variables.defaultFont, 10, "OUTLINE")
-							button.ItemBoundType:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 2, 2)
-
 							button.ItemBoundType:SetShadowOffset(2, 2)
 							button.ItemBoundType:SetShadowColor(0, 0, 0, 1)
+						end
+						button.ItemBoundType:ClearAllPoints()
+						if addon.db["bagIlvlPosition"] == "BOTTOMLEFT" then
+							button.ItemBoundType:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
+						else
+							button.ItemBoundType:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 2, 2)
 						end
 						button.ItemBoundType:SetFormattedText(bType)
 						button.ItemBoundType:Show()
@@ -4121,6 +4190,7 @@ local function initCharacter()
 	addon.functions.InitDBValue("showBagFilterMenu", false)
 	addon.functions.InitDBValue("bagFilterDockFrame", true)
 	addon.functions.InitDBValue("showBindOnBagItems", false)
+	addon.functions.InitDBValue("bagIlvlPosition", "TOPRIGHT")
 	addon.functions.InitDBValue("fadeBagQualityIcons", false)
 	addon.functions.InitDBValue("showInfoOnInspectFrame", false)
 	addon.functions.InitDBValue("showGemsOnCharframe", false)
