@@ -50,9 +50,9 @@ DCP.text:SetTextColor(1, 1, 1)
 local elapsed = 0
 local runtimer = 0
 
-local function IsAnimatingCooldownByName(name)
+local function IsAnimatingCooldown(name, catId)
 	for _, info in ipairs(animating) do
-		if info[3] == name then return true end
+		if info[3] == name and info[4] == catId then return true end
 	end
 	return false
 end
@@ -66,7 +66,7 @@ local function OnUpdate(_, update)
 				local cat = addon.db.cooldownNotifyCategories[cd.catId] or {}
 				local threshold = cat.remainingCooldownWhenNotified or 0
 				if remaining <= threshold then
-					if not IsAnimatingCooldownByName(cd.name) then table.insert(animating, { cd.texture, cd.isPet, cd.name, cd.catId, cd.id }) end
+					if not IsAnimatingCooldown(cd.name, cd.catId) then table.insert(animating, { cd.texture, cd.isPet, cd.name, cd.catId, cd.id }) end
 					cooldowns[i] = nil
 				end
 			else
@@ -235,31 +235,52 @@ end
 function applyAnchor(id)
 	local cat = addon.db.cooldownNotifyCategories[id]
 	if not cat then return end
-       local anchor = ensureAnchor(id)
-       anchor:ClearAllPoints()
-       anchor:SetPoint(cat.anchor.point, UIParent, cat.anchor.point, cat.anchor.x, cat.anchor.y)
+	local anchor = ensureAnchor(id)
+	anchor:ClearAllPoints()
+	anchor:SetPoint(cat.anchor.point, UIParent, cat.anchor.point, cat.anchor.x, cat.anchor.y)
 
-       if DCP:IsShown() then
-               if currentCatId == id then
-                       DCP:ClearAllPoints()
-                       DCP:SetPoint(cat.anchor.point or "CENTER", UIParent, cat.anchor.point or "CENTER", cat.anchor.x or 0, cat.anchor.y or 0)
-               end
-       else
-               -- Update the cooldown frame position so it spawns at the new anchor
-               DCP:ClearAllPoints()
-               DCP:SetPoint(cat.anchor.point or "CENTER", UIParent, cat.anchor.point or "CENTER", cat.anchor.x or 0, cat.anchor.y or 0)
-       end
+	if DCP:IsShown() then
+		if currentCatId == id then
+			DCP:ClearAllPoints()
+			DCP:SetPoint(cat.anchor.point or "CENTER", UIParent, cat.anchor.point or "CENTER", cat.anchor.x or 0, cat.anchor.y or 0)
+		end
+	else
+		-- Update the cooldown frame position so it spawns at the new anchor
+		DCP:ClearAllPoints()
+		DCP:SetPoint(cat.anchor.point or "CENTER", UIParent, cat.anchor.point or "CENTER", cat.anchor.x or 0, cat.anchor.y or 0)
+	end
 end
 
 function CN:SPELL_UPDATE_COOLDOWN(spellID)
-	if not spellID then return end
+	if not spellID then
+		for cid, cat in pairs(addon.db.cooldownNotifyCategories or {}) do
+			if addon.db.cooldownNotifyEnabled[cid] then
+				for sid in pairs(cat.spells or {}) do
+					self:SPELL_UPDATE_COOLDOWN(sid)
+				end
+				for itemID in pairs(cat.items or {}) do
+					local _, itemSpellID = GetItemSpell(itemID)
+					if itemSpellID then self:SPELL_UPDATE_COOLDOWN(itemSpellID) end
+				end
+				for petName in pairs(cat.pets or {}) do
+					local index = GetPetActionIndexByName(petName)
+					if index then
+						local _, _, _, _, _, _, petSpellID = GetPetActionInfo(index)
+						if petSpellID then self:SPELL_UPDATE_COOLDOWN(petSpellID) end
+					end
+				end
+			end
+		end
+		return
+	end
 	local found = false
 	for catId, cat in pairs(addon.db.cooldownNotifyCategories or {}) do
 		if addon.db.cooldownNotifyEnabled[catId] then
 			if cat.spells and cat.spells[spellID] then
 				local cd = C_Spell.GetSpellCooldown(spellID)
 				if cd.isEnabled ~= 0 and cd.duration and cd.duration > 2 then
-					cooldowns[spellID] = {
+					local key = spellID .. ":" .. catId
+					cooldowns[key] = {
 						start = cd.startTime,
 						duration = cd.duration,
 						texture = C_Spell.GetSpellTexture(spellID),
@@ -276,7 +297,8 @@ function CN:SPELL_UPDATE_COOLDOWN(spellID)
 					local start, duration, enabled = C_Container.GetItemCooldown(itemID)
 					if enabled ~= 0 and duration and duration > 2 then
 						local texture = select(10, GetItemInfo(itemID))
-						cooldowns[itemID] = {
+						local key = "item:" .. itemID .. ":" .. catId
+						cooldowns[key] = {
 							start = start,
 							duration = duration,
 							texture = texture,
@@ -295,7 +317,8 @@ function CN:SPELL_UPDATE_COOLDOWN(spellID)
 					if petSpellID == spellID then
 						local start, duration, enabled = GetPetActionCooldown(index)
 						if enabled ~= 0 and duration and duration > 2 then
-							cooldowns[spellID] = {
+							local key = "pet:" .. spellID .. ":" .. catId
+							cooldowns[key] = {
 								start = start,
 								duration = duration,
 								texture = tex,
@@ -472,35 +495,37 @@ local function buildCategoryOptions(container, catId)
 	local shareBtn = addon.functions.createButtonAce(L["ShareCategory"] or "Share Category", 150, function() ShareCategory(catId) end)
 	group:AddChild(shareBtn)
 
-       local testBtn = addon.functions.createButtonAce(L["Test"] or "Test", 150, function()
-               ensureAnchor(catId)
-               local tex, name
-               local firstSpell = next(cat.spells)
-               if firstSpell then
-                       tex = C_Spell.GetSpellTexture(firstSpell)
-                       name = C_Spell.GetSpellName(firstSpell)
-               else
-                       local firstItem = next(cat.items)
-                       if firstItem then
-                               tex = select(10, GetItemInfo(firstItem))
-                               name = GetItemInfo(firstItem)
-                       else
-                               local firstPet = next(cat.pets)
-                               if firstPet then
-                                       local idx = GetPetActionIndexByName(firstPet)
-                                       if idx then _,_,tex = GetPetActionInfo(idx) end
-                                       name = firstPet
-                               end
-                       end
-               end
-               tex = tex or "Interface\\Icons\\INV_Misc_QuestionMark"
-               name = name or L["Test"] or "Test"
-               table.insert(animating, { tex, false, name, catId, 0 })
-               if not DCP:GetScript("OnUpdate") then
-                       DCP:SetScript("OnUpdate", OnUpdate)
-                       DCP:Show()
-               end
-       end)
+	local testBtn = addon.functions.createButtonAce(L["Test"] or "Test", 150, function()
+		ensureAnchor(catId)
+		local tex, name
+		local firstSpell = next(cat.spells)
+		if firstSpell then
+			tex = C_Spell.GetSpellTexture(firstSpell)
+			name = C_Spell.GetSpellName(firstSpell)
+		else
+			local firstItem = next(cat.items)
+			if firstItem then
+				tex = select(10, GetItemInfo(firstItem))
+				name = GetItemInfo(firstItem)
+			else
+				local firstPet = next(cat.pets)
+				if firstPet then
+					local idx = GetPetActionIndexByName(firstPet)
+					if idx then
+						_, _, tex = GetPetActionInfo(idx)
+					end
+					name = firstPet
+				end
+			end
+		end
+		tex = tex or "Interface\\Icons\\INV_Misc_QuestionMark"
+		name = name or L["Test"] or "Test"
+		table.insert(animating, { tex, false, name, catId, 0 })
+		if not DCP:GetScript("OnUpdate") then
+			DCP:SetScript("OnUpdate", OnUpdate)
+			DCP:Show()
+		end
+	end)
 	group:AddChild(testBtn)
 
 	local delBtn = addon.functions.createButtonAce(L["DeleteCategory"], 150, function()
@@ -677,7 +702,6 @@ function CN.functions.addCooldownNotifyOptions(container)
 	local ok = treeGroup:SelectByValue(tostring(addon.db.cooldownNotifySelectedCategory or 1))
 	if not ok and tree[1] and tree[1].value then treeGroup:SelectByValue(tree[1].value) end
 end
-
 
 function exportCategory(catId, encodeMode)
 	local cat = addon.db.cooldownNotifyCategories and addon.db.cooldownNotifyCategories[catId]
