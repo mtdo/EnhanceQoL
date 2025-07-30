@@ -20,6 +20,7 @@ local watching = {}
 local cooldowns = {}
 local animating = {}
 local itemSpells = {}
+local treeGroup
 
 local DCP = CreateFrame("Frame", nil, UIParent)
 DCP:SetPoint("CENTER")
@@ -259,6 +260,12 @@ local function getCategoryTree()
     return tree
 end
 
+local function refreshTree(selectValue)
+    if not treeGroup then return end
+    treeGroup:SetTree(getCategoryTree())
+    if selectValue then treeGroup:SelectByValue(tostring(selectValue)) end
+end
+
 local function buildCategoryOptions(container, catId)
     addon.db.cooldownNotifySelectedCategory = catId
     local cat = addon.db.cooldownNotifyCategories[catId]
@@ -295,6 +302,19 @@ local function buildCategoryOptions(container, catId)
     local sizeSlider = addon.functions.createSliderAce("Icon Size", cat.iconSize or 75, 20, 200, 1, function(_, _, val) cat.iconSize = val end)
     group:AddChild(sizeSlider)
 
+    local spellEdit = addon.functions.createEditboxAce(L["AddSpellID"], nil, function(self, _, text)
+        local id = tonumber(text)
+        if id then
+            cat.spells[id] = true
+            refreshTree(catId)
+            container:ReleaseChildren()
+            buildCategoryOptions(container, catId)
+        end
+        self:SetText("")
+    end)
+    spellEdit:SetRelativeWidth(0.6)
+    group:AddChild(spellEdit)
+
     local exportBtn = addon.functions.createButtonAce(L["ExportCategory"], 150, function()
         local data = exportCategory(catId)
         if not data then return end
@@ -329,7 +349,7 @@ function CN.functions.addCooldownNotifyOptions(container)
 
     local tree = getCategoryTree()
 
-    local treeGroup = AceGUI:Create("TreeGroup")
+    treeGroup = AceGUI:Create("TreeGroup")
     treeGroup:SetTree(tree)
     treeGroup:SetCallback("OnGroupSelected", function(widget, _, value)
         if value == "ADD_CATEGORY" then
@@ -347,8 +367,7 @@ function CN.functions.addCooldownNotifyOptions(container)
                 spells = {}, items = {}, pets = {},
             }
             addon.db.cooldownNotifyEnabled[newId] = true
-            widget:SetTree(getCategoryTree())
-            widget:SelectByValue(tostring(newId))
+            refreshTree(newId)
             return
         elseif value == "IMPORT_CATEGORY" then
             StaticPopupDialogs["EQOL_IMPORT_CATEGORY"] = StaticPopupDialogs["EQOL_IMPORT_CATEGORY"] or {
@@ -370,7 +389,11 @@ function CN.functions.addCooldownNotifyOptions(container)
             StaticPopupDialogs["EQOL_IMPORT_CATEGORY"].OnAccept = function(self)
                 local text = self.editBox:GetText()
                 local id = importCategory(text)
-                if id then widget:SetTree(getCategoryTree()); widget:SelectByValue(tostring(id)) else print(L["ImportCategoryError"] or "Invalid string") end
+                if id then
+                    refreshTree(id)
+                else
+                    print(L["ImportCategoryError"] or "Invalid string")
+                end
             end
             StaticPopup_Show("EQOL_IMPORT_CATEGORY")
             return
