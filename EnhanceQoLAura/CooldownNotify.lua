@@ -61,7 +61,7 @@ local function OnUpdate(_, update)
 				local cat = addon.db.cooldownNotifyCategories[cd.catId] or {}
 				local threshold = cat.remainingCooldownWhenNotified or 0
 				if remaining <= threshold then
-					if not IsAnimatingCooldownByName(cd.name) then table.insert(animating, { cd.texture, cd.isPet, cd.name, cd.catId }) end
+					if not IsAnimatingCooldownByName(cd.name) then table.insert(animating, { cd.texture, cd.isPet, cd.name, cd.catId, cd.id }) end
 					cooldowns[i] = nil
 				end
 			else
@@ -105,9 +105,17 @@ local function OnUpdate(_, update)
 				DCP:SetPoint(anch.point or "CENTER", UIParent, anch.point or "CENTER", anch.x or 0, anch.y or 0)
 				DCP:SetSize(iconSize, iconSize)
 				DCP:Show()
-				if cat.soundReady and cat.soundKey then
-					local file = addon.Aura.sounds[cat.soundKey]
-					if file then PlaySoundFile(file, "Master") end
+				local soundKey
+				if addon.db.cooldownNotifySoundsEnabled[info[4]] and addon.db.cooldownNotifySoundsEnabled[info[4]][info[5]] then
+					soundKey = addon.db.cooldownNotifySounds[info[4]] and addon.db.cooldownNotifySounds[info[4]][info[5]]
+				end
+				if soundKey then
+					local file = addon.Aura.sounds and addon.Aura.sounds[soundKey]
+					if file then
+						PlaySoundFile(file, "Master")
+					else
+						PlaySound(soundKey)
+					end
 				end
 			end
 			local alpha = maxAlpha
@@ -221,6 +229,7 @@ function CN:SPELL_UPDATE_COOLDOWN(spellID)
 						texture = C_Spell.GetSpellTexture(spellID),
 						name = C_Spell.GetSpellName(spellID),
 						catId = catId,
+						id = spellID,
 					}
 					found = true
 				end
@@ -237,6 +246,7 @@ function CN:SPELL_UPDATE_COOLDOWN(spellID)
 							texture = texture,
 							name = GetItemInfo(itemID),
 							catId = catId,
+							id = itemID,
 						}
 						found = true
 					end
@@ -256,6 +266,7 @@ function CN:SPELL_UPDATE_COOLDOWN(spellID)
 								name = petName,
 								catId = catId,
 								isPet = true,
+								id = spellID,
 							}
 							found = true
 						end
@@ -326,31 +337,25 @@ local function buildCategoryOptions(container, catId)
 	end)
 	group:AddChild(lockCB)
 
-	local showNameCB = addon.functions.createCheckboxAce(L["ShowCooldownName"], cat.showName, function(_, _, val) cat.showName = val end)
+	local showNameCB = addon.functions.createCheckboxAce(L["ShowCooldownName"], cat.showName, function(_, _, val)
+		cat.showName = val
+		if not val then cat.customTextEnabled = false end
+		container:ReleaseChildren()
+		buildCategoryOptions(container, catId)
+	end)
 	group:AddChild(showNameCB)
 
-	local customTextCB = addon.functions.createCheckboxAce(L["Show custom text"], cat.customTextEnabled, function(_, _, val) cat.customTextEnabled = val end)
+	local customTextCB = addon.functions.createCheckboxAce(L["Show custom text"], cat.customTextEnabled, function(_, _, val)
+		cat.customTextEnabled = val
+		container:ReleaseChildren()
+		buildCategoryOptions(container, catId)
+	end)
+	customTextCB:SetDisabled(not cat.showName)
 	group:AddChild(customTextCB)
 
 	local customTextEdit = addon.functions.createEditboxAce(L["Text"], cat.customText or "", function(_, _, text) cat.customText = text end)
+	customTextEdit:SetDisabled(not cat.customTextEnabled or not cat.showName)
 	group:AddChild(customTextEdit)
-
-	local soundList = {}
-	for sname in pairs(addon.Aura.sounds or {}) do
-		soundList[sname] = sname
-	end
-	local list, order = addon.functions.prepareListForDropdown(soundList)
-	local soundDrop = addon.functions.createDropdownAce(L["SoundFile"], list, order, function(self, _, key)
-		cat.soundKey = key
-		self:SetValue(key)
-		local file = addon.Aura.sounds[key]
-		if file then PlaySoundFile(file, "Master") end
-	end)
-	soundDrop:SetValue(cat.soundKey)
-	group:AddChild(soundDrop)
-
-	local playSoundCB = addon.functions.createCheckboxAce(L["Play sound on ready"], cat.soundReady, function(_, _, val) cat.soundReady = val end)
-	group:AddChild(playSoundCB)
 
 	local fadeSlider = addon.functions.createSliderAce("Fade In", cat.fadeInTime or 0.3, 0, 2, 0.1, function(_, _, val) cat.fadeInTime = val end)
 	group:AddChild(fadeSlider)
@@ -367,6 +372,10 @@ local function buildCategoryOptions(container, catId)
 		local id = tonumber(text)
 		if id then
 			cat.spells[id] = true
+			addon.db.cooldownNotifySounds[catId] = addon.db.cooldownNotifySounds[catId] or {}
+			addon.db.cooldownNotifySoundsEnabled[catId] = addon.db.cooldownNotifySoundsEnabled[catId] or {}
+			addon.db.cooldownNotifySounds[catId][id] = addon.db.cooldownNotifyDefaultSound
+			addon.db.cooldownNotifySoundsEnabled[catId][id] = false
 			refreshTree(catId)
 			container:ReleaseChildren()
 			buildCategoryOptions(container, catId)
@@ -402,6 +411,12 @@ local function buildCategoryOptions(container, catId)
 
 	local shareBtn = addon.functions.createButtonAce(L["ShareCategory"] or "Share Category", 150, function() ShareCategory(catId) end)
 	group:AddChild(shareBtn)
+
+	local testBtn = addon.functions.createButtonAce(L["Test"] or "Test", 150, function()
+		local first = next(cat.spells)
+		if first then CN:SPELL_UPDATE_COOLDOWN(first) end
+	end)
+	group:AddChild(testBtn)
 
 	local delBtn = addon.functions.createButtonAce(L["DeleteCategory"], 150, function()
 		local catName = addon.db.cooldownNotifyCategories[catId].name or ""
@@ -450,8 +465,36 @@ local function buildSpellOptions(container, catId, spellId)
 	local label = addon.functions.createLabelAce(name .. " (" .. spellId .. ")")
 	wrapper:AddChild(label)
 
+	addon.db.cooldownNotifySounds[catId] = addon.db.cooldownNotifySounds[catId] or {}
+	addon.db.cooldownNotifySoundsEnabled[catId] = addon.db.cooldownNotifySoundsEnabled[catId] or {}
+
+	local cbSound = addon.functions.createCheckboxAce(L["buffTrackerSoundsEnabled"], addon.db.cooldownNotifySoundsEnabled[catId][spellId], function(_, _, val)
+		addon.db.cooldownNotifySoundsEnabled[catId][spellId] = val
+		container:ReleaseChildren()
+		buildSpellOptions(container, catId, spellId)
+	end)
+	wrapper:AddChild(cbSound)
+
+	if addon.db.cooldownNotifySoundsEnabled[catId][spellId] then
+		local soundList = {}
+		for sname in pairs(addon.Aura.sounds or {}) do
+			soundList[sname] = sname
+		end
+		local list, order = addon.functions.prepareListForDropdown(soundList)
+		local dropSound = addon.functions.createDropdownAce(L["SoundFile"], list, order, function(self, _, val)
+			addon.db.cooldownNotifySounds[catId][spellId] = val
+			self:SetValue(val)
+			local file = addon.Aura.sounds and addon.Aura.sounds[val]
+			if file then PlaySoundFile(file, "Master") end
+		end)
+		dropSound:SetValue(addon.db.cooldownNotifySounds[catId][spellId])
+		wrapper:AddChild(dropSound)
+	end
+
 	local btn = addon.functions.createButtonAce(L["Remove"], 150, function()
 		cat.spells[spellId] = nil
+		if addon.db.cooldownNotifySounds[catId] then addon.db.cooldownNotifySounds[catId][spellId] = nil end
+		if addon.db.cooldownNotifySoundsEnabled[catId] then addon.db.cooldownNotifySoundsEnabled[catId][spellId] = nil end
 		refreshTree(catId)
 		container:ReleaseChildren()
 	end)
@@ -489,6 +532,8 @@ function CN.functions.addCooldownNotifyOptions(container)
 			}
 			addon.db.cooldownNotifyEnabled[newId] = true
 			addon.db.cooldownNotifyLocked[newId] = false
+			addon.db.cooldownNotifySounds[newId] = {}
+			addon.db.cooldownNotifySoundsEnabled[newId] = {}
 			ensureAnchor(newId)
 			applyLockState()
 			refreshTree(newId)
