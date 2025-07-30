@@ -168,3 +168,27 @@ for id, cat in pairs(addon.db["castTrackerCategories"] or {}) do
 end
 
 if type(addon.db["castTrackerSelectedCategory"]) ~= "number" then addon.db["castTrackerSelectedCategory"] = 1 end
+
+-- defaults for cooldown notify
+addon.functions.InitDBValue("cooldownNotifyCategories", {
+    [1] = {
+        name = string.format("%s", L["Example"]),
+        anchor = { point = "CENTER", x = 0, y = 0 },
+        iconSize = 75,
+        fadeInTime = 0.3,
+        fadeOutTime = 0.7,
+        holdTime = 0,
+        animScale = 1.5,
+        showName = true,
+        spells = {},
+        items = {},
+        pets = {},
+    },
+})
+addon.functions.InitDBValue("cooldownNotifyEnabled", {})
+addon.functions.InitDBValue("cooldownNotifyLocked", {})
+addon.functions.InitDBValue("cooldownNotifyOrder", {})
+addon.functions.InitDBValue("cooldownNotifySounds", {})
+addon.functions.InitDBValue("cooldownNotifySoundsEnabled", {})
+addon.functions.InitDBValue("cooldownNotifySelectedCategory", 1)
+

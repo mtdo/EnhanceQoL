@@ -28,3 +28,4 @@ Init.lua
 EnhanceQoLAura.lua
 BuffTracker.lua
 CastTracker.lua
+CooldownNotify.lua
