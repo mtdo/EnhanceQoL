@@ -258,6 +258,35 @@ end
 
 local function getCategory(id) return addon.db["buffTrackerCategories"][id] end
 
+local function getSortedCategories()
+	local list = {}
+	for id in pairs(addon.db["buffTrackerCategories"]) do
+		table.insert(list, id)
+	end
+	table.sort(list)
+	return list
+end
+
+local function getBuffOrder(catId)
+	local cat = addon.db["buffTrackerCategories"][catId]
+	if not cat then return {} end
+	local orderIndex = {}
+	for idx, bid in ipairs(addon.db["buffTrackerOrder"][catId] or {}) do
+		orderIndex[bid] = idx
+	end
+	local buffIds = {}
+	for id in pairs(cat.buffs or {}) do
+		table.insert(buffIds, id)
+	end
+	table.sort(buffIds, function(a, b)
+		local ia = orderIndex[a] or math.huge
+		local ib = orderIndex[b] or math.huge
+		if ia ~= ib then return ia < ib end
+		return a < b
+	end)
+	return buffIds
+end
+
 local function rebuildAltMapping()
 	wipe(altToBase)
 	wipe(spellToCat)
@@ -346,19 +375,21 @@ local function updatePositions(id)
 	local cat = getCategory(id)
 	local anchor = ensureAnchor(id)
 	local point = cat.direction or "RIGHT"
+	local spacing = cat.spacing or 2
 	local prev = anchor
 	activeBuffFrames[id] = activeBuffFrames[id] or {}
-	for _, frame in pairs(activeBuffFrames[id]) do
-		if frame:IsShown() then
+	for _, bid in ipairs(getBuffOrder(id)) do
+		local frame = activeBuffFrames[id][bid]
+		if frame and frame:IsShown() then
 			frame:ClearAllPoints()
 			if point == "LEFT" then
-				frame:SetPoint("RIGHT", prev, "LEFT", -2, 0)
+				frame:SetPoint("RIGHT", prev, "LEFT", -spacing, 0)
 			elseif point == "UP" then
-				frame:SetPoint("BOTTOM", prev, "TOP", 0, 2)
+				frame:SetPoint("BOTTOM", prev, "TOP", 0, spacing)
 			elseif point == "DOWN" then
-				frame:SetPoint("TOP", prev, "BOTTOM", 0, -2)
+				frame:SetPoint("TOP", prev, "BOTTOM", 0, -spacing)
 			else
-				frame:SetPoint("LEFT", prev, "RIGHT", 2, 0)
+				frame:SetPoint("LEFT", prev, "RIGHT", spacing, 0)
 			end
 			prev = frame
 		end
@@ -593,13 +624,13 @@ local function updateBuff(catId, id, changedId, firstScan)
 			if not wasActive then playBuffSound(catId, id, triggeredId) end
 			frame.isActive = true
 		else
+			frame.cd:SetReverse(false)
 			if buff.showCooldown then
 				local spellInfo = getSpellCooldown(id)
 				local cdStart = spellInfo.startTime
 				local cdDur = spellInfo.duration
 				local cdEnable = spellInfo.isEnabled
 				local modRate = spellInfo.modRate
-				frame.cd:SetReverse(false)
 				if cdEnable and cdDur and cdDur > 0 and cdStart > 0 and (cdStart + cdDur) > GetTime() then
 					frame.cd:SetCooldown(cdStart, cdDur, modRate)
 					frame.icon:SetDesaturated(true)
@@ -682,12 +713,17 @@ local function updateBuff(catId, id, changedId, firstScan)
 				cdDur = spellInfo.duration
 				cdEnable = spellInfo.isEnabled
 				modRate = spellInfo.modRate
-			end
-			if buff.showCooldown and cdEnable and cdDur and cdDur > 0 and cdStart > 0 and (cdStart + cdDur) > GetTime() then
-				frame.cd:SetCooldown(cdStart, cdDur, modRate)
-				frame.icon:SetDesaturated(true)
-				frame.icon:SetAlpha(0.5)
-				frame.cd:SetScript("OnCooldownDone", CDResetScript)
+				if cdEnable and cdDur and cdDur > 0 and cdStart > 0 and (cdStart + cdDur) > GetTime() then
+					frame.cd:SetCooldown(cdStart, cdDur, modRate)
+					frame.icon:SetDesaturated(true)
+					frame.icon:SetAlpha(0.5)
+					frame.cd:SetScript("OnCooldownDone", CDResetScript)
+				else
+					frame.cd:Clear()
+					frame.cd:SetScript("OnCooldownDone", nil)
+					frame.icon:SetDesaturated(false)
+					frame.icon:SetAlpha(1)
+				end
 			else
 				frame.cd:Clear()
 				frame.cd:SetScript("OnCooldownDone", nil)
@@ -825,9 +861,10 @@ local function scanBuffs()
 	wipe(timedAuras)
 	wipe(buffInstances)
 	wipe(auraInstanceMap)
-	for catId, cat in pairs(addon.db["buffTrackerCategories"]) do
+	for _, catId in ipairs(getSortedCategories()) do
+		local cat = addon.db["buffTrackerCategories"][catId]
 		if addon.db["buffTrackerEnabled"][catId] and categoryAllowed(cat) then
-			for id in pairs(cat.buffs) do
+			for _, id in ipairs(getBuffOrder(catId)) do
 				if not addon.db["buffTrackerHidden"][id] then
 					updateBuff(catId, id, nil, firstScan)
 				elseif activeBuffFrames[catId] and activeBuffFrames[catId][id] then
@@ -1100,6 +1137,7 @@ local function sanitiseCategory(cat)
 	cat.allowedSpecs = nil
 	cat.allowedClasses = nil
 	cat.allowedRoles = nil
+	if cat.spacing == nil then cat.spacing = 2 end
 	for _, buff in pairs(cat.buffs or {}) do
 		if not buff.altIDs then buff.altIDs = {} end
 		if buff.showAlways == nil then buff.showAlways = false end
@@ -1110,6 +1148,7 @@ local function sanitiseCategory(cat)
 		if not buff.allowedClasses then buff.allowedClasses = {} end
 		if not buff.allowedRoles then buff.allowedRoles = {} end
 		if not buff.conditions then buff.conditions = { join = "AND", conditions = {} } end
+		if buff.showCooldown == nil then buff.showCooldown = false end
 		if buff.showStacks == nil then
 			local def = addon.db["buffTrackerShowStacks"]
 			if def == nil then def = true end
@@ -1364,6 +1403,13 @@ function addon.Aura.functions.buildCategoryOptions(container, catId)
 		applySize(catId)
 	end)
 	core:AddChild(sizeSlider)
+
+	local spacingSlider = addon.functions.createSliderAce(L["buffTrackerSpacingHeadline"] .. ": " .. (cat.spacing or 2), cat.spacing or 2, 0, 10, 1, function(self, _, val)
+		cat.spacing = val
+		self:SetLabel(L["buffTrackerSpacingHeadline"] .. ": " .. val)
+		updatePositions(catId)
+	end)
+	core:AddChild(spacingSlider)
 
 	local dirDrop = addon.functions.createDropdownAce(L["GrowthDirection"], { LEFT = "LEFT", RIGHT = "RIGHT", UP = "UP", DOWN = "DOWN" }, nil, function(self, _, val)
 		cat.direction = val
@@ -1871,6 +1917,7 @@ function addon.Aura.functions.addBuffTrackerOptions(container)
 				x = 0,
 				y = 0,
 				size = 50,
+				spacing = 2,
 				direction = "RIGHT",
 				buffs = {},
 			}
