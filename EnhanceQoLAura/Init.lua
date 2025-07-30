@@ -164,9 +164,33 @@ for id, cat in pairs(addon.db["castTrackerCategories"] or {}) do
 		if spell.customText == nil then spell.customText = "" end
 	end
 	cat.sound = nil
-        if addon.db["castTrackerEnabled"][id] == nil then addon.db["castTrackerEnabled"][id] = false end
+	if addon.db["castTrackerEnabled"][id] == nil then addon.db["castTrackerEnabled"][id] = false end
 	if addon.db["castTrackerLocked"][id] == nil then addon.db["castTrackerLocked"][id] = false end
 	addon.db["castTrackerOrder"][id] = addon.db["castTrackerOrder"][id] or {}
 end
 
 if type(addon.db["castTrackerSelectedCategory"]) ~= "number" then addon.db["castTrackerSelectedCategory"] = 1 end
+
+-- defaults for cooldown notify
+addon.functions.InitDBValue("cooldownNotifyCategories", {
+	[1] = {
+		name = string.format("%s", L["Example"]),
+		anchor = { point = "CENTER", x = 0, y = 0 },
+		iconSize = 75,
+		fadeInTime = 0.3,
+		fadeOutTime = 0.7,
+		holdTime = 0,
+		animScale = 1.5,
+		showName = true,
+		spells = {},
+		items = {},
+		pets = {},
+	},
+})
+addon.functions.InitDBValue("cooldownNotifyEnabled", {})
+addon.functions.InitDBValue("cooldownNotifyLocked", {})
+addon.functions.InitDBValue("cooldownNotifyOrder", {})
+addon.functions.InitDBValue("cooldownNotifySounds", {})
+addon.functions.InitDBValue("cooldownNotifySoundsEnabled", {})
+addon.functions.InitDBValue("cooldownNotifyDefaultSound", SOUNDKIT.ALARM_CLOCK_WARNING_3)
+addon.functions.InitDBValue("cooldownNotifySelectedCategory", 1)

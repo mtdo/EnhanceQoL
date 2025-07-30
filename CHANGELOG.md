@@ -1,15 +1,15 @@
 # Changelog
 
-## [3.37.1] – 2025-07-30
-### ❌ Removed
-- Aura Tracker: Show GCD option
-
 ## [3.37.0] – 2025-07-30
 ### ✨ Added
+- **Cooldown Notify**
+  - Get a simple popup when your abilities are ready
 - **Aura Tracker**
   - Option to change the *Spacing* between the auras
 ### 🐛 Fixed
-- Cooldown check in AuraTracker had a missing variable which impacted the performance
+- Cooldown check in AuraTracker had a missing variable which impacted performance.
+
+---
 
 ## [3.36.0] – 2025-07-29
 ### ✨ Added

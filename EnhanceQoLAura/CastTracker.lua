@@ -343,7 +343,7 @@ local function importCategory(encoded)
 	local newId = getNextCategoryId()
 	addon.db.castTrackerCategories[newId] = cat
 	addon.db.castTrackerOrder[newId] = data.order or {}
-        addon.db.castTrackerEnabled[newId] = false
+	addon.db.castTrackerEnabled[newId] = false
 	addon.db.castTrackerLocked[newId] = false
 	addon.db.castTrackerSounds[newId] = {}
 	addon.db.castTrackerSoundsEnabled[newId] = {}
@@ -869,19 +869,38 @@ local function buildSpellOptions(container, catId, spellId)
 	container:DoLayout()
 end
 
-local function BarUpdate(self)
-	local now = GetTime()
-	if now >= self.finish then
-		ReleaseBar(self.catId, self)
-		return
-	end
-	local remaining = self.finish - now
-	if self.castType == "channel" then
-		self.status:SetValue(remaining)
+local TEXT_INTERVAL = 0.07
+local VALUE_INTERVAL = 0
+
+local function BarUpdate(self, elapsed)
+	if VALUE_INTERVAL == 0 or (self._valAcc or 0) >= VALUE_INTERVAL then
+		local now = GetTime()
+		if now >= self.finish then
+			ReleaseBar(self.catId, self)
+			return
+		end
+		local remaining = self.finish - now
+		if self.castType == "channel" then
+			self.status:SetValue(remaining)
+		else
+			self.status:SetValue(now - self.start)
+		end
+		self._valAcc = 0
+		self._lastRemaining = remaining
 	else
-		self.status:SetValue(now - self.start)
+		self._valAcc = (self._valAcc or 0) + elapsed
 	end
-	self.time:SetFormattedText("%.1f", remaining)
+
+	self._txtAcc = (self._txtAcc or 0) + elapsed
+	if self._txtAcc >= TEXT_INTERVAL then
+		self._txtAcc = 0
+		local r = self._lastRemaining
+		local tenths = math.floor(r * 10 + 0.5)
+		if tenths ~= self._lastTenths then
+			self.time:SetFormattedText("%.1f", r)
+			self._lastTenths = tenths
+		end
+	end
 end
 
 function CastTracker.functions.LayoutBars(catId)
@@ -1155,7 +1174,7 @@ function CastTracker.functions.addCastTrackerOptions(container)
 				spells = {},
 				allowedRoles = {},
 			}
-                        addon.db.castTrackerEnabled[newId] = false
+			addon.db.castTrackerEnabled[newId] = false
 			addon.db.castTrackerLocked[newId] = false
 			addon.db.castTrackerOrder[newId] = {}
 			ensureAnchor(newId)

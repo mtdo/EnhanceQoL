@@ -17,9 +17,12 @@ addon.functions.addToTree(nil, {
 	value = "aura",
 	text = L["Aura"],
 	children = {
-		-- { value = "resourcebar", text = DISPLAY_PERSONAL_RESOURCE },
+		--@debug@
+		{ value = "resourcebar", text = DISPLAY_PERSONAL_RESOURCE },
+		--@end-debug@
 		{ value = "bufftracker", text = L["BuffTracker"] },
 		{ value = "casttracker", text = L["CastTracker"] or "Cast Tracker" },
+		{ value = "cooldownnotify", text = L["CooldownNotify"] or "Cooldown Notify" },
 	},
 })
 
@@ -35,5 +38,7 @@ function addon.Aura.functions.treeCallback(container, group)
 
 		-- refresh layout in case options changed
 		if addon.Aura.CastTracker.functions.Refresh then addon.Aura.CastTracker.functions.Refresh() end
+	elseif group == "aura\001cooldownnotify" and addon.Aura.CooldownNotify and addon.Aura.CooldownNotify.functions then
+		addon.Aura.CooldownNotify.functions.addCooldownNotifyOptions(container)
 	end
 end
