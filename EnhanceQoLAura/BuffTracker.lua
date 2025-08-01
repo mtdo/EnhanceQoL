@@ -511,7 +511,7 @@ local function createBuffFrame(icon, parent, size, castOnClick, spellID, showTim
 	local template = nil
 	local frame = CreateFrame(frameType, nil, parent, template)
 	frame:SetSize(size, size)
-	frame:SetFrameStrata("DIALOG")
+	frame:SetFrameStrata("MEDIUM")
 
 	local border = frame:CreateTexture(nil, "BORDER")
 	border:SetPoint("TOPLEFT", frame, "TOPLEFT", -1, 1)
