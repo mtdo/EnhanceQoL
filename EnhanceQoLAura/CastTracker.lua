@@ -1028,7 +1028,6 @@ local function HandleCLEU()
 			_, castTime = getCastInfo(unit)
 			local tgt = unit .. "target"
 			if UnitExists(tgt) then destGUID = UnitGUID(tgt) end
-			print(spellId, UnitName(tgt))
 		end
 		for catId in pairs(cats) do
 			local cat = addon.db.castTrackerCategories[catId]
