@@ -1024,6 +1024,7 @@ local function HandleCLEU()
 		if not cats then return end
 		local castTime
 		local unit = GetUnitFromGUID(sourceGUID)
+		if UnitThreatSituation("player", unit) == nil then return end
 		if unit then
 			_, castTime = getCastInfo(unit)
 			local tgt = unit .. "target"
@@ -1054,6 +1055,7 @@ local function HandleCLEU()
 end
 
 local function HandleUnitChannelStart(unit, castGUID, spellId)
+	if UnitThreatSituation("player", unit) == nil then return end
 	local sourceGUID = UnitGUID(unit)
 	if not sourceGUID then return end
 	local baseSpell = altToBase[spellId] or spellId

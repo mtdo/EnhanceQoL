@@ -17,6 +17,7 @@
 - Catalyst charges were not shown correctly near the end of the season.
 - Missing variable check in the Aura Tracker cooldown logic caused unnecessary CPU usage; fixed.
 - Frame Strata of Buffs was to high
+- Casttracker now only handles mobs infight with me
 
 ---
 
