@@ -756,10 +756,26 @@ function updateBuff(catId, id, changedId, firstScan)
 	elseif tType == "ENCHANT" and buff and buff.slot then
 		activeBuffFrames[catId] = activeBuffFrames[catId] or {}
 		local frame = activeBuffFrames[catId][id]
+		local icon = GetInventoryItemTexture("player", buff.slot) or buff.icon
+		buff.icon = icon
+		local mhHas, _, _, _, ohHas = GetWeaponEnchantInfo()
+		local hasEnchant = (buff.slot == 16 and mhHas) or (buff.slot == 17 and ohHas)
+		local aura = hasEnchant and {} or nil
+		local condOk = evaluateGroup(buff and buff.conditions, aura)
+		if aura == nil and not hasMissingCondition(buff and buff.conditions) then condOk = false end
+		if not condOk then
+			if frame then
+				frame:Hide()
+				frame.isActive = false
+				ActionButton_HideOverlayGlow(frame)
+				frame.cd:Clear()
+			end
+			buffInstances[key] = nil
+			return
+		end
 		local showTimer = buff.showTimerText
 		if showTimer == nil then showTimer = addon.db["buffTrackerShowTimerText"] end
 		if showTimer == nil then showTimer = true end
-		local icon = GetInventoryItemTexture("player", buff.slot) or buff.icon
 		if not frame then
 			frame = createBuffFrame(icon, ensureAnchor(catId), getCategory(catId).size, false, id, showTimer)
 			activeBuffFrames[catId][id] = frame
@@ -767,9 +783,6 @@ function updateBuff(catId, id, changedId, firstScan)
 			frame.cd:SetHideCountdownNumbers(not showTimer)
 		end
 		frame.icon:SetTexture(icon)
-		buff.icon = icon
-		local mhHas, _, _, _, ohHas = GetWeaponEnchantInfo()
-		local hasEnchant = (buff.slot == 16 and mhHas) or (buff.slot == 17 and ohHas)
 		if hasEnchant then
 			frame.icon:SetDesaturated(false)
 			frame.icon:SetAlpha(1)
