@@ -33,6 +33,7 @@
 - Frame strata of buffs was **too** high.
 - Cast Tracker now only handles mobs currently **in combat** with the player.
 - Truncation of UnitFrame names also **affected** nameplates.
+- Evaluation of nested conditions in *Aura Tracker* wasn't working as expected
 
 ---
 
