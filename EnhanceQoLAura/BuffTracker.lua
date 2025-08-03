@@ -812,23 +812,22 @@ function updateBuff(catId, id, changedId, firstScan)
 		else
 			frame.cd:SetHideCountdownNumbers(not showTimer)
 		end
+		local wasShown = frame and frame:IsShown()
 		frame.icon:SetTexture(icon)
 		frame.cd:SetReverse(false)
 		frame.icon:SetDesaturated(false)
 		frame.icon:SetAlpha(1)
+		local missing = not hasEnchant and hasMissingCondition(buff and buff.conditions)
 		if hasEnchant then
 			if aura and aura.duration and aura.duration > 0 then
 				frame.cd:SetCooldown(aura.expirationTime - aura.duration, aura.duration)
 			else
 				frame.cd:Clear()
 			end
-			if not frame.isActive then playBuffSound(catId, id) end
-			frame.isActive = true
 		else
 			frame.cd:Clear()
-			if not frame.isActive then playBuffSound(catId, id) end
-			frame.isActive = true
 		end
+		frame.isActive = hasEnchant or missing
 		if buff.glow then
 			if frame.isActive then
 				ActionButton_ShowOverlayGlow(frame)
@@ -866,6 +865,7 @@ function updateBuff(catId, id, changedId, firstScan)
 			frame.customText:Hide()
 		end
 		frame:Show()
+		if frame.isActive and not wasShown and frame:IsShown() then playBuffSound(catId, id) end
 		buffInstances[key] = nil
 		return
 	end
@@ -999,7 +999,6 @@ function updateBuff(catId, id, changedId, firstScan)
 			else
 				frame.cd:Clear()
 			end
-			if not wasShown then playBuffSound(catId, id, triggeredId) end
 			frame.isActive = true
 			if buff.glow then
 				ActionButton_ShowOverlayGlow(frame)
@@ -1007,6 +1006,7 @@ function updateBuff(catId, id, changedId, firstScan)
 				ActionButton_HideOverlayGlow(frame)
 			end
 			frame:Show()
+			if displayAura and not wasShown and frame:IsShown() then playBuffSound(catId, id, triggeredId) end
 		else
 			local icon = buff.icon
 			-- TODO 11.2: Replace IsSpellKnown* usage with C_SpellBook.IsSpellInSpellBook
@@ -1049,7 +1049,6 @@ function updateBuff(catId, id, changedId, firstScan)
 				frame:EnableMouse(true)
 				frame:RegisterForClicks("AnyUp", "AnyDown")
 			end
-			if not wasShown then playBuffSound(catId, id, triggeredId) end
 			frame.isActive = hasMissingCondition(buff and buff.conditions)
 			if buff.glow then
 				ActionButton_ShowOverlayGlow(frame)
@@ -1057,6 +1056,7 @@ function updateBuff(catId, id, changedId, firstScan)
 				ActionButton_HideOverlayGlow(frame)
 			end
 			frame:Show()
+			if not wasShown and frame:IsShown() then playBuffSound(catId, id, triggeredId) end
 		end
 	else
 		if frame then
