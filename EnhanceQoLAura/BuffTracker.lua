@@ -772,6 +772,17 @@ function updateBuff(catId, id, changedId, firstScan)
 	elseif tType == "ENCHANT" and buff and buff.slot then
 		activeBuffFrames[catId] = activeBuffFrames[catId] or {}
 		local frame = activeBuffFrames[catId][id]
+		local itemID = GetInventoryItemID("player", buff.slot)
+		if not itemID then
+			if frame then
+				frame:Hide()
+				frame.isActive = false
+				ActionButton_HideOverlayGlow(frame)
+				frame.cd:Clear()
+			end
+			buffInstances[key] = nil
+			return
+		end
 		local icon = GetInventoryItemTexture("player", buff.slot) or buff.icon
 		buff.icon = icon
 		local mhHas, mhExp, _, mID, ohHas, ohExp, _, oID, rhHas, rhExp, _, rID = GetWeaponEnchantInfo()
@@ -1372,6 +1383,7 @@ eventFrame:SetScript("OnEvent", function(_, event, unit, ...)
 	if event == "PLAYER_EQUIPMENT_CHANGED" then
 		local slot = unit
 		if slot == 13 or slot == 14 then scheduleEquipScan() end
+		if slot == 16 or slot == 17 then scheduleEnchantScan() end
 		return
 	end
 
