@@ -201,10 +201,13 @@ local function hasEnoughMageFood()
 	return false
 end
 
-local soundPlayed = false
+local joinSoundPlayed = false
+local leaveSoundPlayed = false
 local function checkShow()
 	if not addon.db["mageFoodReminder"] then
 		removeBRFrame()
+		joinSoundPlayed = false
+		leaveSoundPlayed = false
 		return
 	end
 
@@ -212,38 +215,35 @@ local function checkShow()
 	if queuedFollower and IsInLFGDungeon() then
 		if enoughFood then
 			createLeaveFrame()
-			if soundPlayed == false then
-				soundPlayed = true
-				C_Timer.After(0.3, function()
-					playReminderSound("leave")
-					soundPlayed = false
-				end)
+			if not leaveSoundPlayed then
+				leaveSoundPlayed = true
+				joinSoundPlayed = false
+				playReminderSound("leave")
 			end
 		else
 			removeBRFrame()
+			leaveSoundPlayed = false
 		end
 		return
 	end
 
-	if not healerRole or not IsResting() then
+	if not healerRole or not IsResting() or IsInGroup() then
 		removeBRFrame()
+		joinSoundPlayed = false
+		leaveSoundPlayed = false
 		return
 	end
-	if IsInGroup() then
-		removeBRFrame()
-		return
-	end
+
 	if not enoughFood then
 		createBRFrame()
-		if soundPlayed == false then
-			soundPlayed = true
-			C_Timer.After(0.3, function()
-				playReminderSound("join")
-				soundPlayed = false
-			end)
+		if not joinSoundPlayed then
+			joinSoundPlayed = true
+			leaveSoundPlayed = false
+			playReminderSound("join")
 		end
 	else
 		removeBRFrame()
+		joinSoundPlayed = false
 	end
 end
 
