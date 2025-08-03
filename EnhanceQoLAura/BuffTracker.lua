@@ -364,13 +364,23 @@ local function evaluateGroup(group, aura)
 	if #children == 0 then return true end
 	if join == "AND" then
 		for _, child in ipairs(children) do
-			local ok = child.join and evaluateGroup(child, aura) or evaluateCondition(child, aura)
+			local ok
+			if child.join then
+				ok = evaluateGroup(child, aura)
+			else
+				ok = evaluateCondition(child, aura)
+			end
 			if not ok then return false end
 		end
 		return true
 	else
 		for _, child in ipairs(children) do
-			local ok = child.join and evaluateGroup(child, aura) or evaluateCondition(child, aura)
+			local ok
+			if child.join then
+				ok = evaluateGroup(child, aura)
+			else
+				ok = evaluateCondition(child, aura)
+			end
 			if ok then return true end
 		end
 		return false
