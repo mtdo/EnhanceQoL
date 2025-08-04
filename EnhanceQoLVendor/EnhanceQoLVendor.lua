@@ -16,9 +16,10 @@ local updateSellMarks
 local tooltipCache = {}
 
 local function inventoryOpen()
-	if ContainerFrameCombinedBags:IsShown() then return true end
-	for _, frame in ipairs(ContainerFrameContainer.ContainerFrames) do
-		if frame:IsShown() then return true end
+	if ContainerFrameCombinedBags and ContainerFrameCombinedBags:IsShown() then return true end
+	local frames = ContainerFrameContainer and ContainerFrameContainer.ContainerFrames or {}
+	for _, frame in ipairs(frames) do
+		if frame and frame:IsShown() then return true end
 	end
 	return false
 end
@@ -612,22 +613,23 @@ function updateSellMarks(_, resetCache)
 
 	local overlay = addon.db["vendorShowSellOverlay"]
 	local tooltip = addon.db["vendorShowSellTooltip"]
+	local frames = ContainerFrameContainer and ContainerFrameContainer.ContainerFrames or {}
 
-	if not overlay and not tooltip then
-		local frames = { ContainerFrameCombinedBags }
-		for _, frame in ipairs(ContainerFrameContainer.ContainerFrames) do
-			table.insert(frames, frame)
-		end
-
-		for _, frame in ipairs(frames) do
-			if frame and frame:IsShown() then
-				for _, itemButton in frame:EnumerateValidItems() do
-					if itemButton.ItemMarkSell then
-						itemButton.ItemMarkSell:Hide()
-						itemButton.SellOverlay:Hide()
-					end
+	local function clearFrame(frame)
+		if frame and frame:IsShown() then
+			for _, itemButton in frame:EnumerateValidItems() do
+				if itemButton.ItemMarkSell then
+					itemButton.ItemMarkSell:Hide()
+					itemButton.SellOverlay:Hide()
 				end
 			end
+		end
+	end
+
+	if not overlay and not tooltip then
+		clearFrame(ContainerFrameCombinedBags)
+		for _, frame in ipairs(frames) do
+			clearFrame(frame)
 		end
 		wipe(sellMarkLookup)
 		return
@@ -640,12 +642,7 @@ function updateSellMarks(_, resetCache)
 		sellMarkLookup[v.bag .. "_" .. v.slot] = true
 	end
 
-	local frames = { ContainerFrameCombinedBags }
-	for _, frame in ipairs(ContainerFrameContainer.ContainerFrames) do
-		table.insert(frames, frame)
-	end
-
-	for _, frame in ipairs(frames) do
+	local function processFrame(frame)
 		if frame and frame:IsShown() then
 			for _, itemButton in frame:EnumerateValidItems() do
 				local bag = itemButton:GetBagID()
@@ -680,6 +677,11 @@ function updateSellMarks(_, resetCache)
 				end
 			end
 		end
+	end
+
+	processFrame(ContainerFrameCombinedBags)
+	for _, frame in ipairs(frames) do
+		processFrame(frame)
 	end
 end
 
@@ -717,9 +719,10 @@ end
 
 hooksecurefunc(_G.ContainerFrameItemButtonMixin, "OnModifiedClick", AltClickHook)
 
-hooksecurefunc(ContainerFrameCombinedBags, "UpdateItems", updateSellMarks)
-for _, frame in ipairs(ContainerFrameContainer.ContainerFrames) do
-	hooksecurefunc(frame, "UpdateItems", updateSellMarks)
+if ContainerFrameCombinedBags then hooksecurefunc(ContainerFrameCombinedBags, "UpdateItems", updateSellMarks) end
+local frames = ContainerFrameContainer and ContainerFrameContainer.ContainerFrames or {}
+for _, frame in ipairs(frames) do
+	if frame then hooksecurefunc(frame, "UpdateItems", updateSellMarks) end
 end
 
 if TooltipDataProcessor then
