@@ -1,4 +1,5 @@
 -- Example file
+-- luacheck: globals AUCTION_HOUSE_HEADER_ITEM NEED SEARCH
 
 local parentAddonName = "EnhanceQoL"
 local addonName, addon = ...
@@ -164,8 +165,13 @@ local function CreateCraftShopperFrame()
 
 		local label3 = AceGUI:Create("Label")
 		label3:SetText("")
-		label3:SetRelativeWidth(0.2)
+		label3:SetRelativeWidth(0.1)
 		rowHeader:AddChild(label3)
+
+		local label4 = AceGUI:Create("Label")
+		label4:SetText("")
+		label4:SetRelativeWidth(0.1)
+		rowHeader:AddChild(label4)
 		scroll:AddChild(rowHeader)
 		local searchText = (search:GetText() or ""):lower()
 		for _, item in ipairs(addon.Vendor.CraftShopper.items) do
@@ -192,9 +198,36 @@ local function CreateCraftShopperFrame()
 					qty:SetRelativeWidth(0.25)
 					row:AddChild(qty)
 
+					local searchBtn = AceGUI:Create("Button")
+					searchBtn:SetText("?")
+					searchBtn:SetRelativeWidth(0.1)
+					searchBtn:SetWidth(20)
+					searchBtn:SetCallback("OnClick", function()
+						local itemName = C_Item.GetItemInfo(item.itemID)
+						if not itemName then return end
+						local query = {
+							searchString = itemName,
+							sorts = {
+								{ sortOrder = Enum.AuctionHouseSortOrder.Price, reverseSort = false },
+								{ sortOrder = Enum.AuctionHouseSortOrder.Name, reverseSort = false },
+							},
+							filters = {
+								Enum.AuctionHouseFilter.PoorQuality,
+								Enum.AuctionHouseFilter.CommonQuality,
+								Enum.AuctionHouseFilter.UncommonQuality,
+								Enum.AuctionHouseFilter.RareQuality,
+								Enum.AuctionHouseFilter.EpicQuality,
+							},
+						}
+						C_AuctionHouse.SendBrowseQuery(query)
+						AuctionHouseFrame:Show()
+						AuctionHouseFrame:Raise()
+					end)
+					row:AddChild(searchBtn)
+
 					local remove = AceGUI:Create("Button")
 					remove:SetText("X")
-					remove:SetRelativeWidth(0.2)
+					remove:SetRelativeWidth(0.1)
 					remove:SetWidth(20)
 					remove:SetCallback("OnClick", function()
 						item.hidden = true
