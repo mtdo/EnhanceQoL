@@ -189,7 +189,7 @@ local function ShowPurchasePopup(item, buyWidget)
 
 	local popup = AceGUI:Create("Window")
 	popup:SetTitle(L["vendorCraftShopperConfirmPurchase"])
-	popup:SetWidth(250)
+	popup:SetWidth(280)
 	popup:SetHeight(150)
 	popup:SetLayout("List")
 	popup:EnableResize(false)
