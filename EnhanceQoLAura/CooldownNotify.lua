@@ -366,13 +366,17 @@ function CN:SPELL_UPDATE_COOLDOWN(spellID)
 				end
 			end
 		end
+		scheduleTrinketUpdate()
 		return
 	end
 	local found = false
 	for catId, cat in pairs(addon.db.cooldownNotifyCategories or {}) do
 		if addon.db.cooldownNotifyEnabled[catId] then
 			local entry = cat.spells and cat.spells[spellID]
-			if (cat.useAdvancedTracking ~= false and entry) or (cat.useAdvancedTracking == false and playerSpells[spellID] and not (cat.ignoredSpells and cat.ignoredSpells[spellID])) then
+			if
+				(cat.useAdvancedTracking ~= false and entry)
+				or (cat.useAdvancedTracking == false and (playerSpells[spellID] or spellID < 0) and not (cat.ignoredSpells and cat.ignoredSpells[spellID]))
+			then
 				if (type(entry) == "table" and entry.trackType == "ITEM") or spellID < 0 then
 					local slot = (type(entry) == "table" and entry.slot) or -spellID
 					local start, duration, enabled = GetInventoryItemCooldown("player", slot)
@@ -430,6 +434,7 @@ function CN:PLAYER_LOGIN()
 			end
 		end
 	end
+	scheduleTrinketUpdate()
 end
 
 function CN:SPELLS_CHANGED() BuildPlayerSpellList() end
