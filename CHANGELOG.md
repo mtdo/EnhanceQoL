@@ -4,6 +4,7 @@
 
 ### ✨ Added
 - **CooldownNotfiy** now tracks Trinkets
+- Option to hide zone change text
 
 ### 🔄 Changed
 - Performance improvements in **Aura Tracker**

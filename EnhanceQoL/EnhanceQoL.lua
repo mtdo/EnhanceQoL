@@ -1780,6 +1780,15 @@ local function addUIFrame(container)
 		},
 		{
 			parent = "",
+			var = "hideZoneText",
+			type = "CheckBox",
+			callback = function(self, _, value)
+				addon.db["hideZoneText"] = value
+				addon.functions.toggleZoneText(addon.db["hideZoneText"])
+			end,
+		},
+		{
+			parent = "",
 			var = "hideMinimapButton",
 			text = L["Hide Minimap Button"],
 			type = "CheckBox",
@@ -3329,6 +3338,7 @@ local function initMisc()
 	addon.functions.InitDBValue("hideMinimapButton", false)
 	addon.functions.InitDBValue("hideBagsBar", false)
 	addon.functions.InitDBValue("hideMicroMenu", false)
+	addon.functions.InitDBValue("hideZoneText", false)
 	addon.functions.InitDBValue("instantCatalystEnabled", false)
 	--@debug@
 	addon.functions.InitDBValue("automaticallyOpenContainer", false)
@@ -3726,6 +3736,20 @@ local function initUI()
 		end
 	end
 	addon.functions.toggleMicroMenu(addon.db["hideMicroMenu"])
+
+	function addon.functions.toggleZoneText(value)
+		if value then
+			ZoneTextFrame:UnregisterAllEvents()
+			ZoneTextFrame:Hide()
+		else
+			ZoneTextFrame:RegisterEvent("ZONE_CHANGED")
+			ZoneTextFrame:RegisterEvent("ZONE_CHANGED_INDOORS")
+			ZoneTextFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+			ZoneTextFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+			ZoneTextFrame:Show()
+		end
+	end
+	addon.functions.toggleZoneText(addon.db["hideZoneText"])
 
 	function addon.functions.toggleQuickJoinToastButton(value)
 		if value == false then

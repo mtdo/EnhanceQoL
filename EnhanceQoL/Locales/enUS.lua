@@ -96,6 +96,7 @@ L["Loot"] = "Loot"
 
 L["hideBagsBar"] = "Hide Bagsbar"
 L["hideMicroMenu"] = "Hide Micro Menu"
+L["hideZoneText"] = "Hide zone-change text"
 L["MicroMenu"] = "Micro Menu"
 L["BagsBar"] = "Bags Bar"
 -- Dungeon
