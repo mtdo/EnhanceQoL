@@ -962,6 +962,18 @@ local function buildSpellOptions(container, catId, spellId)
 			}
 		StaticPopupDialogs["EQOL_DELETE_CAST_SPELL"].OnAccept = function()
 			cat.spells[spellId] = nil
+
+			local sounds = addon.db.castTrackerSounds
+			if sounds and sounds[catId] then
+				sounds[catId][spellId] = nil
+				if next(sounds[catId]) == nil then sounds[catId] = nil end
+			end
+			local enabled = addon.db.castTrackerSoundsEnabled
+			if enabled and enabled[catId] then
+				enabled[catId][spellId] = nil
+				if next(enabled[catId]) == nil then enabled[catId] = nil end
+			end
+
 			rebuildAltMapping()
 			refreshTree(catId)
 			container:ReleaseChildren()
