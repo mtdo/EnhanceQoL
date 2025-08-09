@@ -122,37 +122,26 @@ drop:HookScript("OnHide", function()
 	wipe(SearchInfoCache)
 end)
 
-hooksecurefunc(drop, "SetupMenu", function(self, blizzGen)
+local function EQOL_AddLFGEntries(owner, root, ctx)
 	if not addon.db["mythicPlusEnableDungeonFilter"] then return end
 	local panel = LFGListFrame.SearchPanel
 	if panel.categoryID ~= 2 then return end
-	if originalSetupGen and blizzGen ~= originalSetupGen then return end
-	originalSetupGen = originalSetupGen or blizzGen
+	root:CreateTitle("")
 
-	local function EQOL_Generator(menu, root)
-		blizzGen(menu, root)
-
-		root:CreateTitle("")
-
-		root:CreateTitle(addonName)
-		root:CreateCheckbox(L["Partyfit"], function() return pDb["partyFit"] end, function() pDb["partyFit"] = not pDb["partyFit"] end)
-		if not playerIsLust then
-			root:CreateCheckbox(L["BloodlustAvailable"], function() return pDb["bloodlustAvailable"] end, function() pDb["bloodlustAvailable"] = not pDb["bloodlustAvailable"] end)
-		end
-		if not playerIsBR then
-			root:CreateCheckbox(L["BattleResAvailable"], function() return pDb["battleResAvailable"] end, function() pDb["battleResAvailable"] = not pDb["battleResAvailable"] end)
-		end
-		if addon.variables.unitRole == "DAMAGER" then
-			root:CreateCheckbox(
-				(L["NoSameSpec"]):format(addon.variables.unitSpecName .. " " .. select(1, UnitClass("player"))),
-				function() return pDb["NoSameSpec"] end,
-				function() pDb["NoSameSpec"] = not pDb["NoSameSpec"] end
-			)
-		end
+	root:CreateTitle(addonName)
+	root:CreateCheckbox(L["Partyfit"], function() return pDb["partyFit"] end, function() pDb["partyFit"] = not pDb["partyFit"] end)
+	if not playerIsLust then root:CreateCheckbox(L["BloodlustAvailable"], function() return pDb["bloodlustAvailable"] end, function() pDb["bloodlustAvailable"] = not pDb["bloodlustAvailable"] end) end
+	if not playerIsBR then root:CreateCheckbox(L["BattleResAvailable"], function() return pDb["battleResAvailable"] end, function() pDb["battleResAvailable"] = not pDb["battleResAvailable"] end) end
+	if addon.variables.unitRole == "DAMAGER" then
+		root:CreateCheckbox(
+			(L["NoSameSpec"]):format(addon.variables.unitSpecName .. " " .. select(1, UnitClass("player"))),
+			function() return pDb["NoSameSpec"] end,
+			function() pDb["NoSameSpec"] = not pDb["NoSameSpec"] end
+		)
 	end
-	self:SetupMenu(EQOL_Generator)
-	self.isSet = true
-end)
+end
+
+if Menu and Menu.ModifyMenu then Menu.ModifyMenu("MENU_LFG_FRAME_SEARCH_FILTER", EQOL_AddLFGEntries) end
 
 local function MyCustomFilter(info)
 	if appliedLookup[info.searchResultID] then return true end
