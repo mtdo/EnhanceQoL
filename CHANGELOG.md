@@ -1,5 +1,14 @@
 # Changelog
 
+## [4.2.1] – 2025-08-07
+
+### ✨ Added
+
+- Slash command `/eqoldash` to open the DataHub dashboard.
+- Documentation for creating external streams.
+
+---
+
 ## [4.2.0] – 2025-08-07
 
 ### ✨ Added

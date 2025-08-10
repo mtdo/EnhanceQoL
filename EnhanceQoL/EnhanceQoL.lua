@@ -1,5 +1,5 @@
 -- luacheck: globals DefaultCompactUnitFrameSetup CompactUnitFrame_UpdateAuras CompactUnitFrame_UpdateName UnitTokenFromGUID C_Bank
--- luacheck: globals Menu GameTooltip_SetTitle GameTooltip_AddNormalLine
+-- luacheck: globals Menu GameTooltip_SetTitle GameTooltip_AddNormalLine EnhanceQoL
 local addonName, addon = ...
 
 local LDB = LibStub("LibDataBroker-1.1")
@@ -5516,3 +5516,6 @@ end
 
 registerEvents(frameLoad)
 frameLoad:SetScript("OnEvent", eventHandler)
+
+SLASH_EQOLDASH1 = "/eqoldash"
+SlashCmdList.EQOLDASH = function() EnhanceQoL.UI.Dashboard:Show() end
