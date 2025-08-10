@@ -179,29 +179,32 @@ function DataPanel.List()
 	addon.db.dataPanels = addon.db.dataPanels or {}
 	local result = {}
 	for id, info in pairs(addon.db.dataPanels) do
-		result[id] = {}
+		local entry = { list = {}, set = {} }
+		result[id] = entry
 		if info.streams then
 			for _, stream in ipairs(info.streams) do
-				result[id][#result[id] + 1] = stream
+				if not entry.set[stream] then
+					entry.set[stream] = true
+					entry.list[#entry.list + 1] = stream
+				end
 			end
 		end
 	end
 	for id, panel in pairs(panels) do
-		local list = result[id]
-		if not list then
-			list = {}
-			result[id] = list
+		local entry = result[id]
+		if not entry then
+			entry = { list = {}, set = {} }
+			result[id] = entry
 		end
 		for _, stream in ipairs(panel.order) do
-			local exists = false
-			for _, s in ipairs(list) do
-				if s == stream then
-					exists = true
-					break
-				end
+			if not entry.set[stream] then
+				entry.set[stream] = true
+				entry.list[#entry.list + 1] = stream
 			end
-			if not exists then list[#list + 1] = stream end
 		end
+	end
+	for id, info in pairs(result) do
+		result[id] = info.list
 	end
 	return result
 end
