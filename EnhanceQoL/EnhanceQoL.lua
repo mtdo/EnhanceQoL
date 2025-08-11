@@ -2913,12 +2913,12 @@ local function buildDatapanelFrame(container)
 	controlGroup:SetTitle("Panels")
 	wrapper:AddChild(controlGroup)
 
-	local newId = addon.functions.createEditboxAce("Panel ID")
-	newId:SetRelativeWidth(0.4)
-	controlGroup:AddChild(newId)
+	local newName = addon.functions.createEditboxAce("Panel Name")
+	newName:SetRelativeWidth(0.4)
+	controlGroup:AddChild(newName)
 
 	local addButton = addon.functions.createButtonAce("Add Panel", 120, function()
-		local id = newId:GetText()
+		local id = newName:GetText()
 		if id and id ~= "" then
 			DataPanel.Create(id)
 			container:ReleaseChildren()
@@ -2952,11 +2952,16 @@ local function buildDatapanelFrame(container)
 
 	-- Available streams for dropdowns
 	local streamList, streamOrder = {}, {}
-	for name in pairs(DataHub.streams) do
-		streamList[name] = name
-		streamOrder[#streamOrder + 1] = name
+	local sortedStreams = {}
+	for id, stream in pairs(DataHub.streams) do
+		local title = (stream.meta and (stream.meta.title or stream.meta.name)) or id
+		streamList[id] = title
+		sortedStreams[#sortedStreams + 1] = { key = id, title = title }
 	end
-	table.sort(streamOrder)
+	table.sort(sortedStreams, function(a, b) return a.title < b.title end)
+	for _, entry in ipairs(sortedStreams) do
+		streamOrder[#streamOrder + 1] = entry.key
+	end
 
 	-- Display existing panels
 	for _, id in ipairs(panelOrder) do
@@ -2981,7 +2986,11 @@ local function buildDatapanelFrame(container)
 		local streams = panels[id] or {}
 		local currentLabel
 		if #streams > 0 then
-			currentLabel = addon.functions.createLabelAce("Streams: " .. table.concat(streams, ", "))
+			local titles = {}
+			for i, sid in ipairs(streams) do
+				titles[i] = streamList[sid] or sid
+			end
+			currentLabel = addon.functions.createLabelAce("Streams: " .. table.concat(titles, ", "))
 		else
 			currentLabel = addon.functions.createLabelAce("Streams: none")
 		end
@@ -2997,10 +3006,10 @@ local function buildDatapanelFrame(container)
 
 		local removeList, removeOrder = {}, {}
 		for _, s in ipairs(streams) do
-			removeList[s] = s
+			removeList[s] = streamList[s] or s
 			removeOrder[#removeOrder + 1] = s
 		end
-		table.sort(removeOrder)
+		table.sort(removeOrder, function(a, b) return removeList[a] < removeList[b] end)
 
 		local removeStream = addon.functions.createDropdownAce("Remove Stream", removeList, removeOrder, function(self, _, val)
 			panel:RemoveStream(val)
