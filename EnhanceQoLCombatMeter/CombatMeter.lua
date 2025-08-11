@@ -69,27 +69,41 @@ local function handleEvent(self, event, ...)
 				healing = data.healing,
 			}
 		end
+		addon.db["combatMeterHistory"] = addon.db["combatMeterHistory"] or {}
 		table.insert(addon.db["combatMeterHistory"], 1, fight)
 	elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
 		if not addon.CombatMeter.inCombat then return end
-		local _, subevent, _, sourceGUID, sourceName, sourceFlags, _, _, _, _, _, arg12, _, _, arg15 = CombatLogGetCurrentEventInfo()
-		if not sourceGUID or bit_band(sourceFlags, groupMask) == 0 then return end
+		local _, subevent, _, sourceGUID, sourceName, sourceFlags, _, _, _, _, _, a12, a13, a14, a15, a16, a17, a18, a19, a20 = CombatLogGetCurrentEventInfo()
+		if not sourceGUID or bit_band(sourceFlags or 0, groupMask) == 0 then return end
+
 		local player = acquirePlayer(addon.CombatMeter.players, sourceGUID, sourceName)
 		local overall = acquirePlayer(addon.CombatMeter.overallPlayers, sourceGUID, sourceName)
 
-		local amount
+		local amount = 0
 		if subevent == "SWING_DAMAGE" then
-			amount = arg12
-			player.damage = player.damage + amount
-			overall.damage = overall.damage + amount
-		elseif subevent:find("_DAMAGE") then
-			amount = arg15
-			player.damage = player.damage + amount
-			overall.damage = overall.damage + amount
-		elseif subevent:find("_HEAL") then
-			amount = arg15
-			player.healing = player.healing + amount
-			overall.healing = overall.healing + amount
+			amount = tonumber(a12) or 0
+			if amount > 0 then
+				player.damage = player.damage + amount
+				overall.damage = overall.damage + amount
+			end
+		elseif subevent == "RANGE_DAMAGE" or subevent == "SPELL_DAMAGE" or subevent == "SPELL_PERIODIC_DAMAGE" or subevent == "DAMAGE_SHIELD" or subevent == "DAMAGE_SPLIT" then
+			amount = tonumber(a15) or 0
+			if amount > 0 then
+				player.damage = player.damage + amount
+				overall.damage = overall.damage + amount
+			end
+		elseif subevent == "ENVIRONMENTAL_DAMAGE" then
+			amount = tonumber(a13) or 0
+			if amount > 0 then
+				player.damage = player.damage + amount
+				overall.damage = overall.damage + amount
+			end
+		elseif subevent == "SPELL_HEAL" or subevent == "SPELL_PERIODIC_HEAL" then
+			amount = tonumber(a15) or 0
+			if amount > 0 then
+				player.healing = player.healing + amount
+				overall.healing = overall.healing + amount
+			end
 		end
 	end
 end
