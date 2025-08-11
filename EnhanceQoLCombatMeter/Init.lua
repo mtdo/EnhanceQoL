@@ -12,3 +12,7 @@ addon.LCombatMeter = {}
 
 addon.functions.InitDBValue("combatMeterEnabled", false)
 addon.functions.InitDBValue("combatMeterHistory", {})
+addon.functions.InitDBValue("combatMeterAlwaysShow", false)
+addon.functions.InitDBValue("combatMeterFramePoint", "CENTER")
+addon.functions.InitDBValue("combatMeterFrameX", 0)
+addon.functions.InitDBValue("combatMeterFrameY", 0)

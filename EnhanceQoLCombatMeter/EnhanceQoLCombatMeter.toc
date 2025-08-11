@@ -23,3 +23,4 @@
 locales\[TextLocale].lua
 Init.lua
 CombatMeter.lua
+CombatMeterUI.lua
