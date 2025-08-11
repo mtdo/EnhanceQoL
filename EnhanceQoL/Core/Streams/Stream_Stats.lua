@@ -1,4 +1,4 @@
--- luacheck: globals EnhanceQoL GAMEMENU_OPTIONS STAT_HASTE STAT_MASTERY STAT_VERSATILITY STAT_CRITICAL_STRIKE CR_HASTE_MELEE CR_MASTERY CR_VERSATILITY_DAMAGE_DONE CR_VERSATILITY_DAMAGE_TAKEN CR_CRIT_MELEE
+-- luacheck: globals EnhanceQoL GAMEMENU_OPTIONS STAT_HASTE STAT_MASTERY STAT_VERSATILITY STAT_CRITICAL_STRIKE CR_HASTE_MELEE CR_MASTERY CR_VERSATILITY_DAMAGE_DONE CR_VERSATILITY_DAMAGE_TAKEN CR_CRIT_MELEE CR_LIFESTEAL CR_BLOCK CR_PARRY CR_DODGE CR_AVOIDANCE CR_SPEED STAT_LIFESTEAL STAT_BLOCK STAT_PARRY STAT_DODGE STAT_AVOIDANCE STAT_SPEED GetLifesteal GetBlockChance GetParryChance GetDodgeChance GetAvoidance GetSpeed
 local addonName, addon = ...
 local L = addon.L
 
@@ -14,14 +14,28 @@ local function ensureDB()
 	db = addon.db.datapanel.stats
 	db.fontSize = db.fontSize or 14
 	db.vertical = db.vertical or false
+	db.primary = db.primary or { enabled = true }
 	db.haste = db.haste or { enabled = true, rating = false }
 	db.mastery = db.mastery or { enabled = true, rating = false }
 	db.versatility = db.versatility or { enabled = true, rating = false }
 	db.crit = db.crit or { enabled = true, rating = false }
+	db.lifesteal = db.lifesteal or { enabled = true, rating = false }
+	db.block = db.block or { enabled = true, rating = false }
+	db.parry = db.parry or { enabled = true, rating = false }
+	db.dodge = db.dodge or { enabled = true, rating = false }
+	db.avoidance = db.avoidance or { enabled = true, rating = false }
+	db.speed = db.speed or { enabled = true, rating = false }
+	db.primary.color = db.primary.color or { r = 1, g = 1, b = 1 }
 	db.haste.color = db.haste.color or { r = 1, g = 1, b = 1 }
 	db.mastery.color = db.mastery.color or { r = 1, g = 1, b = 1 }
 	db.versatility.color = db.versatility.color or { r = 1, g = 1, b = 1 }
 	db.crit.color = db.crit.color or { r = 1, g = 1, b = 1 }
+	db.lifesteal.color = db.lifesteal.color or { r = 1, g = 1, b = 1 }
+	db.block.color = db.block.color or { r = 1, g = 1, b = 1 }
+	db.parry.color = db.parry.color or { r = 1, g = 1, b = 1 }
+	db.dodge.color = db.dodge.color or { r = 1, g = 1, b = 1 }
+	db.avoidance.color = db.avoidance.color or { r = 1, g = 1, b = 1 }
+	db.speed.color = db.speed.color or { r = 1, g = 1, b = 1 }
 end
 
 local function RestorePosition(frame)
@@ -32,7 +46,7 @@ local function RestorePosition(frame)
 end
 
 local aceWindow
-local function addStatOptions(frame, key, label)
+local function addStatOptions(frame, key, label, includeRating)
 	local group = AceGUI:Create("InlineGroup")
 	group:SetTitle(label)
 	group:SetFullWidth(true)
@@ -47,14 +61,16 @@ local function addStatOptions(frame, key, label)
 	end)
 	group:AddChild(show)
 
-	local rating = AceGUI:Create("CheckBox")
-	rating:SetLabel("Use rating")
-	rating:SetValue(db[key].rating)
-	rating:SetCallback("OnValueChanged", function(_, _, val)
-		db[key].rating = val and true or false
-		addon.DataHub:RequestUpdate(stream)
-	end)
-	group:AddChild(rating)
+	if includeRating ~= false then
+		local rating = AceGUI:Create("CheckBox")
+		rating:SetLabel("Use rating")
+		rating:SetValue(db[key].rating)
+		rating:SetCallback("OnValueChanged", function(_, _, val)
+			db[key].rating = val and true or false
+			addon.DataHub:RequestUpdate(stream)
+		end)
+		group:AddChild(rating)
+	end
 
 	local color = AceGUI:Create("ColorPicker")
 	color:SetLabel("Color")
@@ -120,10 +136,18 @@ local function createAceWindow()
 	end)
 	groupCore:AddChild(vertical)
 
+	local primaryLabel = select(3, GetPlayerPrimaryStat())
+	addStatOptions(groupCore, "primary", primaryLabel or "Primary", false)
 	addStatOptions(groupCore, "haste", STAT_HASTE or "Haste")
 	addStatOptions(groupCore, "mastery", STAT_MASTERY or "Mastery")
 	addStatOptions(groupCore, "versatility", STAT_VERSATILITY or "Versatility")
 	addStatOptions(groupCore, "crit", STAT_CRITICAL_STRIKE or "Crit")
+	addStatOptions(groupCore, "lifesteal", STAT_LIFESTEAL or "Leech")
+	addStatOptions(groupCore, "block", STAT_BLOCK or "Block")
+	addStatOptions(groupCore, "parry", STAT_PARRY or "Parry")
+	addStatOptions(groupCore, "dodge", STAT_DODGE or "Dodge")
+	addStatOptions(groupCore, "avoidance", STAT_AVOIDANCE or "Avoidance")
+	addStatOptions(groupCore, "speed", STAT_SPEED or "Speed")
 
 	frame.frame:Show()
 	scroll:DoLayout()
@@ -186,8 +210,8 @@ local function checkStats(stream)
 	stream.snapshot.fontSize = size
 	stream.snapshot.tooltip = L["Right-Click for options"]
 
-	local primaryValue, primaryId, primaryName = GetPlayerPrimaryStat()
-	texts[#texts + 1] = ("%s: %d"):format(primaryName, primaryValue)
+	local primaryValue, _, primaryName = GetPlayerPrimaryStat()
+	if db.primary.enabled then texts[#texts + 1] = colorize(("%s: %d"):format(primaryName, primaryValue), db.primary.color) end
 
 	if db.haste.enabled then
 		local text
@@ -229,6 +253,66 @@ local function checkStats(stream)
 			text = formatStat(STAT_CRITICAL_STRIKE or "Crit", nil, GetCritChance())
 		end
 		texts[#texts + 1] = colorize(text, db.crit.color)
+	end
+
+	if db.lifesteal.enabled then
+		local text
+		if db.lifesteal.rating then
+			text = formatStat(STAT_LIFESTEAL or "Leech", GetCombatRating(CR_LIFESTEAL), nil)
+		else
+			text = formatStat(STAT_LIFESTEAL or "Leech", nil, GetLifesteal())
+		end
+		texts[#texts + 1] = colorize(text, db.lifesteal.color)
+	end
+
+	if db.block.enabled then
+		local text
+		if db.block.rating then
+			text = formatStat(STAT_BLOCK or "Block", GetCombatRating(CR_BLOCK), nil)
+		else
+			text = formatStat(STAT_BLOCK or "Block", nil, GetBlockChance())
+		end
+		texts[#texts + 1] = colorize(text, db.block.color)
+	end
+
+	if db.parry.enabled then
+		local text
+		if db.parry.rating then
+			text = formatStat(STAT_PARRY or "Parry", GetCombatRating(CR_PARRY), nil)
+		else
+			text = formatStat(STAT_PARRY or "Parry", nil, GetParryChance())
+		end
+		texts[#texts + 1] = colorize(text, db.parry.color)
+	end
+
+	if db.dodge.enabled then
+		local text
+		if db.dodge.rating then
+			text = formatStat(STAT_DODGE or "Dodge", GetCombatRating(CR_DODGE), nil)
+		else
+			text = formatStat(STAT_DODGE or "Dodge", nil, GetDodgeChance())
+		end
+		texts[#texts + 1] = colorize(text, db.dodge.color)
+	end
+
+	if db.avoidance.enabled then
+		local text
+		if db.avoidance.rating then
+			text = formatStat(STAT_AVOIDANCE or "Avoidance", GetCombatRating(CR_AVOIDANCE), nil)
+		else
+			text = formatStat(STAT_AVOIDANCE or "Avoidance", nil, GetAvoidance())
+		end
+		texts[#texts + 1] = colorize(text, db.avoidance.color)
+	end
+
+	if db.speed.enabled then
+		local text
+		if db.speed.rating then
+			text = formatStat(STAT_SPEED or "Speed", GetCombatRating(CR_SPEED), nil)
+		else
+			text = formatStat(STAT_SPEED or "Speed", nil, GetSpeed())
+		end
+		texts[#texts + 1] = colorize(text, db.speed.color)
 	end
 
 	stream.snapshot.text = table.concat(texts, sep)
