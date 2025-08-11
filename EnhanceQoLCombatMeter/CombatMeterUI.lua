@@ -117,7 +117,12 @@ local function createGroupFrame(groupConfig)
 			local stats = addon.CombatMeter.functions.getOverallStats()
 			for guid, p in pairs(stats) do
 				if groupUnits[guid] then
-					local value = self.metric == "damageOverall" and p.dps or p.hps
+					local value
+					if self.metric == "damageOverall" then
+						value = p.damage
+					else
+						value = p.hps
+					end
 					table.insert(list, { guid = guid, name = p.name, value = value })
 					if value > maxValue then maxValue = value end
 				end
