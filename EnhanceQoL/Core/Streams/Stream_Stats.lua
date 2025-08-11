@@ -8,6 +8,42 @@ local stream
 
 local idx
 
+local STR = LE_UNIT_STAT_STRENGTH
+local AGI = LE_UNIT_STAT_AGILITY
+local INT = LE_UNIT_STAT_INTELLECT
+
+local NAMES = {
+	[STR] = ITEM_MOD_STRENGTH_SHORT, -- "Strength" (lokalisiert)
+	[AGI] = ITEM_MOD_AGILITY_SHORT, -- "Agility"
+	[INT] = ITEM_MOD_INTELLECT_SHORT, -- "Intellect"
+}
+
+local function GetPlayerPrimaryStatIndex()
+	local spec = C_SpecializationInfo.GetSpecialization()
+	if spec then
+		-- 7. Rückgabewert ist der Primary-Stat (Index, passt direkt in UnitStat)
+		local _, _, _, _, _, _, primaryStat = C_SpecializationInfo.GetSpecializationInfo(spec)
+		if primaryStat == STR or primaryStat == AGI or primaryStat == INT then return primaryStat end
+	end
+	-- Fallback: nimm den höchsten von STR/AGI/INT auf dem Spieler
+	local _, sSTR = UnitStat("player", STR)
+	local _, sAGI = UnitStat("player", AGI)
+	local _, sINT = UnitStat("player", INT)
+	if sSTR >= sAGI and sSTR >= sINT then
+		return STR
+	elseif sAGI >= sINT then
+		return AGI
+	else
+		return INT
+	end
+end
+
+local function GetPlayerPrimaryStat()
+	if not idx then idx = GetPlayerPrimaryStatIndex() end
+	local base, effective = UnitStat("player", idx) -- effective enthält Buffs
+	return (effective or base), idx, (NAMES[idx] or "Primary")
+end
+
 local function ensureDB()
 	addon.db.datapanel = addon.db.datapanel or {}
 	addon.db.datapanel.stats = addon.db.datapanel.stats or {}
@@ -153,42 +189,6 @@ local function createAceWindow()
 	scroll:DoLayout()
 end
 
-local STR = LE_UNIT_STAT_STRENGTH
-local AGI = LE_UNIT_STAT_AGILITY
-local INT = LE_UNIT_STAT_INTELLECT
-
-local NAMES = {
-	[STR] = ITEM_MOD_STRENGTH_SHORT, -- "Strength" (lokalisiert)
-	[AGI] = ITEM_MOD_AGILITY_SHORT, -- "Agility"
-	[INT] = ITEM_MOD_INTELLECT_SHORT, -- "Intellect"
-}
-
-local function GetPlayerPrimaryStatIndex()
-	local spec = C_SpecializationInfo.GetSpecialization()
-	if spec then
-		-- 7. Rückgabewert ist der Primary-Stat (Index, passt direkt in UnitStat)
-		local _, _, _, _, _, _, primaryStat = C_SpecializationInfo.GetSpecializationInfo(spec)
-		if primaryStat == STR or primaryStat == AGI or primaryStat == INT then return primaryStat end
-	end
-	-- Fallback: nimm den höchsten von STR/AGI/INT auf dem Spieler
-	local _, sSTR = UnitStat("player", STR)
-	local _, sAGI = UnitStat("player", AGI)
-	local _, sINT = UnitStat("player", INT)
-	if sSTR >= sAGI and sSTR >= sINT then
-		return STR
-	elseif sAGI >= sINT then
-		return AGI
-	else
-		return INT
-	end
-end
-
-local function GetPlayerPrimaryStat()
-	if not idx then idx = GetPlayerPrimaryStatIndex() end
-	local base, effective = UnitStat("player", idx) -- effective enthält Buffs
-	return (effective or base), idx, (NAMES[idx] or "Primary")
-end
-
 local function formatStat(label, rating, percent)
 	if rating then
 		return ("%s: %d"):format(label, rating)
@@ -228,7 +228,7 @@ local function checkStats(stream)
 		if db.mastery.rating then
 			text = formatStat(STAT_MASTERY or "Mastery", GetCombatRating(CR_MASTERY), nil)
 		else
-			text = formatStat(STAT_MASTERY or "Mastery", nil, GetMastery())
+			text = formatStat(STAT_MASTERY or "Mastery", nil, GetMasteryEffect())
 		end
 		texts[#texts + 1] = colorize(text, db.mastery.color)
 	end
@@ -334,7 +334,7 @@ local provider = {
 			if unit == "player" then addon.DataHub:RequestUpdate(stream) end
 		end,
 		UNIT_AURA = function(stream, _, unit)
-			if unit == "player" then addon.DataHub:RequestUpdate(stream) end
+			if unit == "player" then C_Timer.After(0.5, function() addon.DataHub:RequestUpdate(stream) end) end
 		end,
 		COMBAT_RATING_UPDATE = function(stream) addon.DataHub:RequestUpdate(stream) end,
 		MASTERY_UPDATE = function(stream) addon.DataHub:RequestUpdate(stream) end,
