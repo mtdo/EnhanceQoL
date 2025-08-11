@@ -95,7 +95,8 @@ local function handleEvent(self, event, ...)
 		local sourceGUID = a4
 		local sourceName = a5
 		local sourceFlags = a6
-		if not dmgIdx[subevent] and not healIdx[subevent] and not subevent == "SPELL_ABSORBED" then return end
+		if not (dmgIdx[subevent] or healIdx[subevent] or subevent == "SPELL_ABSORBED") then return end
+		-- (wenn du später *_MISSED ABSORB zählst, hier die MISSED-Events ergänzen)
 		if not sourceGUID or bit_band(sourceFlags or 0, groupMask) == 0 then return end
 
 		local idx = dmgIdx[subevent]
