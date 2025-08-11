@@ -153,8 +153,8 @@ local function createGroupFrame(groupConfig)
 			bar:SetMinMaxValues(0, maxValue)
 			bar:SetValue(p.value)
 
-			local _, _, class, _, _, classFile = GetPlayerInfoByGUID(p.guid)
-			local color = RAID_CLASS_COLORS[classFile] or NORMAL_FONT_COLOR
+			local _, class = GetPlayerInfoByGUID(p.guid)
+			local color = RAID_CLASS_COLORS[class] or NORMAL_FONT_COLOR
 			bar:SetStatusBarColor(color.r, color.g, color.b)
 
 			local unit = groupUnits[p.guid]
