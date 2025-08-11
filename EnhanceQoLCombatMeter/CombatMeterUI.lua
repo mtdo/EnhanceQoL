@@ -17,6 +17,7 @@ local pendingInspect = {}
 local groupFrames = {}
 local groupUnitsCached = {}
 local classByGUID = {}
+local shortNameCache = {}
 local ticker
 
 -- font helpers ---------------------------------------------------------------
@@ -371,26 +372,31 @@ local function createGroupFrame(groupConfig)
 				bar._class = class
 			end
 
-                        local unit = groupUnits[p.guid]
-                        local icon = specIcons[p.guid]
-                        if not icon and unit then
-                                if unit == "player" then
-                                        local specIndex = C_SpecializationInfo.GetSpecialization()
-                                        if specIndex then
-                                                icon = select(4, C_SpecializationInfo.GetSpecializationInfo(specIndex))
-                                                specIcons[p.guid] = icon
-                                        end
-                                elseif CanInspect(unit) and pendingInspect[p.guid] == nil then
-                                        NotifyInspect(unit)
-                                        pendingInspect[p.guid] = true
-                                end
-                        end
-                        if bar._icon ~= icon then
-                                bar.icon:SetTexture(icon)
-                                bar._icon = icon
-                        end
+			local unit = groupUnits[p.guid]
+			local icon = specIcons[p.guid]
+			if not icon and unit then
+				if unit == "player" then
+					local specIndex = C_SpecializationInfo.GetSpecialization()
+					if specIndex then
+						icon = select(4, C_SpecializationInfo.GetSpecializationInfo(specIndex))
+						specIcons[p.guid] = icon
+					end
+				elseif CanInspect(unit) and pendingInspect[p.guid] == nil then
+					NotifyInspect(unit)
+					pendingInspect[p.guid] = true
+				end
+			end
+			if bar._icon ~= icon then
+				bar.icon:SetTexture(icon)
+				bar._icon = icon
+			end
 
-			bar.name:SetText(abbreviateName(p.name))
+			local shortName = shortNameCache[p.guid]
+			if not shortName then
+				shortName = abbreviateName(p.name)
+				shortNameCache[p.guid] = shortName
+			end
+			bar.name:SetText(shortName)
 			if p.total and (self.metric == "dps" or self.metric == "healingPerFight" or self.metric == "damageOverall" or self.metric == "healingOverall") then
 				local decimals = (p.value >= 1e6) and 2 or 0
 				local rate = abbreviateNumber(p.value, decimals)
@@ -508,18 +514,18 @@ controller:SetScript("OnEvent", function(self, event, ...)
 		if guid then
 			specIcons[guid] = nil
 			pendingInspect[guid] = nil
-                        if unit == "player" then
-                                local specIndex = GetSpecialization()
-                                if specIndex then specIcons[guid] = select(4, GetSpecializationInfo(specIndex)) end
-                                UpdateAllFrames()
-                        else
-                                if CanInspect(unit) and pendingInspect[guid] == nil then
-                                        NotifyInspect(unit)
-                                        pendingInspect[guid] = true
-                                end
-                        end
-                end
-        elseif event == "GROUP_ROSTER_UPDATE" then
+			if unit == "player" then
+				local specIndex = GetSpecialization()
+				if specIndex then specIcons[guid] = select(4, GetSpecializationInfo(specIndex)) end
+				UpdateAllFrames()
+			else
+				if CanInspect(unit) and pendingInspect[guid] == nil then
+					NotifyInspect(unit)
+					pendingInspect[guid] = true
+				end
+			end
+		end
+	elseif event == "GROUP_ROSTER_UPDATE" then
 		buildGroupUnits()
 		for guid in pairs(specIcons) do
 			if not groupUnitsCached[guid] then
