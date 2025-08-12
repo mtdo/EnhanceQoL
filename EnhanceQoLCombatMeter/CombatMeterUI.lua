@@ -342,10 +342,27 @@ local function createGroupFrame(groupConfig)
 		if addon.CombatMeter.functions.UpdateBars then addon.CombatMeter.functions.UpdateBars() end
 	end)
 
-	local historyButton = CreateFrame("Button", nil, dragHandle, "UIPanelButtonTemplate")
+	local historyButton = CreateFrame("Button", nil, dragHandle)
 	historyButton:SetSize(16, 16)
 	historyButton:SetPoint("RIGHT", resetButton, "LEFT", -2, 0)
-	historyButton:SetText("H")
+
+	historyButton.icon = historyButton:CreateTexture(nil, "ARTWORK")
+	historyButton.icon:SetAllPoints(historyButton)
+	historyButton.icon:SetTexture(TEXTURE_PATH .. "eqol_history_64.tga")
+	historyButton.icon:SetVertexColor(1, 0.85, 0)
+
+	local hhl = historyButton:CreateTexture(nil, "HIGHLIGHT")
+	hhl:SetAllPoints(historyButton)
+	hhl:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
+	hhl:SetBlendMode("ADD")
+
+	historyButton:SetScript("OnMouseDown", function(self)
+		if self.icon then self.icon:SetVertexColor(0.9, 0.77, 0) end
+	end)
+	historyButton:SetScript("OnMouseUp", function(self)
+		if self.icon then self.icon:SetVertexColor(1, 0.85, 0) end
+	end)
+
 	historyButton:SetScript("OnClick", function(self) OpenHistoryMenu(self) end)
 
 	dragHandle.text = dragHandle:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
