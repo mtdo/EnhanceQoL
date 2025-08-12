@@ -276,10 +276,39 @@ local function createGroupFrame(groupConfig)
 		groupConfig.y = yOfs
 	end)
 
-	local resetButton = CreateFrame("Button", nil, dragHandle, "UIPanelButtonTemplate")
+	local resetButton = CreateFrame("Button", nil, dragHandle)
 	resetButton:SetSize(16, 16)
 	resetButton:SetPoint("RIGHT", dragHandle, "RIGHT", 0, 0)
-	resetButton:SetText("R")
+
+	-- Icon texture (place eqol_reset_32.tga in Interface\\AddOns\\EnhanceQoLCombatMeter\\Texture\\)
+	resetButton.icon = resetButton:CreateTexture(nil, "ARTWORK")
+	resetButton.icon:SetAllPoints(resetButton)
+	resetButton.icon:SetTexture(TEXTURE_PATH .. "eqol_reset_64.tga")
+	resetButton.icon:SetTexCoord(0, 1, 0, 1)
+
+	-- Simple highlight when hovering
+	local hl = resetButton:CreateTexture(nil, "HIGHLIGHT")
+	hl:SetAllPoints(resetButton)
+	hl:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
+	hl:SetBlendMode("ADD")
+
+	-- Visual feedback when pressing
+	resetButton:SetScript("OnMouseDown", function(self)
+		if self.icon then self.icon:SetVertexColor(0.9, 0.9, 0.9) end
+	end)
+	resetButton:SetScript("OnMouseUp", function(self)
+		if self.icon then self.icon:SetVertexColor(1, 1, 1) end
+	end)
+
+	-- Tooltip
+	resetButton:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:AddLine(L["Reset"] or "Reset")
+		GameTooltip:Show()
+	end)
+	resetButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+	-- Click handler (unchanged)
 	resetButton:SetScript("OnClick", function()
 		SlashCmdList["EQOLCM"]("reset")
 		if addon.CombatMeter.functions.UpdateBars then addon.CombatMeter.functions.UpdateBars() end
