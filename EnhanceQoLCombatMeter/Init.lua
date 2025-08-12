@@ -84,10 +84,10 @@ local function addGeneralFrame(container)
 	groupCore:AddChild(sliderPrePull)
 
 	local barTextures = {
-		["Interface\\TARGETINGFRAME\\UI-StatusBar"] = "Classic Gradient (Blizzard)",
-		["Interface\\Buttons\\WHITE8x8"] = "Flat (white, tintable)",
-		["Interface\\Tooltips\\UI-Tooltip-Background"] = "Dark Flat (Tooltip bg)",
-		[TEXTURE_PATH .. "eqol_base_flat_8x8.tga"] = "EQoL: Flat (AddOn)",
+		["Interface\\TARGETINGFRAME\\UI-StatusBar"] = L["Classic Gradient (Blizzard)"],
+		["Interface\\Buttons\\WHITE8x8"] = L["Flat (white, tintable)"],
+		["Interface\\Tooltips\\UI-Tooltip-Background"] = L["Dark Flat (Tooltip bg)"],
+		[TEXTURE_PATH .. "eqol_base_flat_8x8.tga"] = L["EQoL: Flat (AddOn)"],
 	}
 	local barOrder = {
 		"Interface\\TARGETINGFRAME\\UI-StatusBar",
@@ -113,10 +113,10 @@ local function addGeneralFrame(container)
 	groupCore:AddChild(cbOverlay)
 
 	local overlayTextures = {
-		[TEXTURE_PATH .. "eqol_overlay_gradient_512x64.tga"] = "Gradient", -- default
-		[TEXTURE_PATH .. "eqol_overlay_vidro_512x64.tga"] = "Gloss/Vidro",
-		[TEXTURE_PATH .. "eqol_overlay_stripes_512x64.tga"] = "Stripes",
-		[TEXTURE_PATH .. "eqol_overlay_noise_512x64.tga"] = "Noise",
+		[TEXTURE_PATH .. "eqol_overlay_gradient_512x64.tga"] = L["Gradient"], -- default
+		[TEXTURE_PATH .. "eqol_overlay_vidro_512x64.tga"] = L["Gloss/Vidro"],
+		[TEXTURE_PATH .. "eqol_overlay_stripes_512x64.tga"] = L["Stripes"],
+		[TEXTURE_PATH .. "eqol_overlay_noise_512x64.tga"] = L["Noise"],
 	}
 	local overlayOrder = {
 		TEXTURE_PATH .. "eqol_overlay_gradient_512x64.tga",

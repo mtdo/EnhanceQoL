@@ -38,7 +38,7 @@ local function OpenHistoryMenu(owner)
 	if MenuUtil and MenuUtil.CreateContextMenu then
 		MenuUtil.CreateContextMenu(owner, function(_, root)
 			if #hist == 0 then
-				root:CreateTitle(L["No History"] or "No History")
+				root:CreateTitle(L["No History"])
 				return
 			end
 			for i = #hist, 1, -1 do
@@ -53,7 +53,7 @@ local function OpenHistoryMenu(owner)
 	elseif _G.EasyMenu then
 		local menu = {}
 		if #hist == 0 then
-			menu[1] = { text = (L["No History"] or "No History"), notCheckable = true, isTitle = true }
+			menu[1] = { text = L["No History"], notCheckable = true, isTitle = true }
 		else
 			for i = #hist, 1, -1 do
 				local fight = hist[i]
@@ -71,7 +71,7 @@ local function OpenHistoryMenu(owner)
 		local dropdown = _G[addonName .. "CMHistoryMenu"] or CreateFrame("Frame", addonName .. "CMHistoryMenu", UIParent, "UIDropDownMenuTemplate")
 		_G.EasyMenu(menu, dropdown, owner, 0, 0, "MENU")
 	else
-		print("No compatible menu API available.")
+		print(L["No compatible menu API available."])
 	end
 end
 
@@ -261,7 +261,7 @@ local function OpenHistoryMenu(owner)
 	if MenuUtil and MenuUtil.CreateContextMenu then
 		MenuUtil.CreateContextMenu(owner, function(_, root)
 			if #hist == 0 then
-				root:CreateTitle(L["No History"] or "No History")
+				root:CreateTitle(L["No History"])
 				return
 			end
 			for i = #hist, 1, -1 do
@@ -274,7 +274,7 @@ local function OpenHistoryMenu(owner)
 			end
 		end)
 	else
-		print("No compatible menu API available.")
+		print(L["No compatible menu API available."])
 	end
 end
 local function createGroupFrame(groupConfig)
@@ -373,7 +373,7 @@ local function createGroupFrame(groupConfig)
 	-- Tooltip
 	resetButton:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-		GameTooltip:AddLine(L["Reset"] or "Reset")
+		GameTooltip:AddLine(L["Reset"])
 		GameTooltip:Show()
 	end)
 	resetButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -394,7 +394,7 @@ local function createGroupFrame(groupConfig)
 	dragHandle.text:SetPoint("LEFT", dragHandle, "LEFT", 2, 0)
 	dragHandle.text:SetPoint("RIGHT", historyButton, "LEFT", -2, 0)
 	dragHandle.text:SetJustifyH("CENTER")
-	dragHandle.text:SetText(metricNames[groupConfig.type] or "Combat Meter")
+	dragHandle.text:SetText(metricNames[groupConfig.type] or L["Combat Meter"])
 	frame.dragHandle = dragHandle
 
 	local function restorePosition()
