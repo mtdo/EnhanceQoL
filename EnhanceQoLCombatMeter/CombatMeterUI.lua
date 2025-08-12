@@ -17,6 +17,7 @@ local pendingInspect = {}
 local groupFrames = {}
 local groupUnitsCached = {}
 local shortNameCache = {}
+local rawNameCache = {}
 local ticker
 local tickerRate = config["combatMeterUpdateRate"] or 0.3
 local lastMaxValue = 0
@@ -454,10 +455,12 @@ local function createGroupFrame(groupConfig)
 				bar._icon = icon
 			end
 
+			local rawName = rawNameCache[p.guid]
 			local shortName = shortNameCache[p.guid]
-			if not shortName or p.name ~= shortName then
+			if p.name ~= rawName then
 				shortName = abbreviateName(p.name)
 				shortNameCache[p.guid] = shortName
+				rawNameCache[p.guid] = p.name
 			end
 			bar.name:SetText(shortName)
 			if p.total and (self.metric == "dps" or self.metric == "healingPerFight" or self.metric == "damageOverall" or self.metric == "healingOverall") then
@@ -621,9 +624,8 @@ controller:SetScript("OnEvent", function(self, event, ...)
 		for guid in pairs(pendingInspect) do
 			if not groupUnitsCached[guid] then pendingInspect[guid] = nil end
 		end
-		for guid in pairs(shortNameCache) do
-			if not groupUnitsCached[guid] then shortNameCache[guid] = nil end
-		end
+		wipe(shortNameCache)
+		wipe(rawNameCache)
 		C_Timer.After(0, UpdateAllFrames)
 	else
 		if ticker then
