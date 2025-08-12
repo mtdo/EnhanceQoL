@@ -32,49 +32,6 @@ local MAX_TICKER_RATE = 1.0
 local EPSILON = 0.01
 local tinsert, tsort = table.insert, table.sort
 
--- Modern menu API (Dragonflight+/11.x). Falls back to EasyMenu where available (Classic).
-local function OpenHistoryMenu(owner)
-	local hist = addon.db["combatMeterHistory"] or {}
-	if MenuUtil and MenuUtil.CreateContextMenu then
-		MenuUtil.CreateContextMenu(owner, function(_, root)
-			if #hist == 0 then
-				root:CreateTitle(L["No History"])
-				return
-			end
-			for i = #hist, 1, -1 do
-				local fight = hist[i]
-				local text = string.format("%d. %ds", i, math.floor((fight and fight.duration) or 0))
-				local idx = i -- capture loop variable for the closure
-				root:CreateButton(text, function()
-					if addon.CombatMeter and addon.CombatMeter.functions and addon.CombatMeter.functions.loadHistory then addon.CombatMeter.functions.loadHistory(idx) end
-				end)
-			end
-		end)
-	elseif _G.EasyMenu then
-		local menu = {}
-		if #hist == 0 then
-			menu[1] = { text = L["No History"], notCheckable = true, isTitle = true }
-		else
-			for i = #hist, 1, -1 do
-				local fight = hist[i]
-				local text = string.format("%d. %ds", i, math.floor((fight and fight.duration) or 0))
-				local idx = i
-				menu[#menu + 1] = {
-					text = text,
-					notCheckable = true,
-					func = function()
-						if addon.CombatMeter and addon.CombatMeter.functions and addon.CombatMeter.functions.loadHistory then addon.CombatMeter.functions.loadHistory(idx) end
-					end,
-				}
-			end
-		end
-		local dropdown = _G[addonName .. "CMHistoryMenu"] or CreateFrame("Frame", addonName .. "CMHistoryMenu", UIParent, "UIDropDownMenuTemplate")
-		_G.EasyMenu(menu, dropdown, owner, 0, 0, "MENU")
-	else
-		print(L["No compatible menu API available."])
-	end
-end
-
 local POW10 = { [0] = 1 }
 for i = 1, 6 do
 	POW10[i] = POW10[i - 1] * 10
