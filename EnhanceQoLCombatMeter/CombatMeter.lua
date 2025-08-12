@@ -258,8 +258,6 @@ function cm.functions.toggle(enabled)
 	end
 end
 
-cm.functions.toggle(addon.db["combatMeterEnabled"])
-
 SLASH_EQOLCM1 = "/eqolcm"
 SlashCmdList["EQOLCM"] = function(msg)
 	if msg == "reset" then
