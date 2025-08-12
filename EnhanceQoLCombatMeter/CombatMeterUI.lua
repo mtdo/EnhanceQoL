@@ -84,7 +84,7 @@ local function sortByValueDesc(a, b) return a.value > b.value end
 
 local function scheduleInspectRetry(guid, unit)
 	C_Timer.After(1, function()
-		if pendingInspect[guid] and CanInspect(unit) then NotifyInspect(unit) end
+		if pendingInspect[guid] and type(unit) == "string" and (unit == "player" or unit:match("^raid%d+$") or unit:match("^party%d+$")) and CanInspect(unit) then NotifyInspect(unit) end
 	end)
 end
 
@@ -646,7 +646,7 @@ local function createGroupFrame(groupConfig)
 						icon = select(4, C_SpecializationInfo.GetSpecializationInfo(specIndex))
 						specIcons[p.guid] = icon
 					end
-				elseif CanInspect(unit) and pendingInspect[p.guid] == nil then
+				elseif type(unit) == "string" and (unit == "player" or unit:match("^raid%d+$") or unit:match("^party%d+$")) and CanInspect(unit) and not pendingInspect[p.guid] then
 					NotifyInspect(unit)
 					pendingInspect[p.guid] = true
 					scheduleInspectRetry(p.guid, unit)
@@ -830,7 +830,7 @@ controller:SetScript("OnEvent", function(self, event, ...)
 				if specIndex then specIcons[guid] = select(4, GetSpecializationInfo(specIndex)) end
 				UpdateAllFrames()
 			else
-				if CanInspect(unit) and pendingInspect[guid] == nil then
+				if type(unit) == "string" and (unit == "player" or unit:match("^raid%d+$") or unit:match("^party%d+$")) and CanInspect(unit) and not pendingInspect[guid] then
 					NotifyInspect(unit)
 					pendingInspect[guid] = true
 					scheduleInspectRetry(guid, unit)
