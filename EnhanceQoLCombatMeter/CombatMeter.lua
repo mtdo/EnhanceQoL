@@ -81,23 +81,39 @@ local function releasePlayers(players)
 end
 
 local function fullRebuildPetOwners()
-	wipe(petOwner)
-	if IsInRaid() then
-		for i = 1, GetNumGroupMembers() do
-			local owner = UnitGUID("raid" .. i)
-			local pguid = UnitGUID("raid" .. i .. "pet")
-			if owner and pguid then petOwner[pguid] = owner end
-		end
-	else
-		for i = 1, GetNumGroupMembers() do
-			local owner = UnitGUID("party" .. i)
-			local pguid = UnitGUID("party" .. i .. "pet")
-			if owner and pguid then petOwner[pguid] = owner end
-		end
-		local me = UnitGUID("player")
-		local mypet = UnitGUID("pet")
-		if me and mypet then petOwner[mypet] = me end
-	end
+        wipe(petOwner)
+        local activeGUIDs = {}
+        if IsInRaid() then
+                for i = 1, GetNumGroupMembers() do
+                        local owner = UnitGUID("raid" .. i)
+                        local pguid = UnitGUID("raid" .. i .. "pet")
+                        if owner then activeGUIDs[owner] = true end
+                        if owner and pguid then
+                                petOwner[pguid] = owner
+                                activeGUIDs[pguid] = true
+                        end
+                end
+        else
+                for i = 1, GetNumGroupMembers() do
+                        local owner = UnitGUID("party" .. i)
+                        local pguid = UnitGUID("party" .. i .. "pet")
+                        if owner then activeGUIDs[owner] = true end
+                        if owner and pguid then
+                                petOwner[pguid] = owner
+                                activeGUIDs[pguid] = true
+                        end
+                end
+                local me = UnitGUID("player")
+                local mypet = UnitGUID("pet")
+                if me then activeGUIDs[me] = true end
+                if me and mypet then
+                        petOwner[mypet] = me
+                        activeGUIDs[mypet] = true
+                end
+        end
+        for guid in pairs(ownerNameCache) do
+                if not activeGUIDs[guid] then ownerNameCache[guid] = nil end
+        end
 end
 
 local function updatePetOwner(unit)
