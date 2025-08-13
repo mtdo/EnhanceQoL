@@ -454,7 +454,7 @@ addon.MythicPlus.variables.portalCompendium = {
 			[354468] = { text = "DOS", cId = { [377] = true } },
 			[354469] = { text = "SD", cId = { [380] = true } },
 			[367416] = {
-				text = "TAZA",
+				text = { [391] = "STREET", [392] = "GAMBIT" },
 				cId = { [391] = true, [392] = true },
 				mapID = { [391] = { mapID = 2441, zoneID = 1989 }, [392] = { mapID = 2441, zoneID = 1995 } }, -- Checks for zoneID + mapID for Mega Dungeons
 			},
