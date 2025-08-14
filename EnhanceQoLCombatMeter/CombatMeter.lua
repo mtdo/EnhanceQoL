@@ -225,11 +225,20 @@ local function updatePetOwner(unit)
 	end
 end
 
-local function addPrePull(ownerGUID, ownerName, damage, healing)
+local function addPrePull(ownerGUID, ownerName, damage, healing, sid, sname, crit)
 	local buf = cm.prePullBuffer
 	local now = GetTime()
 	local tail = cm.prePullTail + 1
-	buf[tail] = { t = now, guid = ownerGUID, name = ownerName, damage = damage or 0, healing = healing or 0 }
+	buf[tail] = {
+		t = now,
+		guid = ownerGUID,
+		name = ownerName,
+		damage = damage or 0,
+		healing = healing or 0,
+		sid = sid,
+		sname = sname,
+		crit = crit,
+	}
 	cm.prePullTail = tail
 	local cutoff = now - (addon.db["combatMeterPrePullWindow"] or 4)
 	local head = cm.prePullHead
@@ -263,13 +272,51 @@ local function mergePrePull()
 			p._first = p._first or e.t
 			p._last = e.t
 			local o = acquirePlayer(cm.overallPlayers, ownerGUID, ownerName)
+			local sid = e.sid or -1
+			local sname = e.sname or "Other"
 			if e.damage and e.damage > 0 then
 				p.damage = p.damage + e.damage
 				o.damage = o.damage + e.damage
+				local ps = p.spells[sid]
+				if not ps then
+					ps = { name = sname, amount = 0, hits = 0, crits = 0 }
+					p.spells[sid] = ps
+				end
+				ps.name = sname
+				ps.amount = ps.amount + e.damage
+				ps.hits = (ps.hits or 0) + 1
+				if e.crit then ps.crits = (ps.crits or 0) + 1 end
+				local os = o.spells[sid]
+				if not os then
+					os = { name = sname, amount = 0, hits = 0, crits = 0 }
+					o.spells[sid] = os
+				end
+				os.name = sname
+				os.amount = os.amount + e.damage
+				os.hits = (os.hits or 0) + 1
+				if e.crit then os.crits = (os.crits or 0) + 1 end
 			end
 			if e.healing and e.healing > 0 then
 				p.healing = p.healing + e.healing
 				o.healing = o.healing + e.healing
+				local ps = p.spells[sid]
+				if not ps then
+					ps = { name = sname, amount = 0, hits = 0, crits = 0 }
+					p.spells[sid] = ps
+				end
+				ps.name = sname
+				ps.amount = ps.amount + e.healing
+				ps.hits = (ps.hits or 0) + 1
+				if e.crit then ps.crits = (ps.crits or 0) + 1 end
+				local os = o.spells[sid]
+				if not os then
+					os = { name = sname, amount = 0, hits = 0, crits = 0 }
+					o.spells[sid] = os
+				end
+				os.name = sname
+				os.amount = os.amount + e.healing
+				os.hits = (os.hits or 0) + 1
+				if e.crit then os.crits = (os.crits or 0) + 1 end
 			end
 		end
 	end
@@ -388,6 +435,8 @@ local function handleEvent(self, event, unit)
 			if band(ownerFlags or 0, groupMask) == 0 then return end
 			local amount = (idx == 1 and a12) or a15 or 0
 			if amount <= 0 then return end
+			local sid, sname = getSpellInfoFromSub(sub, a12, a15)
+			local crit = a21 or a18
 			if inCombat then
 				local player = acquirePlayer(cm.players, ownerGUID, ownerName)
 				local overall = acquirePlayer(cm.overallPlayers, ownerGUID, ownerName)
@@ -396,8 +445,26 @@ local function handleEvent(self, event, unit)
 				player._last = now
 				player.damage = player.damage + amount
 				overall.damage = overall.damage + amount
+				local ps = player.spells[sid]
+				if not ps then
+					ps = { name = sname, amount = 0, hits = 0, crits = 0 }
+					player.spells[sid] = ps
+				end
+				ps.name = sname
+				ps.amount = ps.amount + amount
+				ps.hits = (ps.hits or 0) + 1
+				if crit then ps.crits = (ps.crits or 0) + 1 end
+				local os = overall.spells[sid]
+				if not os then
+					os = { name = sname, amount = 0, hits = 0, crits = 0 }
+					overall.spells[sid] = os
+				end
+				os.name = sname
+				os.amount = os.amount + amount
+				os.hits = (os.hits or 0) + 1
+				if crit then os.crits = (os.crits or 0) + 1 end
 			else
-				addPrePull(ownerGUID, ownerName, amount, 0)
+				addPrePull(ownerGUID, ownerName, amount, 0, sid, sname, crit)
 			end
 			return
 		end
@@ -427,6 +494,8 @@ local function handleEvent(self, event, unit)
 			if band(ownerFlags or 0, groupMask) == 0 then return end
 			local amount = (a15 or 0) - (a16 or 0)
 			if amount <= 0 then return end
+			local sid, sname = getSpellInfoFromSub(sub, a12, a15)
+			local crit = a21 or a18
 			if inCombat then
 				local player = acquirePlayer(cm.players, ownerGUID, ownerName)
 				local overall = acquirePlayer(cm.overallPlayers, ownerGUID, ownerName)
@@ -435,8 +504,26 @@ local function handleEvent(self, event, unit)
 				player._last = now
 				player.healing = player.healing + amount
 				overall.healing = overall.healing + amount
+				local ps = player.spells[sid]
+				if not ps then
+					ps = { name = sname, amount = 0, hits = 0, crits = 0 }
+					player.spells[sid] = ps
+				end
+				ps.name = sname
+				ps.amount = ps.amount + amount
+				ps.hits = (ps.hits or 0) + 1
+				if crit then ps.crits = (ps.crits or 0) + 1 end
+				local os = overall.spells[sid]
+				if not os then
+					os = { name = sname, amount = 0, hits = 0, crits = 0 }
+					overall.spells[sid] = os
+				end
+				os.name = sname
+				os.amount = os.amount + amount
+				os.hits = (os.hits or 0) + 1
+				if crit then os.crits = (os.crits or 0) + 1 end
 			else
-				addPrePull(ownerGUID, ownerName, 0, amount)
+				addPrePull(ownerGUID, ownerName, 0, amount, sid, sname, crit)
 			end
 			return
 		end
@@ -460,6 +547,7 @@ local function handleEvent(self, event, unit)
 			if not ownerFlags and cm.groupGUIDs and cm.groupGUIDs[ownerGUID] then ownerFlags = COMBATLOG_OBJECT_AFFILIATION_RAID end
 			if band(ownerFlags or 0, groupMask) == 0 then return end
 			if not absorbedAmount or absorbedAmount <= 0 then return end
+			local sid, sname = getSpellInfoFromSub(sub, a12, a15)
 			if inCombat then
 				local p = acquirePlayer(cm.players, ownerGUID, ownerName)
 				local o = acquirePlayer(cm.overallPlayers, ownerGUID, ownerName)
@@ -468,8 +556,24 @@ local function handleEvent(self, event, unit)
 				p._last = now
 				p.healing = p.healing + absorbedAmount
 				o.healing = o.healing + absorbedAmount
+				local ps = p.spells[sid]
+				if not ps then
+					ps = { name = sname, amount = 0, hits = 0, crits = 0 }
+					p.spells[sid] = ps
+				end
+				ps.name = sname
+				ps.amount = ps.amount + absorbedAmount
+				ps.hits = (ps.hits or 0) + 1
+				local os = o.spells[sid]
+				if not os then
+					os = { name = sname, amount = 0, hits = 0, crits = 0 }
+					o.spells[sid] = os
+				end
+				os.name = sname
+				os.amount = os.amount + absorbedAmount
+				os.hits = (os.hits or 0) + 1
 			else
-				addPrePull(ownerGUID, ownerName, 0, absorbedAmount)
+				addPrePull(ownerGUID, ownerName, 0, absorbedAmount, sid, sname, false)
 			end
 			return
 		end
