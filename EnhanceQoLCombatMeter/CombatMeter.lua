@@ -302,7 +302,11 @@ local function handleEvent(self, event, unit)
 		cm.overallDuration = cm.overallDuration + cm.fightDuration
 		for guid, data in pairs(cm.players) do
 			local o = acquirePlayer(cm.overallPlayers, guid, data.name)
-			local active = math.min(cm.fightDuration, math.max(0, (data._last or cm.fightStartTime) - (data._first or cm.fightStartTime)))
+			local start = cm.fightStartTime
+			local finish = start + cm.fightDuration
+			local first = data._first or start
+			local last = data._last or start
+			local active = math.max(0, math.min(last, finish) - math.max(first, start))
 			o.time = (o.time or 0) + active
 		end
 		local fight = { duration = cm.fightDuration, players = {} }

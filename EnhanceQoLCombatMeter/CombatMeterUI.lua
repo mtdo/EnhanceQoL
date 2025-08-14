@@ -474,7 +474,7 @@ local function createGroupFrame(groupConfig)
 			for guid, p in pairs(addon.CombatMeter.overallPlayers) do
 				if groupUnits[guid] then
 					local total = (self.metric == "damageOverall") and (p.damage or 0) or (p.healing or 0)
-					local value = total / math.max(p.time or 0, 1)
+					local value = (p.time and p.time > 0) and (total / p.time) or 0
 					tinsert(list, { guid = guid, name = p.name, value = value, total = total, class = p.class })
 					if value > maxValue then maxValue = value end
 				end
@@ -537,41 +537,40 @@ local function createGroupFrame(groupConfig)
 				local name = UnitName("player")
 				local value, total
 				local class
-				if self.metric == "damageOverall" or self.metric == "healingOverall" then
-					local p = addon.CombatMeter.overallPlayers[playerGUID]
-					if p then
-						total = (self.metric == "damageOverall") and (p.damage or 0) or (p.healing or 0)
-						class = p.class
-						value = total / math.max(p.time or 0, 1)
-					else
-						total = 0
-						value = 0
-					end
-				else
-					local duration
-					if addon.CombatMeter.inCombat then
-						duration = GetTime() - addon.CombatMeter.fightStartTime
-					else
-						duration = addon.CombatMeter.fightDuration
-					end
-					if duration <= 0 then duration = 1 end
-					local data = addon.CombatMeter.players[playerGUID]
-					if data then
-						if self.metric == "dps" then
-							total = data.damage
-							value = data.damage / duration
-						else
-							total = data.healing
-							value = data.healing / duration
-						end
-						class = data.class
-					else
-						total = 0
-						value = 0
-					end
-				end
-				if value > maxValue then maxValue = value end
-				tinsert(list, { guid = playerGUID, name = name, value = value, total = total, class = class })
+                               if self.metric == "damageOverall" or self.metric == "healingOverall" then
+                                        local p = addon.CombatMeter.overallPlayers[playerGUID]
+                                        if p and p.time and p.time > 0 then
+                                                total = (self.metric == "damageOverall") and (p.damage or 0) or (p.healing or 0)
+                                                value = total / p.time
+                                                class = p.class
+                                        end
+                                else
+                                        local duration
+                                        if addon.CombatMeter.inCombat then
+                                                duration = GetTime() - addon.CombatMeter.fightStartTime
+                                        else
+                                                duration = addon.CombatMeter.fightDuration
+                                        end
+                                        if duration <= 0 then duration = 1 end
+                                        local data = addon.CombatMeter.players[playerGUID]
+                                        if data then
+                                                if self.metric == "dps" then
+                                                        total = data.damage
+                                                        value = data.damage / duration
+                                                else
+                                                        total = data.healing
+                                                        value = data.healing / duration
+                                                end
+                                                class = data.class
+                                        else
+                                                total = 0
+                                                value = 0
+                                        end
+                                end
+                                if value then
+                                        if value > maxValue then maxValue = value end
+                                        tinsert(list, { guid = playerGUID, name = name, value = value, total = total, class = class })
+                                end
 			end
 			if #list > maxBars then
 				local playerIndex
