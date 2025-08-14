@@ -77,8 +77,8 @@ local function updateColumnWidths(size)
 	widthMeasure = widthMeasure or UIParent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	widthMeasure:Hide()
 	widthMeasure:SetFont(NUMBER_FONT_PATH, size, getOutlineFlags())
-	widthMeasure:SetText("888.88m")
-	local w = math.ceil(widthMeasure:GetStringWidth() + 2)
+	widthMeasure:SetText("8888.88b")
+	local w = math.ceil(widthMeasure:GetStringWidth() + 8)
 	COL_TOTAL_W = w
 	COL_RATE_W = w
 end
@@ -473,6 +473,57 @@ local function createGroupFrame(groupConfig)
 
 			applyBarTexture(bar)
 
+			-- Tooltip handlers showing top spells for a player
+			bar:SetScript("OnEnter", function(self)
+				local entry = self._entry
+				if not entry then return end
+				local parentFrame = self:GetParent()
+				if not parentFrame then return end
+
+				local pdata
+				if parentFrame.metric == "damageOverall" or parentFrame.metric == "healingOverall" then
+					pdata = addon.CombatMeter.overallPlayers[entry.guid]
+				else
+					pdata = addon.CombatMeter.players[entry.guid]
+				end
+				if not pdata then return end
+				local spells
+				local isHealingMetric = (parentFrame.metric == "healingPerFight" or parentFrame.metric == "healingOverall")
+				spells = isHealingMetric and pdata.healSpells or pdata.damageSpells
+				if not spells then return end
+
+				local temp = {}
+				local total = 0
+				for _, s in pairs(spells) do
+					if s.amount and s.amount > 0 then
+						temp[#temp + 1] = s
+						total = total + s.amount
+					end
+				end
+				if total <= 0 or #temp == 0 then return end
+
+				tsort(temp, function(a, b) return a.amount > b.amount end)
+
+				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+				GameTooltip:AddLine(entry.name or "")
+				local limit = IsShiftKeyDown() and 60 or 30
+				for i = 1, math.min(limit, #temp) do
+					local spell = temp[i]
+					local fullName
+					if spell.icon then fullName = "|T" .. spell.icon .. ":16|t" end
+					if nil == fullName then
+						fullName = spell.name or ""
+					else
+						fullName = fullName .. (spell.name or "")
+					end
+					if not isHealingMetric and spell.periodicHits and spell.hits and spell.periodicHits >= spell.hits then fullName = fullName .. " (DoT)" end
+					local pct = (spell.amount / total) * 100
+					GameTooltip:AddDoubleLine(fullName, string.format("%s (%.1f%%)", abbreviateNumber(spell.amount), pct))
+				end
+				GameTooltip:Show()
+			end)
+			bar:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
 			frame.bars[index] = bar
 		end
 		return bar
@@ -642,6 +693,7 @@ local function createGroupFrame(groupConfig)
 			totalValue = totalValue + (p.value or 0)
 			local bar = getBar(i)
 			bar:Show()
+			bar._entry = p
 			if bar._max ~= maxValue then
 				bar:SetMinMaxValues(0, maxValue)
 				bar._max = maxValue
@@ -714,7 +766,9 @@ local function createGroupFrame(groupConfig)
 		end
 
 		for i = displayCount + 1, #self.bars do
-			self.bars[i]:Hide()
+			local bar = self.bars[i]
+			bar:Hide()
+			bar._entry = nil
 		end
 
 		local newHeight = 16 + displayCount * barHeight
