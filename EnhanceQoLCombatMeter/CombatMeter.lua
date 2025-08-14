@@ -93,7 +93,8 @@ local function acquirePlayer(tbl, guid, name)
 		players[guid] = player
 	end
 	if name and player.name ~= name then player.name = name end
-	player.spells = player.spells or {}
+	player.damageSpells = player.damageSpells or {}
+	player.healSpells = player.healSpells or {}
 	return player
 end
 
@@ -101,10 +102,13 @@ local function releasePlayers(players)
 	local pool = cm.playerPool
 	for guid in pairs(players) do
 		local player = players[guid]
-		local spells = player.spells
-		if spells then wipe(spells) end
+		local dmg = player.damageSpells
+		if dmg then wipe(dmg) end
+		local heal = player.healSpells
+		if heal then wipe(heal) end
 		wipe(player)
-		player.spells = spells
+		player.damageSpells = dmg
+		player.healSpells = heal
 		pool[#pool + 1] = player
 		players[guid] = nil
 	end
@@ -275,19 +279,19 @@ local function mergePrePull()
 			local sid = e.spellId or -1
 			local sname = e.spellName or "Other"
 			if e.damage and e.damage > 0 then
-				local ps = p.spells[sid]
+				local ps = p.damageSpells[sid]
 				if not ps then
 					ps = { name = sname, amount = 0, hits = 0, crits = 0 }
-					p.spells[sid] = ps
+					p.damageSpells[sid] = ps
 				end
 				ps.name = sname
 				ps.amount = ps.amount + e.damage
 				ps.hits = (ps.hits or 0) + 1
 				if e.crit then ps.crits = (ps.crits or 0) + 1 end
-				local os = o.spells[sid]
+				local os = o.damageSpells[sid]
 				if not os then
 					os = { name = sname, amount = 0, hits = 0, crits = 0 }
-					o.spells[sid] = os
+					o.damageSpells[sid] = os
 				end
 				os.name = sname
 				os.amount = os.amount + e.damage
@@ -297,19 +301,19 @@ local function mergePrePull()
 				o.damage = o.damage + e.damage
 			end
 			if e.healing and e.healing > 0 then
-				local ps = p.spells[sid]
+				local ps = p.healSpells[sid]
 				if not ps then
 					ps = { name = sname, amount = 0, hits = 0, crits = 0 }
-					p.spells[sid] = ps
+					p.healSpells[sid] = ps
 				end
 				ps.name = sname
 				ps.amount = ps.amount + e.healing
 				ps.hits = (ps.hits or 0) + 1
 				if e.crit then ps.crits = (ps.crits or 0) + 1 end
-				local os = o.spells[sid]
+				local os = o.healSpells[sid]
 				if not os then
 					os = { name = sname, amount = 0, hits = 0, crits = 0 }
-					o.spells[sid] = os
+					o.healSpells[sid] = os
 				end
 				os.name = sname
 				os.amount = os.amount + e.healing
@@ -336,13 +340,30 @@ local dmgIdx = {
 	DAMAGE_SHIELD = 4,
 }
 
+local spellCache = {}
+local iconCache = {}
+
 local function getSpellInfoFromSub(sub, a12, a15)
-	if sub == "SWING_DAMAGE" then return 6603, "Melee" end
+	if sub == "SWING_DAMAGE" then return 6603, "Melee", 135274 end
 	-- Für SPELL_* und RANGE_* liegt die spellId in a12
 	if sub == "RANGE_DAMAGE" or sub:find("^SPELL_") then
 		local spellID = a12
-		local name = spellID and GetSpellInfo(spellID)
-		return spellID or -1, name or "Other"
+		local name = spellID and spellCache[spellID]
+		local icon = spellID and iconCache[spellID]
+		if not name and spellID then
+			local spellInfo = C_Spell.GetSpellInfo(spellID)
+			if spellInfo then
+				name = spellInfo.name
+				icon = spellInfo.iconID
+			else
+				name = "Other"
+			end
+			if sub == "SPELL_PERIODIC_DAMAGE" then name = name .. " (DoT)" end
+			spellCache[spellID] = name
+			iconCache[spellID] = icon
+			return spellID, name, icon
+		end
+		return spellID or -1, name or "Other", icon
 	end
 	return -1, "Other"
 end
@@ -441,7 +462,7 @@ local function handleEvent(self, event, unit)
 			if band(ownerFlags or 0, groupMask) == 0 then return end
 			local amount = (idx == 1 and a12) or a15 or 0
 			if amount <= 0 then return end
-			local spellId, spellName = getSpellInfoFromSub(sub, a12, a15)
+			local spellId, spellName, spellIcon = getSpellInfoFromSub(sub, a12, a15)
 			local crit = isCritFor(sub, a18, a21)
 			if inCombat then
 				local player = acquirePlayer(cm.players, ownerGUID, ownerName)
@@ -451,19 +472,19 @@ local function handleEvent(self, event, unit)
 				player._last = now
 				player.damage = player.damage + amount
 				overall.damage = overall.damage + amount
-				local ps = player.spells[spellId]
+				local ps = player.damageSpells[spellId]
 				if not ps then
-					ps = { name = spellName, amount = 0, hits = 0, crits = 0 }
-					player.spells[spellId] = ps
+					ps = { name = spellName, amount = 0, hits = 0, crits = 0, icon = spellIcon }
+					player.damageSpells[spellId] = ps
 				end
 				ps.name = spellName
 				ps.amount = ps.amount + amount
 				ps.hits = (ps.hits or 0) + 1
 				if crit then ps.crits = (ps.crits or 0) + 1 end
-				local os = overall.spells[spellId]
+				local os = overall.damageSpells[spellId]
 				if not os then
-					os = { name = spellName, amount = 0, hits = 0, crits = 0 }
-					overall.spells[spellId] = os
+					os = { name = spellName, amount = 0, hits = 0, crits = 0, icon = spellIcon }
+					overall.damageSpells[spellId] = os
 				end
 				os.name = spellName
 				os.amount = os.amount + amount
@@ -500,7 +521,7 @@ local function handleEvent(self, event, unit)
 			if band(ownerFlags or 0, groupMask) == 0 then return end
 			local amount = (a15 or 0) - (a16 or 0)
 			if amount <= 0 then return end
-			local spellId, spellName = getSpellInfoFromSub(sub, a12, a15)
+			local spellId, spellName, spellIcon = getSpellInfoFromSub(sub, a12, a15)
 			local crit = isCritFor(sub, a18, a21)
 			if inCombat then
 				local player = acquirePlayer(cm.players, ownerGUID, ownerName)
@@ -510,19 +531,19 @@ local function handleEvent(self, event, unit)
 				player._last = now
 				player.healing = player.healing + amount
 				overall.healing = overall.healing + amount
-				local ps = player.spells[spellId]
+				local ps = player.healSpells[spellId]
 				if not ps then
-					ps = { name = spellName, amount = 0, hits = 0, crits = 0 }
-					player.spells[spellId] = ps
+					ps = { name = spellName, amount = 0, hits = 0, crits = 0, icon = spellIcon }
+					player.healSpells[spellId] = ps
 				end
 				ps.name = spellName
 				ps.amount = ps.amount + amount
 				ps.hits = (ps.hits or 0) + 1
 				if crit then ps.crits = (ps.crits or 0) + 1 end
-				local os = overall.spells[spellId]
+				local os = overall.healSpells[spellId]
 				if not os then
-					os = { name = spellName, amount = 0, hits = 0, crits = 0 }
-					overall.spells[spellId] = os
+					os = { name = spellName, amount = 0, hits = 0, crits = 0, icon = spellIcon }
+					overall.healSpells[spellId] = os
 				end
 				os.name = spellName
 				os.amount = os.amount + amount
@@ -537,23 +558,23 @@ local function handleEvent(self, event, unit)
 		-- We count absorbs exclusively via SPELL_ABSORBED. Some clients also emit *_MISSED with ABSORB for the same event; counting both leads to double credits.
 		if sub == "SPELL_ABSORBED" then
 			-- Heuristics: swing variant has 8 tail fields (a23 is number); spell variant has 9 (a23 is boolean, amount in a22)
-			local absorberGUID, absorberName, absorberFlags, absorbedAmount
+			local absorberGUID, absorberName, absorberFlags, absorbedAmount, spellId, spellName, spellIcon
 			if type(a23) == "boolean" then
 				-- Spell-Variante mit Crit-Boolean (23 Rückgabewerte)
-				absorberGUID, absorberName, absorberFlags, absorbedAmount = a15, a16, a17, a22
+				absorberGUID, absorberName, absorberFlags, absorbedAmount, spellId, spellName = a15, a16, a17, a22, a19, a20
 			elseif a22 ~= nil then
 				-- Spell-Variante ohne Crit (22 Rückgabewerte)
-				absorberGUID, absorberName, absorberFlags, absorbedAmount = a15, a16, a17, a22
+				absorberGUID, absorberName, absorberFlags, absorbedAmount, spellId, spellName = a15, a16, a17, a22, a19, a20
 			else
 				-- Swing-Variante (19/20 Rückgabewerte)
-				absorberGUID, absorberName, absorberFlags, absorbedAmount = a12, a13, a14, a19
+				absorberGUID, absorberName, absorberFlags, absorbedAmount, spellId, spellName = a12, a13, a14, a19, a16, a17
 			end
 			if not absorberGUID or type(absorberFlags) ~= "number" then return end
 			local ownerGUID, ownerName, ownerFlags = resolveOwner(absorberGUID, absorberName, absorberFlags)
 			if not ownerFlags and cm.groupGUIDs and cm.groupGUIDs[ownerGUID] then ownerFlags = COMBATLOG_OBJECT_AFFILIATION_RAID end
 			if band(ownerFlags or 0, groupMask) == 0 then return end
 			if not absorbedAmount or absorbedAmount <= 0 then return end
-			local spellId, spellName = getSpellInfoFromSub(sub, a12, a15)
+			spellId, spellName, spellIcon = getSpellInfoFromSub(sub, spellId, spellName)
 			if inCombat then
 				local p = acquirePlayer(cm.players, ownerGUID, ownerName)
 				local o = acquirePlayer(cm.overallPlayers, ownerGUID, ownerName)
@@ -562,18 +583,18 @@ local function handleEvent(self, event, unit)
 				p._last = now
 				p.healing = p.healing + absorbedAmount
 				o.healing = o.healing + absorbedAmount
-				local ps = p.spells[spellId]
+				local ps = p.healSpells[spellId]
 				if not ps then
-					ps = { name = spellName, amount = 0, hits = 0, crits = 0 }
-					p.spells[spellId] = ps
+					ps = { name = spellName, amount = 0, hits = 0, crits = 0, icon = spellIcon }
+					p.healSpells[spellId] = ps
 				end
 				ps.name = spellName
 				ps.amount = ps.amount + absorbedAmount
 				ps.hits = (ps.hits or 0) + 1
-				local os = o.spells[spellId]
+				local os = o.healSpells[spellId]
 				if not os then
-					os = { name = spellName, amount = 0, hits = 0, crits = 0 }
-					o.spells[spellId] = os
+					os = { name = spellName, amount = 0, hits = 0, crits = 0, icon = spellIcon }
+					o.healSpells[spellId] = os
 				end
 				os.name = spellName
 				os.amount = os.amount + absorbedAmount

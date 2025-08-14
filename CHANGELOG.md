@@ -5,6 +5,7 @@
 ### ✨ Added
 
 - **Combat Meter**: metric switch to toggle displayed metrics.
+- **Combat Meter**: Damage breakdown on bar hover
 
 ### 🐛 Fixed
 

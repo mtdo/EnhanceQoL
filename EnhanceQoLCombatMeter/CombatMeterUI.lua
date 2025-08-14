@@ -486,11 +486,15 @@ local function createGroupFrame(groupConfig)
 				else
 					pdata = addon.CombatMeter.players[entry.guid]
 				end
-				if not (pdata and pdata.spells) then return end
+				if not pdata then return end
+				local spells
+				local isHealingMetric = (parentFrame.metric == "healingPerFight" or parentFrame.metric == "healingOverall")
+				spells = isHealingMetric and pdata.healSpells or pdata.damageSpells
+				if not spells then return end
 
 				local temp = {}
 				local total = 0
-				for _, s in pairs(pdata.spells) do
+				for _, s in pairs(spells) do
 					if s.amount and s.amount > 0 then
 						temp[#temp + 1] = s
 						total = total + s.amount
@@ -502,11 +506,18 @@ local function createGroupFrame(groupConfig)
 
 				GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 				GameTooltip:AddLine(entry.name or "")
-				local limit = IsShiftKeyDown() and 50 or 10
+				local limit = IsShiftKeyDown() and 60 or 30
 				for i = 1, math.min(limit, #temp) do
 					local spell = temp[i]
+					local fullName
+					if spell.icon then fullName = "|T" .. spell.icon .. ":16|t" end
+					if nil == fullName then
+						fullName = spell.name or ""
+					else
+						fullName = fullName .. (spell.name or "")
+					end
 					local pct = (spell.amount / total) * 100
-					GameTooltip:AddDoubleLine(spell.name or "", string.format("%s (%.1f%%)", abbreviateNumber(spell.amount), pct))
+					GameTooltip:AddDoubleLine(fullName, string.format("%s (%.1f%%)", abbreviateNumber(spell.amount), pct))
 				end
 				GameTooltip:Show()
 			end)
