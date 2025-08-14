@@ -93,6 +93,7 @@ local function acquirePlayer(tbl, guid, name)
 		players[guid] = player
 	end
 	if name and player.name ~= name then player.name = name end
+	player.spells = player.spells or {}
 	return player
 end
 
@@ -100,7 +101,10 @@ local function releasePlayers(players)
 	local pool = cm.playerPool
 	for guid in pairs(players) do
 		local player = players[guid]
+		local spells = player.spells
+		if spells then wipe(spells) end
 		wipe(player)
+		player.spells = spells
 		pool[#pool + 1] = player
 		players[guid] = nil
 	end
