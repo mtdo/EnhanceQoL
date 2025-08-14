@@ -260,8 +260,8 @@ end
 
 function DataPanel.AddStream(id, name)
 	id = tostring(id)
-	local panel = DataPanel.Create(id)
-	panel:AddStream(name)
+	local panel = panels[id] or panels[tonumber(id)]
+	if panel then panel:AddStream(name) end
 end
 
 function DataPanel.RemoveStream(id, name)
