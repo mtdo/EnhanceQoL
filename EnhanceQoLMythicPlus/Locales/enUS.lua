@@ -126,6 +126,7 @@ L["mythicPlusEnableDungeonFilterClearReset"] = "Clear the extended filters when 
 L["filteredTextEntries"] = "Filtered\n%d Entries"
 L["Partyfit"] = "Party fits"
 L["BloodlustAvailable"] = "Bloodlust available"
+L["NoBloodlust"] = "No Bloodlust in Group"
 L["BattleResAvailable"] = "Battle Res available"
 L["NoSameSpec"] = "No %s in Group"
 

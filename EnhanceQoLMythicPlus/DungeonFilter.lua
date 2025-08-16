@@ -145,6 +145,7 @@ local function EQOL_AddLFGEntries(owner, root, ctx)
 	root:CreateTitle(addonName)
 	root:CreateCheckbox(L["Partyfit"], function() return pDb["partyFit"] end, function() pDb["partyFit"] = not pDb["partyFit"] end)
 	if not playerIsLust then root:CreateCheckbox(L["BloodlustAvailable"], function() return pDb["bloodlustAvailable"] end, function() pDb["bloodlustAvailable"] = not pDb["bloodlustAvailable"] end) end
+	if playerIsLust then root:CreateCheckbox(L["NoBloodlust"], function() return pDb["NoBloodlust"] end, function() pDb["NoBloodlust"] = not pDb["NoBloodlust"] end) end
 	if not playerIsBR then root:CreateCheckbox(L["BattleResAvailable"], function() return pDb["battleResAvailable"] end, function() pDb["battleResAvailable"] = not pDb["battleResAvailable"] end) end
 	if addon.variables.unitRole == "DAMAGER" then
 		root:CreateCheckbox(
@@ -172,7 +173,7 @@ local function MyCustomFilter(info)
 
 	-- Welche Details brauchen wir wirklich?
 	local NEED_SAMESPEC = (addon.variables.unitRole == "DAMAGER") and pDb["NoSameSpec"] or false
-	local NEED_LUST = pDb["bloodlustAvailable"] and not partyHasLust
+	local NEED_LUST = (pDb["bloodlustAvailable"] and not partyHasLust) or pDb["NoBloodlust"]
 	local NEED_BR = pDb["battleResAvailable"] and not partyHasBR
 	local NEED_ROLES = pDb["partyFit"]
 
@@ -186,6 +187,7 @@ local function MyCustomFilter(info)
 	local hasSameSpec = info.hasSameSpec or false
 
 	if NEED_SAMESPEC and hasSameSpec then return false end
+	if pDb["NoBloodlust"] and hasLust then return false end
 
 	if pDb["partyFit"] then
 		-- Party-queue role availability check
@@ -274,6 +276,7 @@ local function ApplyEQOLFilters(isInitial)
 	-- Fast exit if nothing to filter (mirrors the old conditions)
 	local needFilter = false
 	if pDb["bloodlustAvailable"] and not playerIsLust then needFilter = true end
+	if pDb["NoBloodlust"] and playerIsLust then needFilter = true end
 	if pDb["battleResAvailable"] and not playerIsBR then needFilter = true end
 	if pDb["partyFit"] then needFilter = true end
 	if pDb["NoSameSpec"] and addon.variables.unitRole == "DAMAGER" then needFilter = true end
@@ -413,6 +416,7 @@ LFGListFrame.SearchPanel.FilterButton.ResetButton:HookScript("OnClick", function
 	if not addon.db["mythicPlusEnableDungeonFilter"] then return end
 	if not addon.db["mythicPlusEnableDungeonFilterClearReset"] then return end
 	pDb["bloodlustAvailable"] = false
+	pDb["NoBloodlust"] = false
 	pDb["battleResAvailable"] = false
 	pDb["partyFit"] = false
 	pDb["NoSameSpec"] = false
