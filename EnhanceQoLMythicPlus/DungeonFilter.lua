@@ -123,7 +123,6 @@ local playerIsBR = BR_CLASSES[addon.variables.unitClass]
 local drop = LFGListFrame.SearchPanel.FilterButton
 local originalSetupGen
 local initialAllEntries = {}
-local removedResults = {}
 
 local titleScore1 = LFGListFrame:CreateFontString(nil, "OVERLAY")
 titleScore1:SetFont(addon.variables.defaultFont, 13, "OUTLINE")
@@ -286,7 +285,6 @@ local function ApplyEQOLFilters(isInitial)
 	-- On initial call, record the current set of entries
 	if isInitial or not next(initialAllEntries) then
 		wipe(initialAllEntries)
-		wipe(removedResults)
 		for _, element in dp:EnumerateEntireRange() do
 			local resultID = element.resultID or element.id
 			if resultID then initialAllEntries[resultID] = true end
@@ -296,7 +294,7 @@ local function ApplyEQOLFilters(isInitial)
 	-- Build removal list without mutating the provider during enumeration
 	for _, element in dp:EnumerateEntireRange() do
 		local resultID = element.resultID or element.id
-		if resultID and not removedResults[resultID] then
+		if resultID then
 			if not SearchInfoCache[resultID] then
 				CacheResultInfo(resultID)
 			else
@@ -312,7 +310,6 @@ local function ApplyEQOLFilters(isInitial)
 		local r = toRemove[i]
 		dp:Remove(r.elem)
 		initialAllEntries[r.id] = false
-		removedResults[r.id] = true
 	end
 
 	local removedCount = 0
@@ -389,7 +386,7 @@ function addon.MythicPlus.functions.addDungeonFilter()
 			if drop then drop.eqolWrapped = nil end
 		elseif event == "LFG_LIST_APPLICANT_LIST_UPDATED" or event == "LFG_LIST_APPLICATION_STATUS_UPDATED" or event == "LFG_LIST_ENTRY_EXPIRED_TOO_MANY_PLAYERS" then
 			UpdateAppliedCache()
-			ScheduleFilters(false) -- zusammenfassen statt sofort laufen
+			ScheduleFilters(true) -- schedule initial pass on application events
 		end
 	end)
 end
