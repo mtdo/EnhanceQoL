@@ -1,12 +1,19 @@
 # Changelog
 
-## [4.4.1] – 2025-08-16
+## [4.5.0] – 2025-08-16
+
+### ✨ Added
+- **No bloodlust in group** option added to LFG Filter
+  - Only show groups without a bloodlust class
+- Optionally move **Teleport Compendium**, **Mythic+ Rating** and **Mythic+ Dungeons**
 
 ### 🐛 Fixed
 
 - _Secret Technique_ by Rogues where missed in **Combat Meter**
 - _Offhealing_ voice not always played in **Potion Tracker**
 - _Reset_ in **Combat Meter** in combat disabled logging of events
+- **Dungeon Filter** wasn't working in some situations as expected
+- **Skip Patreon confirmation** wasn't working as intended since 11.2 changes
 
 ---
 
