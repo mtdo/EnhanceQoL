@@ -172,12 +172,13 @@ local function resetMeter()
 	cm.prePullHead = 1
 	cm.prePullTail = 0
 	wipe(cm.prePullBuffer)
-	
+
 	cm.historySelection = nil
 	cm.historyUnits = nil
 
 	cm.inCombat = UnitAffectingCombat("player")
 	cm.fightStartTime = cm.inCombat and GetTime() or 0
+	wipe(tooltipLookup)
 end
 cm.resetMeter = resetMeter
 
@@ -248,6 +249,7 @@ local function fullRebuildPetOwners()
 	for guid in pairs(unitAffiliation) do
 		if not activeGUIDs[guid] then unitAffiliation[guid] = nil end
 	end
+	wipe(tooltipLookup)
 end
 
 local function updatePetOwner(unit)
