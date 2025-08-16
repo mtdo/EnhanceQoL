@@ -309,6 +309,7 @@ addon.SharedMedia.sounds = {
 	{ key = "Mana Potion", label = "EQOL: Mana Potion", path = voiceoverPath .. "Mana Potion.ogg" },
 	{ key = "Drink", label = "EQOL: Drink", path = voiceoverPath .. "Drink.ogg" },
 	{ key = "OOM", label = "EQOL: OOM", path = voiceoverPath .. "OOM.ogg" },
+	{ key = "Offhealing active", label = "EQOL: Offhealing active", path = voiceoverPath .. "Offhealing active.ogg" },
 }
 
 -- Sort alphabetically, but ignore the leading "EQOL:" prefix (and any following spaces)

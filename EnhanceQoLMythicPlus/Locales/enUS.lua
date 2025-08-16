@@ -89,6 +89,8 @@ L["teleportFavoritesHeadline"] = "Right-click a spell in the Compendium to mark 
 L["teleportFavoritesIgnoreExpansionHide"] = "Always show favourites from expansions you have hidden."
 L["teleportFavoritesIgnoreFilters"] = "Always show favourite teleports, ignoring other filters."
 L["teleportFavoritesIgnoreFiltersDesc"] = "Note: the “Hide missing teleports” filter is never overridden."
+L["frameUnlock"] = "Click to unlock this window. Hold Shift and drag to move; position is saved.\nDoes not work in combat."
+L["frameLock"] = "Click to lock this window to its default position.\nDoes not work in combat."
 
 -- BR Tracker
 L["BRTracker"] = "Combat Resurrection"
@@ -126,6 +128,7 @@ L["mythicPlusEnableDungeonFilterClearReset"] = "Clear the extended filters when 
 L["filteredTextEntries"] = "Filtered\n%d Entries"
 L["Partyfit"] = "Party fits"
 L["BloodlustAvailable"] = "Bloodlust available"
+L["NoBloodlust"] = "No Bloodlust in Group"
 L["BattleResAvailable"] = "Battle Res available"
 L["NoSameSpec"] = "No %s in Group"
 

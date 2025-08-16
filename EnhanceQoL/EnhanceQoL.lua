@@ -3578,11 +3578,11 @@ local function initMisc()
 					then
 						local editBox = self.editBox or self.GetEditBox and self:GetEditBox()
 						editBox:SetText(DELETE_ITEM_CONFIRM_STRING)
-					elseif addon.db["confirmPatronOrderDialog"] and self.data and type(self.data) == "table" and self.data.text == CRAFTING_ORDERS_OWN_REAGENTS_CONFIRMATION and self.button1 then
+					elseif addon.db["confirmPatronOrderDialog"] and self.data and type(self.data) == "table" and self.data.text == CRAFTING_ORDERS_OWN_REAGENTS_CONFIRMATION and self.GetButton then
 						local order = C_CraftingOrders.GetClaimedOrder()
-						if order and order.npcCustomerCreatureID and order.npcCustomerCreatureID > 0 then self.button1:Click() end
-					elseif addon.db["confirmTimerRemovalTrade"] and self.which == "CONFIRM_MERCHANT_TRADE_TIMER_REMOVAL" and self.button1 then
-						self.button1:Click()
+						if order and order.npcCustomerCreatureID and order.npcCustomerCreatureID > 0 then self:GetButton(1):Click() end
+					elseif addon.db["confirmTimerRemovalTrade"] and self.which == "CONFIRM_MERCHANT_TRADE_TIMER_REMOVAL" and self.GetButton then
+						self:GetButton(1):Click()
 					elseif addon.db["confirmReplaceEnchant"] and self.which == "REPLACE_ENCHANT" and self.numButtons > 0 and self.GetButton then
 						self:GetButton(1):Click()
 					elseif addon.db["confirmSocketReplace"] and self.which == "CONFIRM_ACCEPT_SOCKETS" and self.numButtons > 0 and self.GetButton then

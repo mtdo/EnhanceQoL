@@ -106,24 +106,12 @@ local function EnsureExtraInfo(resultID, needRoles, needLust, needBR, needSameSp
 	return info
 end
 
-local function PopulateInfoCache()
-	wipe(SearchInfoCache)
-	local panel = LFGListFrame.SearchPanel
-	local dp = panel.ScrollBox and panel.ScrollBox:GetDataProvider()
-	if not dp then return end
-	for _, element in dp:EnumerateEntireRange() do
-		local resultID = element.resultID or element.id
-		if resultID then CacheResultInfo(resultID) end
-	end
-end
-
 local playerIsLust = LUST_CLASSES[addon.variables.unitClass]
 local playerIsBR = BR_CLASSES[addon.variables.unitClass]
 
 local drop = LFGListFrame.SearchPanel.FilterButton
 local originalSetupGen
 local initialAllEntries = {}
-local removedResults = {}
 
 local titleScore1 = LFGListFrame:CreateFontString(nil, "OVERLAY")
 titleScore1:SetFont(addon.variables.defaultFont, 13, "OUTLINE")
@@ -134,6 +122,7 @@ drop:HookScript("OnHide", function()
 	originalSetupGen = nil
 	titleScore1:Hide()
 	wipe(SearchInfoCache)
+	wipe(initialAllEntries)
 end)
 
 local function EQOL_AddLFGEntries(owner, root, ctx)
@@ -145,6 +134,7 @@ local function EQOL_AddLFGEntries(owner, root, ctx)
 	root:CreateTitle(addonName)
 	root:CreateCheckbox(L["Partyfit"], function() return pDb["partyFit"] end, function() pDb["partyFit"] = not pDb["partyFit"] end)
 	if not playerIsLust then root:CreateCheckbox(L["BloodlustAvailable"], function() return pDb["bloodlustAvailable"] end, function() pDb["bloodlustAvailable"] = not pDb["bloodlustAvailable"] end) end
+	if playerIsLust then root:CreateCheckbox(L["NoBloodlust"], function() return pDb["NoBloodlust"] end, function() pDb["NoBloodlust"] = not pDb["NoBloodlust"] end) end
 	if not playerIsBR then root:CreateCheckbox(L["BattleResAvailable"], function() return pDb["battleResAvailable"] end, function() pDb["battleResAvailable"] = not pDb["battleResAvailable"] end) end
 	if addon.variables.unitRole == "DAMAGER" then
 		root:CreateCheckbox(
@@ -172,7 +162,7 @@ local function MyCustomFilter(info)
 
 	-- Welche Details brauchen wir wirklich?
 	local NEED_SAMESPEC = (addon.variables.unitRole == "DAMAGER") and pDb["NoSameSpec"] or false
-	local NEED_LUST = pDb["bloodlustAvailable"] and not partyHasLust
+	local NEED_LUST = (pDb["bloodlustAvailable"] and not partyHasLust) or pDb["NoBloodlust"]
 	local NEED_BR = pDb["battleResAvailable"] and not partyHasBR
 	local NEED_ROLES = pDb["partyFit"]
 
@@ -186,6 +176,7 @@ local function MyCustomFilter(info)
 	local hasSameSpec = info.hasSameSpec or false
 
 	if NEED_SAMESPEC and hasSameSpec then return false end
+	if pDb["NoBloodlust"] and hasLust then return false end
 
 	if pDb["partyFit"] then
 		-- Party-queue role availability check
@@ -274,6 +265,7 @@ local function ApplyEQOLFilters(isInitial)
 	-- Fast exit if nothing to filter (mirrors the old conditions)
 	local needFilter = false
 	if pDb["bloodlustAvailable"] and not playerIsLust then needFilter = true end
+	if pDb["NoBloodlust"] and playerIsLust then needFilter = true end
 	if pDb["battleResAvailable"] and not playerIsBR then needFilter = true end
 	if pDb["partyFit"] then needFilter = true end
 	if pDb["NoSameSpec"] and addon.variables.unitRole == "DAMAGER" then needFilter = true end
@@ -286,7 +278,6 @@ local function ApplyEQOLFilters(isInitial)
 	-- On initial call, record the current set of entries
 	if isInitial or not next(initialAllEntries) then
 		wipe(initialAllEntries)
-		wipe(removedResults)
 		for _, element in dp:EnumerateEntireRange() do
 			local resultID = element.resultID or element.id
 			if resultID then initialAllEntries[resultID] = true end
@@ -296,7 +287,7 @@ local function ApplyEQOLFilters(isInitial)
 	-- Build removal list without mutating the provider during enumeration
 	for _, element in dp:EnumerateEntireRange() do
 		local resultID = element.resultID or element.id
-		if resultID and not removedResults[resultID] then
+		if resultID then
 			if not SearchInfoCache[resultID] then
 				CacheResultInfo(resultID)
 			else
@@ -308,11 +299,11 @@ local function ApplyEQOLFilters(isInitial)
 		end
 	end
 
+	local didRemove = (#toRemove > 0)
 	for i = 1, #toRemove do
 		local r = toRemove[i]
 		dp:Remove(r.elem)
 		initialAllEntries[r.id] = false
-		removedResults[r.id] = true
 	end
 
 	local removedCount = 0
@@ -327,8 +318,8 @@ local function ApplyEQOLFilters(isInitial)
 		titleScore1:Hide()
 	end
 
-	-- Refresh the scrollbox (be tolerant if constants differ)
-	if panel.ScrollBox and panel.ScrollBox.FullUpdate then
+	-- Refresh the scrollbox nur wenn etwas entfernt wurde (be tolerant if constants differ)
+	if didRemove and panel.ScrollBox and panel.ScrollBox.FullUpdate then
 		if ScrollBoxConstants and ScrollBoxConstants.UpdateImmediately then
 			panel.ScrollBox:FullUpdate(ScrollBoxConstants.UpdateImmediately)
 		else
@@ -351,7 +342,7 @@ local function ScheduleFilters(initial)
 	if initial then _lastInitial = true end
 	if _filterScheduled then return end
 	_filterScheduled = true
-	C_Timer.After(0.05, function()
+	C_Timer.After(0, function()
 		_filterScheduled = false
 		ApplyEQOLFilters(_lastInitial)
 		_lastInitial = false
@@ -376,20 +367,18 @@ function addon.MythicPlus.functions.addDungeonFilter()
 		if not drop:IsVisible() then return end
 		if not addon.db["mythicPlusEnableDungeonFilter"] then return end
 		if event == "LFG_LIST_SEARCH_RESULTS_RECEIVED" then
-			PopulateInfoCache()
 			ScheduleFilters(true)
 		elseif event == "LFG_LIST_SEARCH_RESULT_UPDATED" then
 			local resultID = ...
 			if resultID then CacheResultInfo(resultID) end
 			ScheduleFilters(false)
 		elseif event == "LFG_LIST_AVAILABILITY_UPDATE" then
-			PopulateInfoCache()
 			ScheduleFilters(true)
 		elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
 			if drop then drop.eqolWrapped = nil end
 		elseif event == "LFG_LIST_APPLICANT_LIST_UPDATED" or event == "LFG_LIST_APPLICATION_STATUS_UPDATED" or event == "LFG_LIST_ENTRY_EXPIRED_TOO_MANY_PLAYERS" then
 			UpdateAppliedCache()
-			ScheduleFilters(false) -- zusammenfassen statt sofort laufen
+			ScheduleFilters(false) -- filter next frame, aber ohne erneutes 'initial'; reduziert Flackern
 		end
 	end)
 end
@@ -413,6 +402,7 @@ LFGListFrame.SearchPanel.FilterButton.ResetButton:HookScript("OnClick", function
 	if not addon.db["mythicPlusEnableDungeonFilter"] then return end
 	if not addon.db["mythicPlusEnableDungeonFilterClearReset"] then return end
 	pDb["bloodlustAvailable"] = false
+	pDb["NoBloodlust"] = false
 	pDb["battleResAvailable"] = false
 	pDb["partyFit"] = false
 	pDb["NoSameSpec"] = false

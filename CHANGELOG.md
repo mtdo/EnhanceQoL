@@ -1,19 +1,38 @@
 # Changelog
 
+## [4.5.0] – 2025-08-16
+
+### ✨ Added
+
+- **No Bloodlust in group** (LFG Filter)  
+  Hides groups that already include a Bloodlust provider (Mage, Shaman, Evoker, or Hunter via pet), showing only groups **without** Bloodlust.
+- **Repositioning**: Optionally move **Teleport Compendium**, **Mythic+ Rating**, and **Mythic+ Dungeons** frames.
+
+### 🐛 Fixed
+
+- **Combat Meter**: _Secret Technique_ (Rogue) was not counted.
+- **Combat Meter**: Beast Mastery second pet (_Generic Hunter Pet_, NPC **165189**) was not mapped.
+- **Potion Tracker**: **Offhealing** voice line did not always play.
+- **Combat Meter**: **Reset during combat** could disable event logging.
+- **Dungeon Filter**: Filtering failed in certain situations.
+- **Patreon**: **Skip confirmation** behavior broken since 11.2.
+
+---
+
 ## [4.4.0] – 2025-08-14
 
 ### ✨ Added
 
 - **Combat Meter**: metric switch to toggle displayed metrics.
 - **Combat Meter**: spell breakdown on bar hover
-- **Combat Meter**: absorbed *_MISSED events now count toward damage done.
+- **Combat Meter**: absorbed \*\_MISSED events now count toward damage done.
 
 ### 🐛 Fixed
 
 - Resolved issues in **DataPanel**.
 - Improved **Combat Meter** DPS/HPS determination accuracy.
 - Fixed an error when filtering inventory by item level.
-- **Combat Meter** no longer counts overkill for *_DAMAGE events.
+- **Combat Meter** no longer counts overkill for \*\_DAMAGE events.
 
 ---
 

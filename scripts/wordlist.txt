@@ -114,6 +114,7 @@ LoS;180;"[[pbas -60]]"
 Move;170;"[[pbas -60]]"
 Next;180;"[[pbas -30]]"
 Nuke;180;"[[pbas -60]]"
+Offhealing active;180;"[[pbas -60]]";Offhealing active
 Orange;180;"[[pbas -60]]"
 Out;180;"[[pbas -60]]"
 Overlap;180;"[[pbas -60]]"

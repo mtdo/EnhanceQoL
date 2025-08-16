@@ -47,6 +47,53 @@ local PETMASK = bor(COMBATLOG_OBJECT_TYPE_PET or 0, COMBATLOG_OBJECT_TYPE_GUARDI
 local spellCache = {}
 local iconCache = {}
 
+-- Guardians spawned without SPELL_SUMMON. Add NPC IDs here.
+local missingSummonNPCs = {
+	[144961] = true, -- SecTec
+	[31216] = true, -- Mirror Images
+	[165189] = true, -- Generic Hunter Pet
+}
+
+local tooltipLookup = {}
+
+local getIDFromGUID = addon.functions.getIDFromGUID
+
+local function setOwnerFromTooltip(guid)
+	local tooltipData = C_TooltipInfo.GetHyperlink("unit:" .. guid)
+	if not tooltipData then return end
+
+	local ownerGUID = tooltipData.guid
+	if (not ownerGUID or ownerGUID:find("^Pet")) and tooltipData.lines then
+		for i = 1, #tooltipData.lines do
+			local lineData = tooltipData.lines[i]
+			local lToken = lineData.unitToken
+			if lineData.unitToken then
+				ownerGUID = UnitGUID(lineData.unitToken)
+				if ownerGUID then break end
+			end
+			if lineData.guid and lineData.guid:find("^Player") then
+				ownerGUID = lineData.guid
+				if ownerGUID then break end
+			end
+		end
+	end
+
+	if ownerGUID and ownerGUID:find("^Player") then
+		petOwner[guid] = ownerGUID
+		ownerPets[ownerGUID] = ownerPets[ownerGUID] or {}
+		ownerPets[ownerGUID][guid] = true
+		return ownerGUID
+	end
+end
+
+local function trySetOwnerFromTooltip(guid)
+	local now = GetTime()
+	if (tooltipLookup[guid] or 0) + 1 < now then
+		tooltipLookup[guid] = now
+		setOwnerFromTooltip(guid)
+	end
+end
+
 local function resolveOwner(srcGUID, srcName, srcFlags)
 	if srcGUID and srcFlags then unitAffiliation[srcGUID] = srcFlags end
 	if srcGUID then
@@ -122,11 +169,16 @@ local function resetMeter()
 	releasePlayers(cm.overallPlayers)
 	cm.overallDuration = 0
 	cm.fightDuration = 0
-	cm.inCombat = false
-	cm.fightStartTime = 0
 	cm.prePullHead = 1
 	cm.prePullTail = 0
 	wipe(cm.prePullBuffer)
+
+	cm.historySelection = nil
+	cm.historyUnits = nil
+
+	cm.inCombat = UnitAffectingCombat("player")
+	cm.fightStartTime = cm.inCombat and GetTime() or 0
+	wipe(tooltipLookup)
 end
 cm.resetMeter = resetMeter
 
@@ -197,6 +249,7 @@ local function fullRebuildPetOwners()
 	for guid in pairs(unitAffiliation) do
 		if not activeGUIDs[guid] then unitAffiliation[guid] = nil end
 	end
+	wipe(tooltipLookup)
 end
 
 local function updatePetOwner(unit)
@@ -393,6 +446,13 @@ local function isCritFor(sub, a18, a21)
 	return false
 end
 
+local TYPE_MASK = 64512
+local TYPE_PLAYER = 1024
+local TYPE_PET = 4096
+local TYPE_GUARDIAN = 8192
+local CONTROL_MASK = 768
+local CONTROL_PLAYER = 256
+
 local function handleEvent(self, event, unit)
 	if event == "PLAYER_REGEN_DISABLED" or event == "ENCOUNTER_START" then
 		if cm.inCombat then return end
@@ -484,9 +544,21 @@ local function handleEvent(self, event, unit)
 		end
 		if not inCombat and not pre then return end
 
+		-- Attempt to map pet owners for guardians spawned without a summon event and no unitframe
+		if dmgIdx[sub] and not petOwner[sourceGUID] and band(sourceFlags or 0, groupMask) ~= 0 then
+			local petType = bit.band(sourceFlags, TYPE_MASK)
+			if petType ~= TYPE_PLAYER then
+				if (petType == TYPE_GUARDIAN or petType == TYPE_PET) and bit.band(sourceFlags, CONTROL_MASK) == CONTROL_PLAYER then
+					local id = getIDFromGUID(sourceGUID)
+					if id and missingSummonNPCs[id] then trySetOwnerFromTooltip(sourceGUID) end
+				end
+			end
+		end
+
 		local idx = dmgIdx[sub]
 		if idx then
 			if not sourceGUID then return end
+
 			local ownerGUID, ownerName, ownerFlags = resolveOwner(sourceGUID, sourceName, sourceFlags)
 			if not ownerFlags and cm.groupGUIDs and cm.groupGUIDs[ownerGUID] then ownerFlags = COMBATLOG_OBJECT_AFFILIATION_RAID end
 			if band(ownerFlags or 0, groupMask) == 0 then return end

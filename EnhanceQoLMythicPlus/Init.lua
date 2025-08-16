@@ -89,6 +89,12 @@ addon.functions.InitDBValue("teleportsEnableCompendium", false)
 addon.functions.InitDBValue("teleportFavorites", {})
 addon.functions.InitDBValue("teleportFavoritesIgnoreExpansionHide", false)
 addon.functions.InitDBValue("teleportFavoritesIgnoreFilters", false)
+addon.functions.InitDBValue("teleportFrameLocked", true)
+addon.functions.InitDBValue("teleportFrameData", {})
+addon.functions.InitDBValue("teleportCompendiumLocked", true)
+addon.functions.InitDBValue("teleportCompendiumFrameData", {})
+addon.functions.InitDBValue("dungeonScoreFrameLocked", true)
+addon.functions.InitDBValue("dungeonScoreFrameData", {})
 
 -- Group Dungeon Filter
 addon.functions.InitDBValue("mythicPlusEnableDungeonFilter", false)
