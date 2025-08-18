@@ -13,6 +13,12 @@ if addon.db["mythicPlusDungeonFilters"][UnitGUID("player")] == nil then addon.db
 
 local pDb = addon.db["mythicPlusDungeonFilters"][UnitGUID("player")]
 
+local function eqolDbg(msg)
+	if addon.db and addon.db.debugDungeonFilter then
+	DEFAULT_CHAT_FRAME:AddMessage("|cffffcc00[EQOL:DF]|r " .. msg)
+	end
+end
+
 local appliedLookup = {}
 
 local ACTIVE_STATUS = {
@@ -44,6 +50,7 @@ local lastIntendedSelection = nil
 local function SuspendFilters(sec)
 	local s = sec or 1.0
 	suspendFilterUntil = math.max(suspendFilterUntil, GetTime() + s)
+	eqolDbg("SuspendFilters " .. tostring(s))
 end
 
 local function CacheResultInfo(resultID)
@@ -124,7 +131,7 @@ local initialAllEntries = {}
 local titleScore1 = LFGListFrame:CreateFontString(nil, "OVERLAY")
 titleScore1:SetFont(addon.variables.defaultFont, 13, "OUTLINE")
 titleScore1:SetPoint("TOPRIGHT", PVEFrameLeftInset, "TOPRIGHT", -10, -5)
-titleScore1:Hide()
+		titleScore1:Hide()
 
 drop:HookScript("OnHide", function()
 	originalSetupGen = nil
@@ -153,7 +160,7 @@ local function EQOL_AddLFGEntries(owner, root, ctx)
 			function() pDb["NoSameSpec"] = not pDb["NoSameSpec"] end
 		)
 	end
-end
+	end
 
 if Menu and Menu.ModifyMenu then Menu.ModifyMenu("MENU_LFG_FRAME_SEARCH_FILTER", EQOL_AddLFGEntries) end
 
@@ -245,23 +252,30 @@ end
 local _eqolFiltering = false
 
 local function ApplyEQOLFilters(isInitial)
-	if _eqolFiltering then return end
+	if _eqolFiltering then
+	eqolDbg("guard: already filtering")
+	return
+	end
 	_eqolFiltering = true
 	if LFGListApplicationDialog and LFGListApplicationDialog:IsShown() then
-		_eqolFiltering = false
-		return
+	eqolDbg("guard: application dialog")
+	_eqolFiltering = false
+	return
 	end
 	if GetTime() < suspendFilterUntil then
-		_eqolFiltering = false
-		return
+	eqolDbg("guard: suspended")
+	_eqolFiltering = false
+	return
 	end
 	if LFGListInviteDialog and LFGListInviteDialog:IsShown() then
-		_eqolFiltering = false
-		return
+	eqolDbg("guard: invite dialog")
+	_eqolFiltering = false
+	return
 	end
 	if LFDRoleCheckPopup and LFDRoleCheckPopup:IsShown() then
-		_eqolFiltering = false
-		return
+	eqolDbg("guard: role check popup")
+	_eqolFiltering = false
+	return
 	end
 
 	scanGen = scanGen + 1
@@ -269,30 +283,36 @@ local function ApplyEQOLFilters(isInitial)
 
 	-- Basic guards
 	if not drop or not drop:IsVisible() then
+		eqolDbg("guard: dropdown hidden")
 		_eqolFiltering = false
 		return
 	end
 	if not addon.db["mythicPlusEnableDungeonFilter"] then
+		eqolDbg("guard: feature disabled")
 		_eqolFiltering = false
 		return
 	end
 
 	local panel = LFGListFrame and LFGListFrame.SearchPanel
 	if not panel or panel.categoryID ~= 2 then
+		eqolDbg("guard: wrong panel")
 		titleScore1:Hide()
 		_eqolFiltering = false
 		return
 	end
 	local dp = panel.ScrollBox and panel.ScrollBox:GetDataProvider()
 	if not dp then
+		eqolDbg("guard: missing data provider")
 		_eqolFiltering = false
 		return
 	end
 	if IsMouseButtonDown() and panel and panel.ScrollBox and MouseIsOver(panel.ScrollBox) then
+		eqolDbg("guard: mouse down")
 		_eqolFiltering = false
 		return
 	end
 	if panel.SignUpButton and (panel.SignUpButton:IsMouseOver() or panel.SignUpButton:GetButtonState() == "PUSHED") then
+		eqolDbg("guard: sign up button")
 		_eqolFiltering = false
 		return
 	end
@@ -305,6 +325,7 @@ local function ApplyEQOLFilters(isInitial)
 	if pDb["partyFit"] then needFilter = true end
 	if pDb["NoSameSpec"] and addon.variables.unitRole == "DAMAGER" then needFilter = true end
 	if not needFilter then
+		eqolDbg("guard: nothing to filter")
 		titleScore1:Hide()
 		_eqolFiltering = false
 		return
@@ -321,6 +342,7 @@ local function ApplyEQOLFilters(isInitial)
 
 	local selectedID = ((type(LFGListSearchPanel_GetSelectedResult) == "function") and LFGListSearchPanel_GetSelectedResult(panel)) or panel.selectedResultID or panel.selectedResult
 	local pinnedID = lastIntendedSelection or selectedID
+	if pinnedID then eqolDbg("pinnedID " .. pinnedID) end
 
 	-- Build removal list without mutating the provider during enumeration
 	for _, element in dp:EnumerateEntireRange() do
@@ -346,7 +368,10 @@ local function ApplyEQOLFilters(isInitial)
 
 	if pinnedID and type(LFGListSearchPanel_SelectResult) == "function" then
 		local cur = selectedID
-		if cur ~= pinnedID then LFGListSearchPanel_SelectResult(panel, pinnedID) end
+		if cur ~= pinnedID then
+			eqolDbg("reselect " .. pinnedID)
+			LFGListSearchPanel_SelectResult(panel, pinnedID)
+		end
 	end
 
 	local removedCount = 0
@@ -376,7 +401,7 @@ local function ApplyEQOLFilters(isInitial)
 	end
 
 	_eqolFiltering = false
-end
+	end
 
 -- Coalesce frequent events to a single filter pass
 local _filterScheduled = false
@@ -431,8 +456,14 @@ function addon.MythicPlus.functions.addDungeonFilter()
 	f:RegisterEvent("LFG_ROLE_CHECK_UPDATE")
 	f:RegisterEvent("LFG_ROLE_CHECK_HIDE")
 	f:SetScript("OnEvent", function(_, event, ...)
-		if not drop:IsVisible() then return end
-		if not addon.db["mythicPlusEnableDungeonFilter"] then return end
+		if not drop:IsVisible() then
+			eqolDbg("guard: drop not visible")
+			return
+		end
+		if not addon.db["mythicPlusEnableDungeonFilter"] then
+			eqolDbg("guard: feature disabled")
+			return
+		end
 		if event == "LFG_LIST_SEARCH_RESULTS_RECEIVED" then
 			ScheduleFilters(true)
 		elseif event == "LFG_LIST_SEARCH_RESULT_UPDATED" then
