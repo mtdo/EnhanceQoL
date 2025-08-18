@@ -421,6 +421,11 @@ function addon.MythicPlus.functions.addDungeonFilter()
 	f:RegisterEvent("LFG_LIST_APPLICATION_STATUS_UPDATED")
 	f:RegisterEvent("LFG_LIST_APPLICANT_LIST_UPDATED")
 	f:RegisterEvent("LFG_LIST_ENTRY_EXPIRED_TOO_MANY_PLAYERS")
+	f:RegisterEvent("GROUP_ROSTER_UPDATE")
+	f:RegisterEvent("PLAYER_ROLES_ASSIGNED")
+	f:RegisterEvent("LFG_ROLE_CHECK_SHOW")
+	f:RegisterEvent("LFG_ROLE_CHECK_UPDATE")
+	f:RegisterEvent("LFG_ROLE_CHECK_HIDE")
 	f:SetScript("OnEvent", function(_, event, ...)
 		if not drop:IsVisible() then return end
 		if not addon.db["mythicPlusEnableDungeonFilter"] then return end
@@ -428,7 +433,8 @@ function addon.MythicPlus.functions.addDungeonFilter()
 			ScheduleFilters(true)
 		elseif event == "LFG_LIST_SEARCH_RESULT_UPDATED" then
 			local resultID = ...
-			if resultID then CacheResultInfo(resultID) end
+			CacheResultInfo(resultID)
+			if IsInGroup() then SuspendFilters(0.3) end
 			ScheduleFilters(false)
 		elseif event == "LFG_LIST_AVAILABILITY_UPDATE" then
 			ScheduleFilters(true)
@@ -436,7 +442,15 @@ function addon.MythicPlus.functions.addDungeonFilter()
 			if drop then drop.eqolWrapped = nil end
 		elseif event == "LFG_LIST_APPLICANT_LIST_UPDATED" or event == "LFG_LIST_APPLICATION_STATUS_UPDATED" or event == "LFG_LIST_ENTRY_EXPIRED_TOO_MANY_PLAYERS" then
 			UpdateAppliedCache()
-			ScheduleFilters(false) -- filter next frame, aber ohne erneutes 'initial'; reduziert Flackern
+			SuspendFilters(1.0)
+			ScheduleFilters(false)
+		elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ROLES_ASSIGNED" then
+			SuspendFilters(1.0)
+			ScheduleFilters(true)
+		elseif event == "LFG_ROLE_CHECK_SHOW" or event == "LFG_ROLE_CHECK_UPDATE" then
+			SuspendFilters(1.0)
+		elseif event == "LFG_ROLE_CHECK_HIDE" then
+			ScheduleFilters(true)
 		end
 	end)
 end
