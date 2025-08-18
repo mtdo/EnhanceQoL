@@ -38,6 +38,14 @@ local SearchInfoCache = {}
 local scanGen = 0 -- generation counter for pruning the cache
 local toRemove = {} -- reusable array to avoid reallocations
 
+local suspendFilterUntil = 0
+local lastIntendedSelection = nil
+
+local function SuspendFilters(sec)
+	local s = sec or 1.0
+	suspendFilterUntil = math.max(suspendFilterUntil, GetTime() + s)
+end
+
 local function CacheResultInfo(resultID)
 	local info = C_LFGList.GetSearchResultInfo(resultID)
 	if not info then
@@ -123,6 +131,8 @@ drop:HookScript("OnHide", function()
 	titleScore1:Hide()
 	wipe(SearchInfoCache)
 	wipe(initialAllEntries)
+	lastIntendedSelection = nil
+	suspendFilterUntil = 0
 end)
 
 local function EQOL_AddLFGEntries(owner, root, ctx)
