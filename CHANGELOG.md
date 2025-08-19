@@ -1,5 +1,26 @@
 # Changelog
 
+## [4.6.0] – 2025-08-18
+
+### ✨ Added
+
+- Options to block duels, party invites, and pet battle requests
+
+### 🔄 Changed
+
+- Switched from LibOpenRaid to LibOpenKeystone
+- Refactored Dungeon Filter
+
+### ❌ Removed
+
+- Hidden counter from Dungeon Filter
+
+### 🐛 Fixed
+
+- Anchor error with Mythic+ rating
+
+---
+
 ## [4.5.0] – 2025-08-16
 
 ### ✨ Added

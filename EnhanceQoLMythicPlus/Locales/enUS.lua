@@ -123,9 +123,10 @@ L["DeletedLoadout"] = "Deleted Talent Loadout"
 L["MissingTalentLoadout"] = "Some Talent Loadouts used by Talent Reminder\nhave been removed and can no longer be used:"
 
 L["groupFilter"] = "Group Filter"
-L["mythicPlusEnableDungeonFilter"] = "Extend the default Blizzard Dungeon Group Filter with new filters"
+L["mythicPlusEnableDungeonFilter"] = "Add advanced filters to the Dungeon Finder"
+L["mythicPlusEnableDungeonFilterDesc"] =
+	"Adds advanced filters to the Dungeon Finder (party fit, Bloodlust/Battle Res, same-spec etc.). While this is enabled, the \"%s\" control is adjusted to prevent Blizzard UI 'taint' errors."
 L["mythicPlusEnableDungeonFilterClearReset"] = "Clear the extended filters when the default Blizzard filter is reset"
-L["filteredTextEntries"] = "Filtered\n%d Entries"
 L["Partyfit"] = "Party fits"
 L["BloodlustAvailable"] = "Bloodlust available"
 L["NoBloodlust"] = "No Bloodlust in Group"

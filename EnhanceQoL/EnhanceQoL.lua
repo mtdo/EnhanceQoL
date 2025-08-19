@@ -1,6 +1,7 @@
 -- luacheck: globals DefaultCompactUnitFrameSetup CompactUnitFrame_UpdateAuras CompactUnitFrame_UpdateName UnitTokenFromGUID C_Bank
 -- luacheck: globals Menu GameTooltip_SetTitle GameTooltip_AddNormalLine EnhanceQoL
 -- luacheck: globals GenericTraitUI_LoadUI GenericTraitFrame
+-- luacheck: globals CancelDuel DeclineGroup C_PetBattles
 local addonName, addon = ...
 
 local LDB = LibStub("LibDataBroker-1.1")
@@ -2846,6 +2847,27 @@ local function addSocialFrame(container)
 	local data = {
 		{
 			parent = "",
+			var = "blockDuelRequests",
+			text = L["blockDuelRequests"],
+			type = "CheckBox",
+			callback = function(self, _, value) addon.db["blockDuelRequests"] = value end,
+		},
+		{
+			parent = "",
+			var = "blockPetBattleRequests",
+			text = L["blockPetBattleRequests"],
+			type = "CheckBox",
+			callback = function(self, _, value) addon.db["blockPetBattleRequests"] = value end,
+		},
+		{
+			parent = "",
+			var = "blockPartyInvites",
+			text = L["blockPartyInvites"],
+			type = "CheckBox",
+			callback = function(self, _, value) addon.db["blockPartyInvites"] = value end,
+		},
+		{
+			parent = "",
 			var = "enableIgnore",
 			text = L["EnableAdvancedIgnore"],
 			type = "CheckBox",
@@ -3879,6 +3901,9 @@ local function initSocial()
 	addon.functions.InitDBValue("ignoreFramePoint", "CENTER")
 	addon.functions.InitDBValue("ignoreFrameX", 0)
 	addon.functions.InitDBValue("ignoreFrameY", 0)
+	addon.functions.InitDBValue("blockDuelRequests", false)
+	addon.functions.InitDBValue("blockPetBattleRequests", false)
+	addon.functions.InitDBValue("blockPartyInvites", false)
 	if addon.Ignore and addon.Ignore.SetEnabled then addon.Ignore:SetEnabled(addon.db["enableIgnore"]) end
 	if addon.Ignore and addon.Ignore.UpdateAnchor then addon.Ignore:UpdateAnchor() end
 end
@@ -5476,6 +5501,18 @@ local eventHandlers = {
 			EnhanceQoLInstantCatalyst.icon:SetDesaturated(false)
 		end
 	end,
+	["DUEL_REQUESTED"] = function()
+		if addon.db["blockDuelRequests"] then
+			CancelDuel()
+			StaticPopup_Hide("DUEL_REQUESTED")
+		end
+	end,
+	["PET_BATTLE_PVP_DUEL_REQUESTED"] = function()
+		if addon.db["blockPetBattleRequests"] then
+			C_PetBattles.CancelPVPDuel()
+			StaticPopup_Hide("PET_BATTLE_PVP_DUEL_REQUESTED")
+		end
+	end,
 	["INVENTORY_SEARCH_UPDATE"] = function()
 		if addon.db["showBagFilterMenu"] then
 			C_Timer.After(0, function()
@@ -5520,7 +5557,12 @@ local eventHandlers = {
 			if not addon.db["autoAcceptGroupInviteGuildOnly"] and not addon.db["autoAcceptGroupInviteFriendOnly"] then
 				AcceptGroup()
 				StaticPopup_Hide("PARTY_INVITE")
+				return
 			end
+		end
+		if addon.db["blockPartyInvites"] then
+			DeclineGroup()
+			StaticPopup_Hide("PARTY_INVITE")
 		end
 	end,
 	["PLAYERBANKSLOTS_CHANGED"] = function(arg1)

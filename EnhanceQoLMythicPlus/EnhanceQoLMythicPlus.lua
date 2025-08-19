@@ -1042,6 +1042,7 @@ local function addGroupFilterFrame(container)
 		{
 			text = L["mythicPlusEnableDungeonFilter"],
 			var = "mythicPlusEnableDungeonFilter",
+			desc = L["mythicPlusEnableDungeonFilterDesc"]:format(REPORT_GROUP_FINDER_ADVERTISEMENT),
 			func = function(self, _, value)
 				addon.db["mythicPlusEnableDungeonFilter"] = value
 				if value then
@@ -1065,7 +1066,7 @@ local function addGroupFilterFrame(container)
 	for _, cbData in ipairs(data) do
 		local uFunc = function(self, _, value) addon.db[cbData.var] = value end
 		if cbData.func then uFunc = cbData.func end
-		local cbElement = addon.functions.createCheckboxAce(cbData.text, addon.db[cbData.var], uFunc)
+		local cbElement = addon.functions.createCheckboxAce(cbData.text, addon.db[cbData.var], uFunc, cbData.desc)
 		groupCore:AddChild(cbElement)
 	end
 end

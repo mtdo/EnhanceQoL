@@ -296,6 +296,9 @@ L["IgnoreAnchorFriends"] = "Anchor to Friends list"
 L["IgnoreAnchorFriendsDesc"] = "Attach the enhanced ignore list to the Friends window."
 L["IgnoreDesc"] =
 	'Blocks duel, pet-battle, trade, invite and whisper requests from ignored players. Automatically adds same-realm names to Blizzard’s ignore list when space is available.\nIn the Dungeon Finder ignored players are shown as "!!! <Name> !!!".\n\nOpen the list with /eil.'
+L["blockDuelRequests"] = "Block duel requests"
+L["blockPetBattleRequests"] = "Block pet battle duel requests"
+L["blockPartyInvites"] = "Block party invites"
 L["ImportGILDialog"] = "GlobalIgnoreList data found. Import its entries and disable that addon? Both addons cannot be active at the same time."
 L["ImportGILCancelDialog"] = "Disable either the advanced ignore option or GlobalIgnoreList and reload your interface."
 L["ImportGILAccept"] = "Import & Reload"

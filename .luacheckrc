@@ -590,6 +590,7 @@ globals = {
 	"C_AuthChallenge.SetFrame",
 	"C_AuthChallenge.Submit",
 	"C_BattleNet",
+	"REPORT_GROUP_FINDER_ADVERTISEMENT",
 	"C_BlackMarket",
 	"C_BlackMarket.Close",
 	"C_BlackMarket.GetHotItem",

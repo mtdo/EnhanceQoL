@@ -7,7 +7,7 @@ else
 	error(parentAddonName .. " is not loaded")
 end
 
-local openRaidLib = LibStub:GetLibrary("LibOpenRaid-1.0", true)
+local openRaidLib = LibStub:GetLibrary("LibOpenKeystone-1.0", true) or LibStub:GetLibrary("LibOpenRaid-1.0", true)
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_MythicPlus")
 
 local cModeIDs
@@ -1410,7 +1410,7 @@ GameTooltip:HookScript("OnShow", function(self)
 			CreateRioScore()
 			local offsetX = 0
 			if nil ~= RaiderIO_ProfileTooltip then offsetX = RaiderIO_ProfileTooltip:GetSize() end
-			if gFrameAnchorScore then gFrameAnchorScore:SetPoint("TOPLEFT", GameTooltip, "TOPRIGHT", offsetX, 0) end
+			if gFrameAnchorScore and addon.db["dungeonScoreFrameLocked"] then gFrameAnchorScore:SetPoint("TOPLEFT", GameTooltip, "TOPRIGHT", offsetX, 0) end
 
 			if addon.db["teleportFrame"] then frameAnchor:SetAlpha(0) end
 			if addon.db["teleportsEnableCompendium"] then frameAnchorCompendium:SetAlpha(0) end
