@@ -1,4 +1,4 @@
--- luacheck: globals EnhanceQoL GAMEMENU_OPTIONS C_CurrencyInfo C_Timer ITEM_QUALITY_COLORS HIGHLIGHT_FONT_COLOR_CODE RED_FONT_COLOR_CODE FONT_COLOR_CODE_CLOSE CURRENCY_SEASON_TOTAL_MAXIMUM CURRENCY_SEASON_TOTAL CURRENCY_TOTAL CURRENCY_TOTAL_CAP BreakUpLargeNumbers
+-- luacheck: globals EnhanceQoL GAMEMENU_OPTIONS C_CurrencyInfo C_Timer ITEM_QUALITY_COLORS HIGHLIGHT_FONT_COLOR_CODE RED_FONT_COLOR_CODE FONT_COLOR_CODE_CLOSE CURRENCY_SEASON_TOTAL_MAXIMUM CURRENCY_SEASON_TOTAL CURRENCY_TOTAL CURRENCY_TOTAL_CAP BreakUpLargeNumbers UIParent GameTooltip GetCursorPosition GameFontNormal
 local addonName, addon = ...
 local L = addon.L
 
@@ -7,6 +7,46 @@ local db
 local stream
 local tracked = {}
 local trackedDirty = true
+local measureFont = UIParent:CreateFontString()
+
+local function handleMouseEnter(button)
+	if not db or not db.tooltipPerCurrency then return end
+	local slot = button.slot
+	local function update()
+		local hover = slot.hover
+		if not hover then return end
+		local x, _ = GetCursorPosition()
+		local scale = UIParent:GetEffectiveScale()
+		x = x / scale
+		local left = button:GetLeft()
+		local relx = x - left
+		for _, h in ipairs(hover) do
+			if relx >= h.start and relx <= h.stop then
+				if slot.lastTip ~= h.id then
+					GameTooltip:SetOwner(button, "ANCHOR_TOPLEFT")
+					GameTooltip:SetCurrencyByID(h.id)
+					GameTooltip:Show()
+					slot.lastTip = h.id
+				end
+				return
+			end
+		end
+		if slot.lastTip ~= "default" then
+			GameTooltip:SetOwner(button, "ANCHOR_TOPLEFT")
+			GameTooltip:SetText(L["Right-Click for options"])
+			GameTooltip:Show()
+			slot.lastTip = "default"
+		end
+	end
+	button:SetScript("OnUpdate", update)
+	update()
+end
+
+local function handleMouseLeave(button)
+	if not db or not db.tooltipPerCurrency then return end
+	button:SetScript("OnUpdate", nil)
+	if button.slot then button.slot.lastTip = nil end
+end
 
 local function rebuildTracked()
 	if not db then return end
@@ -35,6 +75,8 @@ local function ensureDB()
 	db = addon.db.datapanel.currency
 	db.fontSize = db.fontSize or 14
 	db.ids = db.ids or {}
+	db.tooltipPerCurrency = db.tooltipPerCurrency or false
+	if db.showDescription == nil then db.showDescription = true end
 	if trackedDirty then rebuildTracked() end
 end
 
@@ -138,6 +180,24 @@ local function createAceWindow()
 	end)
 	frame:AddChild(fontSize)
 
+	local perTip = AceGUI:Create("CheckBox")
+	perTip:SetLabel("Per-currency tooltips")
+	perTip:SetValue(db.tooltipPerCurrency)
+	perTip:SetCallback("OnValueChanged", function(_, _, val)
+		db.tooltipPerCurrency = val and true or false
+		RequestUpdateDebounced()
+	end)
+	frame:AddChild(perTip)
+
+	local showDesc = AceGUI:Create("CheckBox")
+	showDesc:SetLabel("Show description in tooltip")
+	showDesc:SetValue(db.showDescription)
+	showDesc:SetCallback("OnValueChanged", function(_, _, val)
+		db.showDescription = val and true or false
+		RequestUpdateDebounced()
+	end)
+	frame:AddChild(showDesc)
+
 	local addGroup = addon.functions.createContainer("SimpleGroup", "Flow")
 	local addBox = AceGUI:Create("EditBox")
 	addBox:SetLabel("Currency ID")
@@ -177,36 +237,56 @@ local function checkCurrencies(stream)
 	ensureDB()
 	local size = db.fontSize or 14
 	local parts = {}
-	local tips = {}
+	local tips = db.tooltipPerCurrency and nil or {}
+	local hover = db.tooltipPerCurrency and {} or nil
+	local font = (addon.variables and addon.variables.defaultFont) or select(1, GameFontNormal:GetFont())
+	measureFont:SetFont(font, size, "OUTLINE")
+	measureFont:SetText(" ")
+	local spaceWidth = measureFont:GetStringWidth()
+	local x = 0
 	for _, id in ipairs(db.ids) do
 		local info = C_CurrencyInfo.GetCurrencyInfo(id)
 		if info then
 			if not iconCache[id] and info.iconFileID then iconCache[id] = info.iconFileID end
 			local icon = iconCache[id] or info.iconFileID
-			parts[#parts + 1] = ("|T%s:%d:%d:0:0|t %d"):format(icon or 0, size, size, info.quantity or 0)
-
-			local color = ITEM_QUALITY_COLORS[info.quality]
-			local name = (color and color.hex or "|cffffffff") .. (info.name or ("ID %d"):format(id)) .. "|r"
-			tips[#tips + 1] = name
-			if info.description and info.description ~= "" then tips[#tips + 1] = info.description end
-			tips[#tips + 1] = ""
-
-			tips[#tips + 1] = CURRENCY_TOTAL:format(HIGHLIGHT_FONT_COLOR_CODE, BreakUpLargeNumbers(info.quantity or 0)) .. FONT_COLOR_CODE_CLOSE
-			if info.useTotalEarnedForMaxQty then
+			local qty = info.quantity or 0
+			local colorCode = HIGHLIGHT_FONT_COLOR_CODE
+			if info.useTotalEarnedForMaxQty and info.maxQuantity and info.maxQuantity > 0 then
 				local earnedRaw = info.trackedQuantity or info.totalEarned or 0
-				local earned = BreakUpLargeNumbers(earnedRaw)
-				if info.maxQuantity and info.maxQuantity > 0 then
-					local colorCode = earnedRaw >= info.maxQuantity and RED_FONT_COLOR_CODE or HIGHLIGHT_FONT_COLOR_CODE
-					tips[#tips + 1] = CURRENCY_SEASON_TOTAL_MAXIMUM:format(colorCode, earned, BreakUpLargeNumbers(info.maxQuantity)) .. FONT_COLOR_CODE_CLOSE
-				else
-					tips[#tips + 1] = CURRENCY_SEASON_TOTAL:format(HIGHLIGHT_FONT_COLOR_CODE, earned) .. FONT_COLOR_CODE_CLOSE
-				end
-			elseif info.maxQuantity and info.maxQuantity > 0 then
-				local qty = info.quantity or 0
-				local colorCode = qty >= info.maxQuantity and RED_FONT_COLOR_CODE or HIGHLIGHT_FONT_COLOR_CODE
-				tips[#tips + 1] = CURRENCY_TOTAL_CAP:format(colorCode, BreakUpLargeNumbers(qty), BreakUpLargeNumbers(info.maxQuantity)) .. FONT_COLOR_CODE_CLOSE
+				if earnedRaw >= info.maxQuantity then colorCode = RED_FONT_COLOR_CODE end
+			elseif info.maxQuantity and info.maxQuantity > 0 and qty >= info.maxQuantity then
+				colorCode = RED_FONT_COLOR_CODE
 			end
-			tips[#tips + 1] = ""
+			parts[#parts + 1] = ("|T%s:%d:%d:0:0|t %s%d%s"):format(icon or 0, size, size, colorCode, qty, FONT_COLOR_CODE_CLOSE)
+			if hover then
+				if #hover > 0 then x = x + spaceWidth end
+				local start = x
+				measureFont:SetText(tostring(qty))
+				local numWidth = measureFont:GetStringWidth()
+				x = x + size + spaceWidth + numWidth
+				hover[#hover + 1] = { id = id, start = start, stop = x }
+			else
+				local color = ITEM_QUALITY_COLORS[info.quality]
+				local name = (color and color.hex or "|cffffffff") .. (info.name or ("ID %d"):format(id)) .. "|r"
+				tips[#tips + 1] = name
+				if db.showDescription and info.description and info.description ~= "" then tips[#tips + 1] = info.description end
+				tips[#tips + 1] = ""
+				tips[#tips + 1] = CURRENCY_TOTAL:format(HIGHLIGHT_FONT_COLOR_CODE, BreakUpLargeNumbers(qty)) .. FONT_COLOR_CODE_CLOSE
+				if info.useTotalEarnedForMaxQty then
+					local earnedRaw = info.trackedQuantity or info.totalEarned or 0
+					local earned = BreakUpLargeNumbers(earnedRaw)
+					if info.maxQuantity and info.maxQuantity > 0 then
+						local colorCode2 = earnedRaw >= info.maxQuantity and RED_FONT_COLOR_CODE or HIGHLIGHT_FONT_COLOR_CODE
+						tips[#tips + 1] = CURRENCY_SEASON_TOTAL_MAXIMUM:format(colorCode2, earned, BreakUpLargeNumbers(info.maxQuantity)) .. FONT_COLOR_CODE_CLOSE
+					else
+						tips[#tips + 1] = CURRENCY_SEASON_TOTAL:format(HIGHLIGHT_FONT_COLOR_CODE, earned) .. FONT_COLOR_CODE_CLOSE
+					end
+				elseif info.maxQuantity and info.maxQuantity > 0 then
+					local colorCode2 = qty >= info.maxQuantity and RED_FONT_COLOR_CODE or HIGHLIGHT_FONT_COLOR_CODE
+					tips[#tips + 1] = CURRENCY_TOTAL_CAP:format(colorCode2, BreakUpLargeNumbers(qty), BreakUpLargeNumbers(info.maxQuantity)) .. FONT_COLOR_CODE_CLOSE
+				end
+				tips[#tips + 1] = ""
+			end
 		end
 	end
 
@@ -220,13 +300,18 @@ local function checkCurrencies(stream)
 		stream.snapshot.text = newText
 		stream.snapshot.fontSize = size
 	end
-	if #tips > 0 then
-		if tips[#tips] == "" then tips[#tips] = nil end
-		tips[#tips + 1] = ""
-		tips[#tips + 1] = L["Right-Click for options"]
-		stream.snapshot.tooltip = table.concat(tips, "\n")
-	elseif not stream.snapshot.tooltip then
-		stream.snapshot.tooltip = L["Right-Click for options"]
+	stream.snapshot.hover = hover
+	if tips then
+		if #tips > 0 then
+			if tips[#tips] == "" then tips[#tips] = nil end
+			tips[#tips + 1] = ""
+			tips[#tips + 1] = L["Right-Click for options"]
+			stream.snapshot.tooltip = table.concat(tips, "\n")
+		else
+			stream.snapshot.tooltip = L["Right-Click for options"]
+		end
+	else
+		stream.snapshot.tooltip = nil
 	end
 end
 
@@ -245,6 +330,8 @@ local provider = {
 	OnClick = function(_, btn)
 		if btn == "RightButton" then createAceWindow() end
 	end,
+	OnMouseEnter = handleMouseEnter,
+	OnMouseLeave = handleMouseLeave,
 }
 
 stream = EnhanceQoL.DataHub.RegisterStream(provider)

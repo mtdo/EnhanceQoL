@@ -198,6 +198,7 @@ function DataPanel.Create(id, name)
 				end
 			end
 			data.tooltip = payload.tooltip
+			data.hover = payload.hover
 			data.OnMouseEnter = payload.OnMouseEnter
 			data.OnMouseLeave = payload.OnMouseLeave
 			if payload.OnClick ~= nil then data.OnClick = payload.OnClick end

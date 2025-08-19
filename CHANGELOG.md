@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### ✨ Added
+
+- DataPanel currency stream: per-currency tooltips, optional description hiding, and red coloring when capped
+
 ## [4.6.0] – 2025-08-18
 
 ### ✨ Added
