@@ -7,6 +7,7 @@
 - Options to block duel requests, party invites, and pet-battle requests
 - **Ignore:** remembers sort order and search term
 - **Ignore:** right-click context menu with quick actions
+- **Aura Tracker** - Filter for group type (Raid, Party, solo)
 
 ### 🔄 Changed
 
