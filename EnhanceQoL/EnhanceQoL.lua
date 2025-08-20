@@ -1218,6 +1218,16 @@ local function addMinimapFrame(container)
 				if addon.InstanceDifficulty and addon.InstanceDifficulty.SetEnabled then addon.InstanceDifficulty:SetEnabled(value) end
 			end,
 		},
+		{
+			parent = "",
+			var = "enableLandingPageMenu",
+			desc = L["enableLandingPageMenuDesc"],
+			text = L["enableLandingPageMenu"],
+			type = "CheckBox",
+			callback = function(self, _, value)
+				addon.db["enableLandingPageMenu"] = value
+			end,
+		},
 		-- {
 		-- 	parent = "",
 		-- 	var = "instanceDifficultyUseIcon",
@@ -3618,6 +3628,7 @@ local function initMisc()
 	addon.functions.InitDBValue("autoQuickLootWithShift", false)
 	addon.functions.InitDBValue("hideAzeriteToast", false)
 	addon.functions.InitDBValue("hiddenLandingPages", {})
+	addon.functions.InitDBValue("enableLandingPageMenu", false)
 	addon.functions.InitDBValue("hideMinimapButton", false)
 	addon.functions.InitDBValue("hideBagsBar", false)
 	addon.functions.InitDBValue("hideMicroMenu", false)
@@ -3808,7 +3819,9 @@ local function initMisc()
 	local function AttachRightClickMenu(button)
 		if not button or button._eqolMenuHooked then return end
 		button:HookScript("OnMouseUp", function(self, btn)
-			if btn == "RightButton" then ShowLandingMenu(self) end
+			if btn == "RightButton" and addon.db["enableLandingPageMenu"] then
+				ShowLandingMenu(self)
+			end
 		end)
 		button._eqolMenuHooked = true
 	end
