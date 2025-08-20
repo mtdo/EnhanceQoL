@@ -1,11 +1,11 @@
 # Changelog
 
-## [Unreleased]
+## [4.7.0] – 2025-08-20
 
 ### ✨ Added
 
 - DataPanel currency stream: per-currency tooltips, optional description hiding, and red coloring when capped
-- Optional right-click menu for Landing Page minimap buttons
+- Optional right-click menu for minimap buttons like Report, Garrison, and Covenant
 
 ### 🐛 Fixed
 
