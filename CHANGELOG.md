@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.7.2] – 2025-08-25
+
+### 🐛 Fixed
+- **Combat Meter:** Spirit Link Totem redistribution was incorrectly credited as damage done to the Shaman. It is now treated as **negative healing** and excluded from DPS.
+
+---
+
 ## [4.7.1] – 2025-08-24
 
 ### 🐛 Fixed

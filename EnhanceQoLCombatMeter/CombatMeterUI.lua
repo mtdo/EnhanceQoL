@@ -534,6 +534,28 @@ local function createGroupFrame(groupConfig)
 					local pct = (spell.amount / total) * 100
 					GameTooltip:AddDoubleLine(fullName, string.format("%s (%.1f%%)", abbreviateNumber(spell.amount), pct))
 				end
+				-- Add Spirit Link (Damage) line for healing metrics (WCL-style)
+				if isHealingMetric then
+					local sl = tonumber(pdata.spiritLinkDamage or 0) or 0
+					if sl > 0 then
+						-- localized spell name & icon
+						local si = C_Spell.GetSpellInfo(98021)
+						local slName = (si and si.name) or "Spirit Link"
+						local slIcon = si and si.iconID
+						local label
+						if slIcon then
+							label = "|T"..slIcon..":16|t"..slName.." ("..(DAMAGE or "Damage")..")"
+						else
+							label = slName.." ("..(DAMAGE or "Damage")..")"
+						end
+						-- percentage relative to net healing when positive, otherwise fall back to positive total
+						local denom = total - sl
+						if not denom or denom <= 0 then denom = total end
+						local pct = 0
+						if denom and denom > 0 then pct = ((-sl) / denom) * 100 end
+						GameTooltip:AddDoubleLine(label, string.format("%s (%.1f%%)", abbreviateNumber(-sl), pct))
+					end
+				end
 				GameTooltip:Show()
 			end)
 			bar:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -584,7 +606,14 @@ local function createGroupFrame(groupConfig)
 			for guid, p in pairs(addon.CombatMeter.overallPlayers) do
 				-- Skip players without recorded time to avoid blank bars
 				if groupUnits[guid] and p.time and p.time > 0 then
-					local total = (self.metric == "damageOverall") and (p.damage or 0) or (p.healing or 0)
+					local total
+					if self.metric == "damageOverall" then
+						total = (p.damage or 0)
+					else
+						local raw = (p.healing or 0)
+						local sl  = (p.spiritLinkDamage or 0)
+						total = raw - sl
+					end
 					local value = total / p.time
 					tinsert(list, { guid = guid, name = p.name, value = value, total = total, class = p.class })
 					if value > maxValue then maxValue = value end
@@ -606,8 +635,10 @@ local function createGroupFrame(groupConfig)
 						value = data.damage / duration
 						total = data.damage
 					else
-						value = data.healing / duration
-						total = data.healing
+						local raw = (data.healing or 0)
+						local sl  = (data.spiritLinkDamage or 0)
+						total = raw - sl
+						value = total / duration
 					end
 					tinsert(list, { guid = guid, name = data.name, value = value, total = total, class = data.class })
 					if value > maxValue then maxValue = value end
@@ -651,7 +682,13 @@ local function createGroupFrame(groupConfig)
 				if self.metric == "damageOverall" or self.metric == "healingOverall" then
 					local p = addon.CombatMeter.overallPlayers[playerGUID]
 					if p and p.time and p.time > 0 then
-						total = (self.metric == "damageOverall") and (p.damage or 0) or (p.healing or 0)
+						if self.metric == "damageOverall" then
+							total = (p.damage or 0)
+						else
+							local raw = (p.healing or 0)
+							local sl  = (p.spiritLinkDamage or 0)
+							total = raw - sl
+						end
 						value = total / p.time
 						class = p.class
 					end
@@ -669,8 +706,10 @@ local function createGroupFrame(groupConfig)
 							total = data.damage
 							value = data.damage / duration
 						else
-							total = data.healing
-							value = data.healing / duration
+							local raw = (data.healing or 0)
+							local sl  = (data.spiritLinkDamage or 0)
+							total = raw - sl
+							value = total / duration
 						end
 						class = data.class
 					else
@@ -712,7 +751,7 @@ local function createGroupFrame(groupConfig)
 				bar:SetMinMaxValues(0, maxValue)
 				bar._max = maxValue
 			end
-			bar:SetValue(p.value)
+			bar:SetValue((p.value and p.value > 0) and p.value or 0)
 
 			local class = p.class or ""
 			if bar._class ~= class then

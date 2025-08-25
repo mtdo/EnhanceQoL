@@ -13,6 +13,9 @@ local bor = bit.bor
 local CLEU = CombatLogGetCurrentEventInfo
 local GPIG = GetPlayerInfoByGUID
 
+-- Spirit Link Totem redistribution damage (friendly-fire that should not count as DPS)
+local SPIRIT_LINK_DAMAGE_SPELL_ID = 98021
+
 cm.inCombat = false
 cm.fightStartTime = 0
 cm.fightDuration = 0
@@ -158,6 +161,9 @@ local function acquirePlayer(tbl, guid, name)
 		player.damage = 0
 		player.healing = 0
 		player.damageTaken = 0
+		-- Initialize friendly-fire trackers
+		player.friendlyFire = 0
+		player.spiritLinkDamage = 0
 		local _, class = GPIG(guid)
 		player.class = class
 		players[guid] = player
@@ -506,6 +512,8 @@ local function handleEvent(self, event, unit)
 				damage = data.damage,
 				healing = data.healing,
 				damageTaken = data.damageTaken,
+				spiritLinkDamage = data.spiritLinkDamage or 0,
+				friendlyFire = data.friendlyFire or 0,
 			}
 		end
 		addon.db["combatMeterHistory"] = addon.db["combatMeterHistory"] or {}
@@ -588,6 +596,24 @@ local function handleEvent(self, event, unit)
 			if amount <= 0 then return end
 			local spellId, spellName, spellIcon = getSpellInfoFromSub(sub, a12, a15)
 			local crit = isCritFor(sub, a18, a21)
+
+			-- FRIENDLY-FIRE GUARD: do not count damage done to group members as DPS
+			-- Track it separately so we can surface in tooltips later, and special-case Spirit Link.
+			local isFriendlyTarget = band(destFlags or 0, groupMask) ~= 0
+			if isFriendlyTarget then
+				if inCombat then
+					local player = acquirePlayer(cm.players, ownerGUID, ownerName)
+					local overall = acquirePlayer(cm.overallPlayers, ownerGUID, ownerName)
+					player.friendlyFire = (player.friendlyFire or 0) + amount
+					overall.friendlyFire = (overall.friendlyFire or 0) + amount
+					if spellId == SPIRIT_LINK_DAMAGE_SPELL_ID then
+						player.spiritLinkDamage = (player.spiritLinkDamage or 0) + amount
+						overall.spiritLinkDamage = (overall.spiritLinkDamage or 0) + amount
+					end
+				end
+				return
+			end
+
 			if inCombat then
 				local player = acquirePlayer(cm.players, ownerGUID, ownerName)
 				local overall = acquirePlayer(cm.overallPlayers, ownerGUID, ownerName)
@@ -637,6 +663,8 @@ local function handleEvent(self, event, unit)
 				crit = a18
 			end
 			if missType ~= "ABSORB" or amount <= 0 then return end
+			-- Ignore friendly-fire absorbs for outgoing damage credit
+			if band(destFlags or 0, groupMask) ~= 0 then return end
 			local ownerGUID, ownerName, ownerFlags = resolveOwner(sourceGUID, sourceName, sourceFlags)
 			if not ownerFlags and cm.groupGUIDs and cm.groupGUIDs[ownerGUID] then ownerFlags = COMBATLOG_OBJECT_AFFILIATION_RAID end
 			if band(ownerFlags or 0, groupMask) == 0 then return end
@@ -813,6 +841,8 @@ local function loadHistory(index)
 		player.healing = p.healing or 0
 		player.damageTaken = p.damageTaken or 0
 		player.class = p.class
+		player.spiritLinkDamage = p.spiritLinkDamage or 0
+		player.friendlyFire = p.friendlyFire or 0
 		cm.historyUnits[guid] = p.name
 	end
 	if addon.CombatMeter.functions.UpdateBars then addon.CombatMeter.functions.UpdateBars() end
