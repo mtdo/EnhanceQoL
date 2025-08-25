@@ -2,6 +2,21 @@ local parentAddonName = "EnhanceQoL"
 local addonName, addon = ...
 local drinkMacroName = "EnhanceQoLDrinkMacro"
 
+local UnitAffectingCombat = UnitAffectingCombat
+local UnitPowerMax = UnitPowerMax
+local GetMacroInfo = GetMacroInfo
+local EditMacro = EditMacro
+local CreateMacro = CreateMacro
+
+local recuperateSpellName
+local recuperateSpellKnown
+
+local function updateRecuperateData()
+	local spellInfo = C_Spell.GetSpellInfo(1231411)
+	recuperateSpellName = spellInfo and spellInfo.name
+	recuperateSpellKnown = recuperateSpellName and C_SpellBook.IsSpellInSpellBook(1231411) or false
+end
+
 if _G[parentAddonName] then
 	addon = _G[parentAddonName]
 else
@@ -19,10 +34,8 @@ local function buildMacroString(item)
 	local resetType = "combat"
 	local recuperateString = ""
 
-	if addon.db.allowRecuperate and addon.db.useRecuperateWithDrinks then
-		local spellInfo = C_Spell.GetSpellInfo(1231411)
-		local spellName = spellInfo and spellInfo.name
-		if spellName and C_SpellBook.IsSpellInSpellBook(1231411) and item ~= spellName then recuperateString = "\n/cast " .. spellName end
+	if addon.db.allowRecuperate and addon.db.useRecuperateWithDrinks and recuperateSpellName and recuperateSpellKnown and item ~= recuperateSpellName then
+		recuperateString = "\n/cast " .. recuperateSpellName
 	end
 
 	if item == nil then
@@ -41,6 +54,7 @@ local lastItemPlaced
 local lastAllowRecuperate
 local lastUseRecuperate
 local function addDrinks()
+	if not addon.Drinks.filteredDrinks or #addon.Drinks.filteredDrinks == 0 then return end
 	local foundItem = nil
 	for _, value in ipairs(addon.Drinks.filteredDrinks) do
 		if value.getCount() > 0 then
@@ -84,11 +98,21 @@ frameLoad:RegisterEvent("PLAYER_LOGIN")
 frameLoad:RegisterEvent("PLAYER_REGEN_ENABLED")
 frameLoad:RegisterEvent("PLAYER_LEVEL_UP")
 frameLoad:RegisterEvent("BAG_UPDATE_DELAYED")
+frameLoad:RegisterEvent("SPELLS_CHANGED")
+frameLoad:RegisterEvent("PLAYER_TALENT_UPDATE")
 -- Funktion zum Umgang mit Events
+local pendingUpdate = false
 local function eventHandler(self, event, arg1, arg2, arg3, arg4)
 	if event == "BAG_UPDATE_DELAYED" then
-		addon.functions.updateAvailableDrinks(false)
+		if not pendingUpdate then
+			pendingUpdate = true
+			C_Timer.After(0.05, function()
+				addon.functions.updateAvailableDrinks(false)
+				pendingUpdate = false
+			end)
+		end
 	elseif event == "PLAYER_LOGIN" then
+		updateRecuperateData()
 		-- on login always load the macro
 		addon.functions.updateAllowedDrinks()
 		addon.functions.updateAvailableDrinks(false)
@@ -99,6 +123,9 @@ local function eventHandler(self, event, arg1, arg2, arg3, arg4)
 		-- on level up, reload the complete list of allowed drinks
 		addon.functions.updateAllowedDrinks()
 		addon.functions.updateAvailableDrinks(true)
+	elseif event == "SPELLS_CHANGED" or event == "PLAYER_TALENT_UPDATE" then
+		updateRecuperateData()
+		addon.functions.updateAvailableDrinks(false)
 	end
 end
 -- Setze den Event-Handler
