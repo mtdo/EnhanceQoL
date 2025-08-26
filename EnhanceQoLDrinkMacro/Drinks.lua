@@ -12,7 +12,14 @@ local UnitPowerMax = UnitPowerMax
 local UnitRace = UnitRace
 local IsSpellInSpellBook = C_SpellBook.IsSpellInSpellBook
 local wipe = wipe
+local tinsert = table.insert
+local newItem = addon.functions.newItem
+local db = addon.db
 
+local _, race = UnitRace("player")
+local isEarthen = (race == "EarthenDwarf")
+
+print(race, isEarthen)
 addon.Drinks.drinkList = { -- Special Food
 	{ key = "MarinatedMaggots", id = 226811, requiredLevel = 75, mana = 2700000, isBuffFood = false },
 	{ key = "ConjureRefreshment", id = 190336, requiredLevel = 5, mana = 0, isSpell = true }, -- set mana to zero, because we update it anyway
@@ -567,20 +574,11 @@ table.sort(addon.Drinks.drinkList, function(a, b) return a.mana > b.mana end)
 
 function addon.functions.updateAllowedDrinks()
 	-- cache globals as locals
-	local UnitLevel = UnitLevel
-	local UnitPowerMax = UnitPowerMax
-	local UnitRace = UnitRace
-	local IsSpellInSpellBook = C_SpellBook.IsSpellInSpellBook
-	local tinsert = table.insert
-	local newItem = addon.functions.newItem
-	local db = addon.db
 
 	local playerLevel = UnitLevel("player")
 	local mana = UnitPowerMax("player", 0)
 	if mana <= 0 then return end
 
-	local _, race = UnitRace("player")
-	local isEarthen = (race == "EarthenDwarf")
 	local minManaValue = mana * (db.minManaFoodValue / 100)
 
 	-- prepare new result tables
