@@ -202,7 +202,7 @@ local function addGeneralFrame(container)
                 interrupts = INTERRUPTS,
                 interruptsOverall = INTERRUPTS .. " Overall",
         }
-        local metricOrder = { "dps", "damageOverall", "healingPerFight", "healingOverall", "interrupts", "interruptsOverall" }
+       local metricOrder = { "damageOverall", "healingOverall", "interruptsOverall", "dps", "healingPerFight", "interrupts" }
 
 	for i, cfg in ipairs(addon.db["combatMeterGroups"]) do
 		local idx = i

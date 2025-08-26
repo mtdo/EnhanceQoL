@@ -93,6 +93,12 @@ local metricNames = {
         interruptsOverall = INTERRUPTS .. " Overall",
 }
 
+local overallMetrics = { "damageOverall", "healingOverall", "interruptsOverall" }
+table.sort(overallMetrics, function(a, b) return metricNames[a] < metricNames[b] end)
+
+local perFightMetrics = { "dps", "healingPerFight", "interrupts" }
+table.sort(perFightMetrics, function(a, b) return metricNames[a] < metricNames[b] end)
+
 local function applyBarTexture(bar)
 	if not bar then return end
 	local tex = config["combatMeterBarTexture"] or (TEXTURE_PATH .. "eqol_base_flat_8x8.tga")
@@ -237,16 +243,23 @@ end
 
 -- Opens a metric selection menu for a group frame
 local function OpenMetricMenu(owner, frame)
-	MenuUtil.CreateContextMenu(owner, function(_, root)
-		for metric, name in pairs(metricNames) do
-			root:CreateButton(name, function()
-				frame.metric = metric
-				frame.groupConfig.type = metric
-				if frame.dragHandle and frame.dragHandle.text then frame.dragHandle.text:SetText(metricNames[metric]) end
-				if addon.CombatMeter and addon.CombatMeter.functions and addon.CombatMeter.functions.UpdateBars then addon.CombatMeter.functions.UpdateBars() end
-			end)
-		end
-	end)
+       MenuUtil.CreateContextMenu(owner, function(_, root)
+               local function addButtons(list)
+                       for _, metric in ipairs(list) do
+                               local name = metricNames[metric]
+                               root:CreateButton(name, function()
+                                       frame.metric = metric
+                                       frame.groupConfig.type = metric
+                                       if frame.dragHandle and frame.dragHandle.text then frame.dragHandle.text:SetText(name) end
+                                       if addon.CombatMeter and addon.CombatMeter.functions and addon.CombatMeter.functions.UpdateBars then addon.CombatMeter.functions.UpdateBars() end
+                               end)
+                       end
+               end
+
+               addButtons(overallMetrics)
+               root:CreateDivider()
+               addButtons(perFightMetrics)
+       end)
 end
 local function createGroupFrame(groupConfig)
 	local barHeight = groupConfig.barHeight or DEFAULT_BAR_HEIGHT
