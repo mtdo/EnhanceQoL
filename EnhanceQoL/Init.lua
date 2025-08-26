@@ -575,6 +575,8 @@ addon.variables.shouldEnchantedChecks = {
 		end,
 	},
 }
+addon.variables.shouldSocketed = { [2] = 2, [11] = 2, [12] = 2 }
+addon.variables.shouldSocketedChecks = {}
 
 addon.variables.landingPageType = {
 	[10] = { title = GARRISON_LANDING_PAGE_TITLE, checkbox = GARRISON_LOCATION_TOOLTIP },
