@@ -515,15 +515,25 @@ local function handleEvent(self, event, unit)
 			fight.players[guid] = {
 				guid = guid,
 				name = data.name,
-				class = data.class,
-				damage = data.damage,
-				healing = data.healing,
-				damageTaken = data.damageTaken,
-				spiritLinkDamage = data.spiritLinkDamage or 0,
-				friendlyFire = data.friendlyFire or 0,
-				temperedDamage = data.temperedDamage or 0,
-			}
-		end
+                               class = data.class,
+                               damage = data.damage,
+                               healing = data.healing,
+                               damageTaken = data.damageTaken,
+                               spiritLinkDamage = data.spiritLinkDamage or 0,
+                               friendlyFire = data.friendlyFire or 0,
+                               temperedDamage = data.temperedDamage or 0,
+                               interrupts = data.interrupts or 0,
+                               interruptSpells = (function()
+                                       local source = data.interruptSpells
+                                       if not source or not next(source) then return nil end
+                                       local copy = {}
+                                       for spellId, s in pairs(source) do
+                                               copy[spellId] = { name = s.name, amount = s.amount, icon = s.icon }
+                                       end
+                                       return copy
+                               end)(),
+                       }
+               end
 		addon.db["combatMeterHistory"] = addon.db["combatMeterHistory"] or {}
 		local hist = addon.db["combatMeterHistory"]
 		-- hist[#hist + 1] = fight is required to keep trimming O(1) for inserts
@@ -886,16 +896,24 @@ local function loadHistory(index)
 	releasePlayers(cm.players)
 	cm.fightDuration = fight.duration or 0
 	for guid, p in pairs(fight.players) do
-		local player = acquirePlayer(cm.players, guid, p.name)
-		player.damage = p.damage or 0
-		player.healing = p.healing or 0
-		player.damageTaken = p.damageTaken or 0
-		player.class = p.class
-		player.spiritLinkDamage = p.spiritLinkDamage or 0
-		player.friendlyFire = p.friendlyFire or 0
-		player.temperedDamage = p.temperedDamage or 0
-		cm.historyUnits[guid] = p.name
-	end
+               local player = acquirePlayer(cm.players, guid, p.name)
+               player.damage = p.damage or 0
+               player.healing = p.healing or 0
+               player.damageTaken = p.damageTaken or 0
+               player.class = p.class
+               player.spiritLinkDamage = p.spiritLinkDamage or 0
+               player.friendlyFire = p.friendlyFire or 0
+               player.temperedDamage = p.temperedDamage or 0
+               player.interrupts = p.interrupts or 0
+               local spells = player.interruptSpells
+               if spells then wipe(spells) end
+               if p.interruptSpells then
+                       for spellId, s in pairs(p.interruptSpells) do
+                               spells[spellId] = { name = s.name, amount = s.amount, icon = s.icon }
+                       end
+               end
+               cm.historyUnits[guid] = p.name
+       end
 	if addon.CombatMeter.functions.UpdateBars then addon.CombatMeter.functions.UpdateBars() end
 end
 cm.functions.loadHistory = loadHistory
