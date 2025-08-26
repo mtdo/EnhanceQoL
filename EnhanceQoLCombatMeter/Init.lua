@@ -194,13 +194,14 @@ local function addGeneralFrame(container)
 	groupGroup:SetTitle(L["Groups"])
 	wrapper:AddChild(groupGroup)
 
-	local metricNames = {
-		dps = L["DPS"],
-		damageOverall = L["Damage Overall"],
-		healingPerFight = L["Healing Per Fight"],
-		healingOverall = L["Healing Overall"],
-	}
-	local metricOrder = { "dps", "damageOverall", "healingPerFight", "healingOverall" }
+        local metricNames = {
+                dps = L["DPS"],
+                damageOverall = L["Damage Overall"],
+                healingPerFight = L["Healing Per Fight"],
+                healingOverall = L["Healing Overall"],
+                interrupts = L["Interrupts"],
+        }
+        local metricOrder = { "dps", "damageOverall", "healingPerFight", "healingOverall", "interrupts" }
 
 	for i, cfg in ipairs(addon.db["combatMeterGroups"]) do
 		local idx = i
