@@ -1,5 +1,11 @@
 # Changelog
 
+## [4.9.1] – 2025-08-28
+
+### 🐛 Fixed
+
+- **Datapanel Currency:** Calculation issue to display _season maximum_
+
 ## [4.9.0] – 2025-08-27
 
 ### ✨ Added

@@ -12,15 +12,15 @@ local checkCurrencies
 local updateCurrency
 
 local function publish(s)
-        s = s or stream
-        if s then addon.DataHub:Publish(s, s.snapshot) end
+	s = s or stream
+	if s then addon.DataHub:Publish(s, s.snapshot) end
 end
 
 local function fullUpdate(s)
-        s = s or stream
-        if not s then return end
-        checkCurrencies(s)
-        publish(s)
+	s = s or stream
+	if not s then return end
+	checkCurrencies(s)
+	publish(s)
 end
 
 local function rebuildTracked()
@@ -202,157 +202,161 @@ local idToIndex = {} -- [currencyID] = index in parts
 local tooltipParts = {} -- [currencyID] = { lines }
 
 local function rebuildTooltip(s)
-        s = s or stream
-        if db.tooltipPerCurrency then
-                s.snapshot.tooltip = nil
-                s.snapshot.perCurrency = true
-                s.snapshot.showDescription = db.showDescription
-                return
-        end
-        local tips = {}
-        for _, id in ipairs(db.ids) do
-                local lines = tooltipParts[id]
-                if lines then
-                        for i = 1, #lines do
-                                tips[#tips + 1] = lines[i]
-                        end
-                end
-        end
-        if #tips > 0 then
-                if tips[#tips] == "" then tips[#tips] = nil end
-                tips[#tips + 1] = ""
-                tips[#tips + 1] = L["Right-Click for options"]
-                s.snapshot.tooltip = table.concat(tips, "\n")
-        else
-                s.snapshot.tooltip = L["Right-Click for options"]
-        end
-        s.snapshot.perCurrency = false
-        s.snapshot.showDescription = db.showDescription
+	s = s or stream
+	if db.tooltipPerCurrency then
+		s.snapshot.tooltip = nil
+		s.snapshot.perCurrency = true
+		s.snapshot.showDescription = db.showDescription
+		return
+	end
+	local tips = {}
+	for _, id in ipairs(db.ids) do
+		local lines = tooltipParts[id]
+		if lines then
+			for i = 1, #lines do
+				tips[#tips + 1] = lines[i]
+			end
+		end
+	end
+	if #tips > 0 then
+		if tips[#tips] == "" then tips[#tips] = nil end
+		tips[#tips + 1] = ""
+		tips[#tips + 1] = L["Right-Click for options"]
+		s.snapshot.tooltip = table.concat(tips, "\n")
+	else
+		s.snapshot.tooltip = L["Right-Click for options"]
+	end
+	s.snapshot.perCurrency = false
+	s.snapshot.showDescription = db.showDescription
 end
 
 checkCurrencies = function(s)
-        s = s or stream
-        ensureDB()
-        local size = db.fontSize or 14
-        local parts = {}
-        for k in pairs(idToIndex) do idToIndex[k] = nil end
-        for k in pairs(tooltipParts) do tooltipParts[k] = nil end
-        for _, id in ipairs(db.ids) do
-                local info = C_CurrencyInfo.GetCurrencyInfo(id)
-                if info then
-                        if not iconCache[id] and info.iconFileID then iconCache[id] = info.iconFileID end
-                        local icon = iconCache[id] or info.iconFileID
-                        local qty = info.quantity or 0
-                        local colorCode = HIGHLIGHT_FONT_COLOR_CODE
-                        if info.useTotalEarnedForMaxQty and info.maxQuantity and info.maxQuantity > 0 then
-                                local earnedRaw = info.trackedQuantity or info.totalEarned or 0
-                                if earnedRaw >= info.maxQuantity then colorCode = RED_FONT_COLOR_CODE end
-                        elseif info.maxQuantity and info.maxQuantity > 0 and qty >= info.maxQuantity then
-                                colorCode = RED_FONT_COLOR_CODE
-                        end
-                        parts[#parts + 1] = {
-                                id = id,
-                                text = ("|T%s:%d:%d:0:0|t %s%d%s"):format(icon or 0, size, size, colorCode, qty, FONT_COLOR_CODE_CLOSE),
-                        }
-                        idToIndex[id] = #parts
-                        if not db.tooltipPerCurrency then
-                                local lines = {}
-                                local color = ITEM_QUALITY_COLORS[info.quality]
-                                local name = (color and color.hex or "|cffffffff") .. (info.name or ("ID %d"):format(id)) .. "|r"
-                                lines[#lines + 1] = name
-                                if db.showDescription and info.description and info.description ~= "" then lines[#lines + 1] = info.description end
-                                lines[#lines + 1] = ""
-                                lines[#lines + 1] = CURRENCY_TOTAL:format(HIGHLIGHT_FONT_COLOR_CODE, BreakUpLargeNumbers(qty)) .. FONT_COLOR_CODE_CLOSE
-                                if info.useTotalEarnedForMaxQty then
-                                        local earnedRaw = info.trackedQuantity or info.totalEarned or 0
-                                        local earned = BreakUpLargeNumbers(earnedRaw)
-                                        if info.maxQuantity and info.maxQuantity > 0 then
-                                                local colorCode2 = earnedRaw >= info.maxQuantity and RED_FONT_COLOR_CODE or HIGHLIGHT_FONT_COLOR_CODE
-                                                lines[#lines + 1] = CURRENCY_SEASON_TOTAL_MAXIMUM:format(colorCode2, earned, BreakUpLargeNumbers(info.maxQuantity)) .. FONT_COLOR_CODE_CLOSE
-                                        else
-                                                lines[#lines + 1] = CURRENCY_SEASON_TOTAL:format(HIGHLIGHT_FONT_COLOR_CODE, earned) .. FONT_COLOR_CODE_CLOSE
-                                        end
-                                elseif info.maxQuantity and info.maxQuantity > 0 then
-                                        local colorCode2 = qty >= info.maxQuantity and RED_FONT_COLOR_CODE or HIGHLIGHT_FONT_COLOR_CODE
-                                        lines[#lines + 1] = CURRENCY_TOTAL_CAP:format(colorCode2, BreakUpLargeNumbers(qty), BreakUpLargeNumbers(info.maxQuantity)) .. FONT_COLOR_CODE_CLOSE
-                                end
-                                lines[#lines + 1] = ""
-                                tooltipParts[id] = lines
-                        end
-                end
-        end
-        if #parts > 0 then
-                s.snapshot.parts = parts
-                s.snapshot.text = nil
-        else
-                s.snapshot.parts = nil
-                s.snapshot.text = L["Right-Click for options"]
-        end
-        s.snapshot.fontSize = size
-        rebuildTooltip(s)
+	s = s or stream
+	ensureDB()
+	local size = db.fontSize or 14
+	local parts = {}
+	for k in pairs(idToIndex) do
+		idToIndex[k] = nil
+	end
+	for k in pairs(tooltipParts) do
+		tooltipParts[k] = nil
+	end
+	for _, id in ipairs(db.ids) do
+		local info = C_CurrencyInfo.GetCurrencyInfo(id)
+		if info then
+			if not iconCache[id] and info.iconFileID then iconCache[id] = info.iconFileID end
+			local icon = iconCache[id] or info.iconFileID
+			local qty = info.quantity or 0
+			local colorCode = HIGHLIGHT_FONT_COLOR_CODE
+			if info.useTotalEarnedForMaxQty and info.maxQuantity and info.maxQuantity > 0 then
+				local earnedRaw = info.totalEarned or info.trackedQuantity or 0
+				if earnedRaw >= info.maxQuantity then colorCode = RED_FONT_COLOR_CODE end
+			elseif info.maxQuantity and info.maxQuantity > 0 and qty >= info.maxQuantity then
+				colorCode = RED_FONT_COLOR_CODE
+			end
+			parts[#parts + 1] = {
+				id = id,
+				text = ("|T%s:%d:%d:0:0|t %s%d%s"):format(icon or 0, size, size, colorCode, qty, FONT_COLOR_CODE_CLOSE),
+			}
+			idToIndex[id] = #parts
+			if not db.tooltipPerCurrency then
+				local lines = {}
+				local color = ITEM_QUALITY_COLORS[info.quality]
+				local name = (color and color.hex or "|cffffffff") .. (info.name or ("ID %d"):format(id)) .. "|r"
+				lines[#lines + 1] = name
+				if db.showDescription and info.description and info.description ~= "" then lines[#lines + 1] = info.description end
+				lines[#lines + 1] = ""
+				lines[#lines + 1] = CURRENCY_TOTAL:format(HIGHLIGHT_FONT_COLOR_CODE, BreakUpLargeNumbers(qty)) .. FONT_COLOR_CODE_CLOSE
+				if info.useTotalEarnedForMaxQty then
+					local earnedRaw = info.trackedQuantity or info.totalEarned or 0
+					local earned = BreakUpLargeNumbers(earnedRaw)
+					if info.maxQuantity and info.maxQuantity > 0 then
+						local colorCode2 = earnedRaw >= info.maxQuantity and RED_FONT_COLOR_CODE or HIGHLIGHT_FONT_COLOR_CODE
+						lines[#lines + 1] = CURRENCY_SEASON_TOTAL_MAXIMUM:format(colorCode2, earned, BreakUpLargeNumbers(info.maxQuantity)) .. FONT_COLOR_CODE_CLOSE
+					else
+						lines[#lines + 1] = CURRENCY_SEASON_TOTAL:format(HIGHLIGHT_FONT_COLOR_CODE, earned) .. FONT_COLOR_CODE_CLOSE
+					end
+				elseif info.maxQuantity and info.maxQuantity > 0 then
+					local colorCode2 = qty >= info.maxQuantity and RED_FONT_COLOR_CODE or HIGHLIGHT_FONT_COLOR_CODE
+					lines[#lines + 1] = CURRENCY_TOTAL_CAP:format(colorCode2, BreakUpLargeNumbers(qty), BreakUpLargeNumbers(info.maxQuantity)) .. FONT_COLOR_CODE_CLOSE
+				end
+				lines[#lines + 1] = ""
+				tooltipParts[id] = lines
+			end
+		end
+	end
+	if #parts > 0 then
+		s.snapshot.parts = parts
+		s.snapshot.text = nil
+	else
+		s.snapshot.parts = nil
+		s.snapshot.text = L["Right-Click for options"]
+	end
+	s.snapshot.fontSize = size
+	rebuildTooltip(s)
 end
 
 updateCurrency = function(s, id)
-        s = s or stream
-        ensureDB()
-        local idx = idToIndex[id]
-        if not idx then
-                fullUpdate(s)
-                return
-        end
-        local info = C_CurrencyInfo.GetCurrencyInfo(id)
-        if not info then return end
-        if not iconCache[id] and info.iconFileID then iconCache[id] = info.iconFileID end
-        local icon = iconCache[id] or info.iconFileID
-        local qty = info.quantity or 0
-        local colorCode = HIGHLIGHT_FONT_COLOR_CODE
-        if info.useTotalEarnedForMaxQty and info.maxQuantity and info.maxQuantity > 0 then
-                local earnedRaw = info.trackedQuantity or info.totalEarned or 0
-                if earnedRaw >= info.maxQuantity then colorCode = RED_FONT_COLOR_CODE end
-        elseif info.maxQuantity and info.maxQuantity > 0 and qty >= info.maxQuantity then
-                colorCode = RED_FONT_COLOR_CODE
-        end
-        local size = db.fontSize or 14
-        s.snapshot.parts[idx].text = ("|T%s:%d:%d:0:0|t %s%d%s"):format(icon or 0, size, size, colorCode, qty, FONT_COLOR_CODE_CLOSE)
-        if not db.tooltipPerCurrency then
-                local lines = {}
-                local color = ITEM_QUALITY_COLORS[info.quality]
-                local name = (color and color.hex or "|cffffffff") .. (info.name or ("ID %d"):format(id)) .. "|r"
-                lines[#lines + 1] = name
-                if db.showDescription and info.description and info.description ~= "" then lines[#lines + 1] = info.description end
-                lines[#lines + 1] = ""
-                lines[#lines + 1] = CURRENCY_TOTAL:format(HIGHLIGHT_FONT_COLOR_CODE, BreakUpLargeNumbers(qty)) .. FONT_COLOR_CODE_CLOSE
-                if info.useTotalEarnedForMaxQty then
-                        local earnedRaw = info.trackedQuantity or info.totalEarned or 0
-                        local earned = BreakUpLargeNumbers(earnedRaw)
-                        if info.maxQuantity and info.maxQuantity > 0 then
-                                local colorCode2 = earnedRaw >= info.maxQuantity and RED_FONT_COLOR_CODE or HIGHLIGHT_FONT_COLOR_CODE
-                                lines[#lines + 1] = CURRENCY_SEASON_TOTAL_MAXIMUM:format(colorCode2, earned, BreakUpLargeNumbers(info.maxQuantity)) .. FONT_COLOR_CODE_CLOSE
-                        else
-                                lines[#lines + 1] = CURRENCY_SEASON_TOTAL:format(HIGHLIGHT_FONT_COLOR_CODE, earned) .. FONT_COLOR_CODE_CLOSE
-                        end
-                elseif info.maxQuantity and info.maxQuantity > 0 then
-                        local colorCode2 = qty >= info.maxQuantity and RED_FONT_COLOR_CODE or HIGHLIGHT_FONT_COLOR_CODE
-                        lines[#lines + 1] = CURRENCY_TOTAL_CAP:format(colorCode2, BreakUpLargeNumbers(qty), BreakUpLargeNumbers(info.maxQuantity)) .. FONT_COLOR_CODE_CLOSE
-                end
-                lines[#lines + 1] = ""
-                tooltipParts[id] = lines
-                rebuildTooltip(s)
-        end
-        publish(s)
+	s = s or stream
+	ensureDB()
+	local idx = idToIndex[id]
+	if not idx then
+		fullUpdate(s)
+		return
+	end
+	local info = C_CurrencyInfo.GetCurrencyInfo(id)
+	if not info then return end
+	if not iconCache[id] and info.iconFileID then iconCache[id] = info.iconFileID end
+	local icon = iconCache[id] or info.iconFileID
+	local qty = info.quantity or 0
+	local colorCode = HIGHLIGHT_FONT_COLOR_CODE
+	if info.useTotalEarnedForMaxQty and info.maxQuantity and info.maxQuantity > 0 then
+		local earnedRaw = info.trackedQuantity or info.totalEarned or 0
+		if earnedRaw >= info.maxQuantity then colorCode = RED_FONT_COLOR_CODE end
+	elseif info.maxQuantity and info.maxQuantity > 0 and qty >= info.maxQuantity then
+		colorCode = RED_FONT_COLOR_CODE
+	end
+	local size = db.fontSize or 14
+	s.snapshot.parts[idx].text = ("|T%s:%d:%d:0:0|t %s%d%s"):format(icon or 0, size, size, colorCode, qty, FONT_COLOR_CODE_CLOSE)
+	if not db.tooltipPerCurrency then
+		local lines = {}
+		local color = ITEM_QUALITY_COLORS[info.quality]
+		local name = (color and color.hex or "|cffffffff") .. (info.name or ("ID %d"):format(id)) .. "|r"
+		lines[#lines + 1] = name
+		if db.showDescription and info.description and info.description ~= "" then lines[#lines + 1] = info.description end
+		lines[#lines + 1] = ""
+		lines[#lines + 1] = CURRENCY_TOTAL:format(HIGHLIGHT_FONT_COLOR_CODE, BreakUpLargeNumbers(qty)) .. FONT_COLOR_CODE_CLOSE
+		if info.useTotalEarnedForMaxQty then
+			local earnedRaw = info.trackedQuantity or info.totalEarned or 0
+			local earned = BreakUpLargeNumbers(earnedRaw)
+			if info.maxQuantity and info.maxQuantity > 0 then
+				local colorCode2 = earnedRaw >= info.maxQuantity and RED_FONT_COLOR_CODE or HIGHLIGHT_FONT_COLOR_CODE
+				lines[#lines + 1] = CURRENCY_SEASON_TOTAL_MAXIMUM:format(colorCode2, earned, BreakUpLargeNumbers(info.maxQuantity)) .. FONT_COLOR_CODE_CLOSE
+			else
+				lines[#lines + 1] = CURRENCY_SEASON_TOTAL:format(HIGHLIGHT_FONT_COLOR_CODE, earned) .. FONT_COLOR_CODE_CLOSE
+			end
+		elseif info.maxQuantity and info.maxQuantity > 0 then
+			local colorCode2 = qty >= info.maxQuantity and RED_FONT_COLOR_CODE or HIGHLIGHT_FONT_COLOR_CODE
+			lines[#lines + 1] = CURRENCY_TOTAL_CAP:format(colorCode2, BreakUpLargeNumbers(qty), BreakUpLargeNumbers(info.maxQuantity)) .. FONT_COLOR_CODE_CLOSE
+		end
+		lines[#lines + 1] = ""
+		tooltipParts[id] = lines
+		rebuildTooltip(s)
+	end
+	publish(s)
 end
 
 local provider = {
 	id = "currency",
 	version = 1,
 	title = "Currencies",
-        update = checkCurrencies,
-        events = {
-                PLAYER_LOGIN = function(s) fullUpdate(s) end,
-                CURRENCY_DISPLAY_UPDATE = function(s, _, currencyType)
-                        if tracked[currencyType] then updateCurrency(s, currencyType) end
-                end,
-        },
+	update = checkCurrencies,
+	events = {
+		PLAYER_LOGIN = function(s) fullUpdate(s) end,
+		CURRENCY_DISPLAY_UPDATE = function(s, _, currencyType)
+			if tracked[currencyType] then updateCurrency(s, currencyType) end
+		end,
+	},
 	OnClick = function(_, btn)
 		if btn == "RightButton" then createAceWindow() end
 	end,
