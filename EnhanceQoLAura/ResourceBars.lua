@@ -24,6 +24,7 @@ local getAnchor
 local lastTabIndex
 local lastBarSelectionPerSpec = {}
 local BAR_STACK_SPACING = -4
+local SEPARATOR_THICKNESS = 1
 
 function addon.Aura.functions.addResourceFrame(container)
 	local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
@@ -271,6 +272,7 @@ function addon.Aura.functions.addResourceFrame(container)
 							height = addon.db.personalResourceBarManaHeight,
 							textStyle = pType == "MANA" and "PERCENT" or "CURMAX",
 							fontSize = 16,
+							showSeparator = false,
 						}
 					dbSpec[pType].anchor = dbSpec[pType].anchor or {}
 				end
@@ -416,20 +418,32 @@ function addon.Aura.functions.addResourceFrame(container)
 				end)
 				groupConfig:AddChild(sh)
 
-				local tList = { PERCENT = "Percentage", CURMAX = "Current/Max", CURRENT = "Current" }
-				local tOrder = { "PERCENT", "CURMAX", "CURRENT" }
-				local drop = addon.functions.createDropdownAce("Text", tList, tOrder, function(self, _, key)
-					cfg.textStyle = key
-					addon.Aura.ResourceBars.Refresh()
-				end)
-				drop:SetValue(curStyle)
-				groupConfig:AddChild(drop)
+				if sel ~= "RUNES" then
+					local tList = { PERCENT = "Percentage", CURMAX = "Current/Max", CURRENT = "Current" }
+					local tOrder = { "PERCENT", "CURMAX", "CURRENT" }
+					local drop = addon.functions.createDropdownAce("Text", tList, tOrder, function(self, _, key)
+						cfg.textStyle = key
+						addon.Aura.ResourceBars.Refresh()
+					end)
+					drop:SetValue(curStyle)
+					groupConfig:AddChild(drop)
 
-				local sFont = addon.functions.createSliderAce("Text Size", curFont, 6, 64, 1, function(self, _, val)
-					cfg.fontSize = val
-					addon.Aura.ResourceBars.Refresh()
-				end)
-				groupConfig:AddChild(sFont)
+					local sFont = addon.functions.createSliderAce("Text Size", curFont, 6, 64, 1, function(self, _, val)
+						cfg.fontSize = val
+						addon.Aura.ResourceBars.Refresh()
+					end)
+					groupConfig:AddChild(sFont)
+				end
+
+				-- Separator toggle for eligible resource types
+				local eligible = addon.Aura.ResourceBars.separatorEligible
+				if eligible and eligible[sel] then
+					local cbSep = addon.functions.createCheckboxAce("Show separator", cfg.showSeparator == true, function(self, _, val)
+						cfg.showSeparator = val and true or false
+						addon.Aura.ResourceBars.Refresh()
+					end)
+					groupConfig:AddChild(cbSep)
+				end
 
 				addAnchorOptions(sel, groupConfig, cfg.anchor, frames)
 			end
@@ -646,9 +660,9 @@ local powertypeClasses = {
 		[2] = { MAIN = "FURY" },
 	},
 	DEATHKNIGHT = {
-		[1] = { MAIN = "RUNIC_POWER" },
-		[2] = { MAIN = "RUNIC_POWER" },
-		[3] = { MAIN = "RUNIC_POWER" },
+		[1] = { MAIN = "RUNIC_POWER", RUNES = true },
+		[2] = { MAIN = "RUNIC_POWER", RUNES = true },
+		[3] = { MAIN = "RUNIC_POWER", RUNES = true },
 	},
 	PALADIN = {
 		[1] = { MAIN = "HOLY_POWER", MANA = true },
@@ -710,6 +724,7 @@ local classPowerTypes = {
 	"FURY",
 	"COMBO_POINTS",
 	"RUNIC_POWER",
+    "RUNES",
 	"SOUL_SHARDS",
 	"LUNAR_POWER",
 	"HOLY_POWER",
@@ -722,6 +737,15 @@ local classPowerTypes = {
 
 ResourceBars.powertypeClasses = powertypeClasses
 ResourceBars.classPowerTypes = classPowerTypes
+ResourceBars.separatorEligible = {
+    ENERGY = true,
+    HOLY_POWER = true,
+    SOUL_SHARDS = true,
+    ESSENCE = true,
+    ARCANE_CHARGES = true,
+    CHI = true,
+    RUNES = true,
+}
 
 function getBarSettings(pType)
 	local class = addon.variables.unitClass
@@ -733,10 +757,29 @@ function getBarSettings(pType)
 end
 
 local function updatePowerBar(type)
-	if powerbar[type] and powerbar[type]:IsVisible() then
-		local pType = powerTypeEnums[type:gsub("_", "")]
-		local maxPower = UnitPowerMax("player", pType)
-		local curPower = UnitPower("player", pType)
+    if powerbar[type] and powerbar[type]:IsVisible() then
+        -- Special handling for DK Runes: aggregate ready + fractional recharge
+        if type == "RUNES" then
+            local maxRunes = 6
+            local total = 0
+            for i = 1, maxRunes do
+                local start, duration, runeReady = GetRuneCooldown(i)
+                if runeReady then
+                    total = total + 1
+                elseif start and duration and duration > 0 then
+                    local prog = (GetTime() - start) / duration
+                    if prog > 0 then total = total + math.min(1, math.max(0, prog)) end
+                end
+            end
+            local bar = powerbar[type]
+            bar:SetMinMaxValues(0, maxRunes)
+            bar:SetValue(total)
+            if bar.text then bar.text:SetText("") end
+            return
+        end
+        local pType = powerTypeEnums[type:gsub("_", "")]
+        local maxPower = UnitPowerMax("player", pType)
+        local curPower = UnitPower("player", pType)
 
 		local settings = getBarSettings(type)
 		local style = settings and settings.textStyle
@@ -758,11 +801,68 @@ local function updatePowerBar(type)
 			text = curPower .. " / " .. maxPower
 		end
 
-		local bar = powerbar[type]
-		bar:SetMinMaxValues(0, maxPower)
-		bar:SetValue(curPower)
-		if bar.text then bar.text:SetText(text) end
-	end
+        local bar = powerbar[type]
+        bar:SetMinMaxValues(0, maxPower)
+        bar:SetValue(curPower)
+        if bar.text then bar.text:SetText(text) end
+    end
+end
+
+-- Create/update separator ticks for a given bar type if enabled
+local function updateBarSeparators(pType)
+    local eligible = ResourceBars.separatorEligible
+    if not eligible or not eligible[pType] then return end
+    local bar = powerbar[pType]
+    if not bar then return end
+    local cfg = getBarSettings(pType)
+    if not (cfg and cfg.showSeparator) then
+        if bar.separatorMarks then
+            for _, tx in ipairs(bar.separatorMarks) do tx:Hide() end
+        end
+        return
+    end
+
+    local segments
+    if pType == "ENERGY" then
+        segments = 10
+    elseif pType == "RUNES" then
+        segments = 6
+    else
+        local enumId = powerTypeEnums[pType:gsub("_", "")]
+        segments = enumId and UnitPowerMax("player", enumId) or 0
+    end
+    if not segments or segments < 2 then
+        -- Nothing to separate
+        if bar.separatorMarks then for _, tx in ipairs(bar.separatorMarks) do tx:Hide() end end
+        return
+    end
+
+    bar.separatorMarks = bar.separatorMarks or {}
+    local needed = segments - 1
+    local w = math.max(1, bar:GetWidth() or 0)
+    local h = math.max(1, bar:GetHeight() or 0)
+
+    -- Ensure we have enough textures
+    for i = #bar.separatorMarks + 1, needed do
+        local tx = bar:CreateTexture(nil, "OVERLAY")
+        tx:SetColorTexture(1, 1, 1, 0.5)
+        bar.separatorMarks[i] = tx
+    end
+    -- Position visible separators
+    for i = 1, needed do
+        local tx = bar.separatorMarks[i]
+        tx:ClearAllPoints()
+        local frac = i / segments
+        local x = math.floor(w * frac + 0.5)
+        local half = math.floor(SEPARATOR_THICKNESS * 0.5)
+        tx:SetPoint("LEFT", bar, "LEFT", x - math.max(0, half), 0)
+        tx:SetSize(SEPARATOR_THICKNESS, h)
+        tx:Show()
+    end
+    -- Hide extras
+    for i = needed + 1, #bar.separatorMarks do
+        bar.separatorMarks[i]:Hide()
+    end
 end
 
 local function createPowerBar(type, anchor)
@@ -784,9 +884,9 @@ local function createPowerBar(type, anchor)
 	-- Anchor handling: only use fallback anchor if no explicit DB anchor exists
 	local a = getAnchor(type, addon.variables.unitSpec)
 	local allowMove = true
-	if a.point then
-		local rel, looped = resolveAnchor(a, type)
-		if looped and (a.relativeFrame or "UIParent") ~= "UIParent" then
+    if a.point then
+        local rel, looped = resolveAnchor(a, type)
+        if looped and (a.relativeFrame or "UIParent") ~= "UIParent" then
 			-- Loop fallback: recenter on UIParent
 			local pw = UIParent and UIParent.GetWidth and UIParent:GetWidth() or 0
 			local ph = UIParent and UIParent.GetHeight and UIParent:GetHeight() or 0
@@ -798,9 +898,9 @@ local function createPowerBar(type, anchor)
 			rel = UIParent
 		end
 		if rel and rel.GetName and rel:GetName() ~= "UIParent" then allowMove = false end
-		bar:ClearAllPoints()
-		bar:SetPoint(a.point, rel or UIParent, a.relativePoint or a.point, a.x or 0, a.y or 0)
-	elseif anchor then
+        bar:ClearAllPoints()
+        bar:SetPoint(a.point, rel or UIParent, a.relativePoint or a.point, a.x or 0, a.y or 0)
+    elseif anchor then
 		-- Default stack below provided anchor and persist default anchor in DB
 		bar:ClearAllPoints()
 		bar:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, BAR_STACK_SPACING)
@@ -824,10 +924,15 @@ local function createPowerBar(type, anchor)
 	bar:SetBackdropColor(0, 0, 0, 0.8)
 	bar:SetBackdropBorderColor(0, 0, 0, 0)
 
-	local fontSize = settings and settings.fontSize or 16
-	if not bar.text then bar.text = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight") end
-	bar.text:SetFont(addon.variables.defaultFont, fontSize, "OUTLINE")
-	bar.text:SetPoint("CENTER", bar, "CENTER", 3, 0)
+    local fontSize = settings and settings.fontSize or 16
+    if type ~= "RUNES" then
+        if not bar.text then bar.text = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight") end
+        bar.text:SetFont(addon.variables.defaultFont, fontSize, "OUTLINE")
+        bar.text:SetPoint("CENTER", bar, "CENTER", 3, 0)
+        bar.text:Show()
+    else
+        if bar.text then bar.text:SetText(""); bar.text:Hide() end
+    end
 	bar:SetStatusBarColor(getPowerBarColor(type))
 
 	-- Dragging only when not anchored to another EQOL bar
@@ -863,14 +968,16 @@ local function createPowerBar(type, anchor)
 		end
 	end)
 
-	powerbar[type] = bar
-	bar:Show()
-	updatePowerBar(type)
+    powerbar[type] = bar
+    bar:Show()
+    updatePowerBar(type)
+    updateBarSeparators(type)
 
 	-- Ensure dependents re-anchor when this bar changes size
-	bar:SetScript("OnSizeChanged", function()
-		if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.ReanchorDependentsOf then addon.Aura.ResourceBars.ReanchorDependentsOf("EQOL" .. type .. "Bar") end
-	end)
+    bar:SetScript("OnSizeChanged", function()
+        if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.ReanchorDependentsOf then addon.Aura.ResourceBars.ReanchorDependentsOf("EQOL" .. type .. "Bar") end
+        updateBarSeparators(type)
+    end)
 end
 
 local eventsToRegister = {
@@ -881,6 +988,7 @@ local eventsToRegister = {
 	"UNIT_POWER_FREQUENT",
 	"UNIT_DISPLAYPOWER",
 	"UNIT_MAXPOWER",
+    "RUNE_POWER_UPDATE",
 }
 
 local function setPowerbars()
@@ -1002,15 +1110,18 @@ local function eventHandler(self, event, unit, arg1)
 		C_Timer.After(0.05, function()
 			if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.ReanchorAll then addon.Aura.ResourceBars.ReanchorAll() end
 		end)
-	elseif (event == "UNIT_MAXHEALTH" or event == "UNIT_HEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED") and healthBar and healthBar:IsShown() then
-		updateHealthBar()
-	elseif event == "UNIT_POWER_UPDATE" and powerbar[arg1] and powerbar[arg1]:IsShown() and not powerfrequent[arg1] then
-		updatePowerBar(arg1)
-	elseif event == "UNIT_POWER_FREQUENT" and powerbar[arg1] and powerbar[arg1]:IsShown() and powerfrequent[arg1] then
-		updatePowerBar(arg1)
-	elseif event == "UNIT_MAXPOWER" and powerbar[arg1] and powerbar[arg1]:IsShown() then
-		updatePowerBar(arg1)
-	end
+elseif (event == "UNIT_MAXHEALTH" or event == "UNIT_HEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED") and healthBar and healthBar:IsShown() then
+    updateHealthBar()
+elseif event == "UNIT_POWER_UPDATE" and powerbar[arg1] and powerbar[arg1]:IsShown() and not powerfrequent[arg1] then
+    updatePowerBar(arg1)
+elseif event == "UNIT_POWER_FREQUENT" and powerbar[arg1] and powerbar[arg1]:IsShown() and powerfrequent[arg1] then
+    updatePowerBar(arg1)
+    elseif event == "UNIT_MAXPOWER" and powerbar[arg1] and powerbar[arg1]:IsShown() then
+        updatePowerBar(arg1)
+        updateBarSeparators(arg1)
+    elseif event == "RUNE_POWER_UPDATE" then
+        if powerbar["RUNES"] and powerbar["RUNES"]:IsShown() then updatePowerBar("RUNES") end
+    end
 end
 
 function ResourceBars.EnableResourceBars()
@@ -1018,9 +1129,13 @@ function ResourceBars.EnableResourceBars()
 		frameAnchor = CreateFrame("Frame")
 		addon.Aura.anchorFrame = frameAnchor
 	end
-	for _, event in ipairs(eventsToRegister) do
-		frameAnchor:RegisterUnitEvent(event, "player")
-	end
+    for _, event in ipairs(eventsToRegister) do
+        if event == "RUNE_POWER_UPDATE" then
+            frameAnchor:RegisterEvent(event)
+        else
+            frameAnchor:RegisterUnitEvent(event, "player")
+        end
+    end
 	frameAnchor:RegisterEvent("PLAYER_ENTERING_WORLD")
 	frameAnchor:RegisterEvent("ACTIVE_PLAYER_SPECIALIZATION_CHANGED")
 	frameAnchor:RegisterEvent("TRAIT_CONFIG_UPDATED")
@@ -1123,13 +1238,15 @@ function ResourceBars.SetPowerBarSize(w, h, pType)
         if powerbar[pType] then
             powerbar[pType]:SetSize(w, h)
             changed[getFrameName(pType)] = true
+            updateBarSeparators(pType)
         end
-	else
-		for t, bar in pairs(powerbar) do
-			bar:SetSize(w, h)
-			changed[getFrameName(t)] = true
-		end
-	end
+    else
+        for t, bar in pairs(powerbar) do
+            bar:SetSize(w, h)
+            changed[getFrameName(t)] = true
+            updateBarSeparators(t)
+        end
+    end
 
 	local class = addon.variables.unitClass
 	local spec = addon.variables.unitSpec
@@ -1196,34 +1313,35 @@ function ResourceBars.Refresh()
 		healthBar:ClearAllPoints()
 		healthBar:SetPoint(a.point or "TOPLEFT", rel, a.relativePoint or a.point or "TOPLEFT", a.x or 0, a.y or 0)
 	end
-	for pType, bar in pairs(powerbar) do
-		if bar then
-			local a = getAnchor(pType, addon.variables.unitSpec)
-			if (a.relativeFrame or "UIParent") == "UIParent" then
-				a.point = "TOPLEFT"
-				a.relativePoint = "TOPLEFT"
-			end
-			local rel, looped = resolveAnchor(a, pType)
-			if looped and (a.relativeFrame or "UIParent") ~= "UIParent" then
-				local pw = UIParent and UIParent.GetWidth and UIParent:GetWidth() or 0
-				local ph = UIParent and UIParent.GetHeight and UIParent:GetHeight() or 0
-				local w = bar:GetWidth() or (addon.db.personalResourceBarManaWidth or 0)
-				local h = bar:GetHeight() or (addon.db.personalResourceBarManaHeight or 0)
-				a.point = "TOPLEFT"
-				a.relativeFrame = "UIParent"
-				a.relativePoint = "TOPLEFT"
-				a.x = (pw - w) / 2
-				a.y = (h - ph) / 2
-				rel = UIParent
-			end
-			bar:ClearAllPoints()
-			bar:SetPoint(a.point or "TOPLEFT", rel, a.relativePoint or a.point or "TOPLEFT", a.x or 0, a.y or 0)
-			-- Update movability based on anchor target (only movable when relative to UIParent)
-			local isUI = (a.relativeFrame or "UIParent") == "UIParent"
-			bar:SetMovable(isUI)
-			bar:EnableMouse(isUI)
-		end
-	end
+    for pType, bar in pairs(powerbar) do
+        if bar then
+            local a = getAnchor(pType, addon.variables.unitSpec)
+            if (a.relativeFrame or "UIParent") == "UIParent" then
+                a.point = "TOPLEFT"
+                a.relativePoint = "TOPLEFT"
+            end
+            local rel, looped = resolveAnchor(a, pType)
+            if looped and (a.relativeFrame or "UIParent") ~= "UIParent" then
+                local pw = UIParent and UIParent.GetWidth and UIParent:GetWidth() or 0
+                local ph = UIParent and UIParent.GetHeight and UIParent:GetHeight() or 0
+                local w = bar:GetWidth() or (addon.db.personalResourceBarManaWidth or 0)
+                local h = bar:GetHeight() or (addon.db.personalResourceBarManaHeight or 0)
+                a.point = "TOPLEFT"
+                a.relativeFrame = "UIParent"
+                a.relativePoint = "TOPLEFT"
+                a.x = (pw - w) / 2
+                a.y = (h - ph) / 2
+                rel = UIParent
+            end
+            bar:ClearAllPoints()
+            bar:SetPoint(a.point or "TOPLEFT", rel, a.relativePoint or a.point or "TOPLEFT", a.x or 0, a.y or 0)
+            -- Update movability based on anchor target (only movable when relative to UIParent)
+            local isUI = (a.relativeFrame or "UIParent") == "UIParent"
+            bar:SetMovable(isUI)
+            bar:EnableMouse(isUI)
+            updateBarSeparators(pType)
+        end
+    end
 	-- Apply text font sizes without forcing full rebuild
 	local class = addon.variables.unitClass
 	local spec = addon.variables.unitSpec
