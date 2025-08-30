@@ -1401,7 +1401,6 @@ local eventsToRegister = {
 	"UNIT_POWER_FREQUENT",
 	"UNIT_DISPLAYPOWER",
 	"UNIT_MAXPOWER",
-	"RUNE_POWER_UPDATE",
 	"UPDATE_SHAPESHIFT_FORM",
 }
 
@@ -1601,7 +1600,7 @@ function ResourceBars.EnableResourceBars()
 	end
 	for _, event in ipairs(eventsToRegister) do
 		-- Register unit vs non-unit events correctly
-		if event == "RUNE_POWER_UPDATE" or event == "UPDATE_SHAPESHIFT_FORM" then
+		if event == "UPDATE_SHAPESHIFT_FORM" then
 			frameAnchor:RegisterEvent(event)
 		else
 			frameAnchor:RegisterUnitEvent(event, "player")
@@ -1621,6 +1620,7 @@ function ResourceBars.EnableResourceBars()
         if setPowerbars then setPowerbars() end
         if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.ReanchorAll then addon.Aura.ResourceBars.ReanchorAll() end
     end
+    if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.UpdateRuneEventRegistration then addon.Aura.ResourceBars.UpdateRuneEventRegistration() end
 end
 
 function ResourceBars.DisableResourceBars()
