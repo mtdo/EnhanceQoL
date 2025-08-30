@@ -1613,6 +1613,15 @@ local function eventHandler(self, event, unit, arg1)
 				if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.UpdateRuneEventRegistration then addon.Aura.ResourceBars.UpdateRuneEventRegistration() end
 			end)
 		end)
+	elseif event == "TRAIT_CONFIG_UPDATED" then
+		C_Timer.After(0.2, function()
+			setPowerbars()
+			-- Re-anchor once all bars exist, in case of inter-bar dependencies
+			C_Timer.After(0.05, function()
+				if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.ReanchorAll then addon.Aura.ResourceBars.ReanchorAll() end
+				if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.UpdateRuneEventRegistration then addon.Aura.ResourceBars.UpdateRuneEventRegistration() end
+			end)
+		end)
 	elseif event == "PLAYER_ENTERING_WORLD" then
 		updateHealthBar()
 		setPowerbars()
