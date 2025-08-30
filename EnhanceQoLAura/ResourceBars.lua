@@ -17,7 +17,7 @@ local UnitPower, UnitPowerMax, UnitHealth, UnitHealthMax, UnitGetTotalAbsorbs, G
 local CreateFrame = CreateFrame
 local PowerBarColor = PowerBarColor
 local floor, max, min, ceil = math.floor, math.max, math.min, math.ceil
-local tsort = table.sort
+local tinsert, tsort = table.insert, table.sort
 
 local frameAnchor
 local mainFrame
@@ -311,7 +311,7 @@ function addon.Aura.functions.addResourceFrame(container)
 		local specTabs = {}
 		for i = 1, C_SpecializationInfo.GetNumSpecializationsForClassID(addon.variables.unitClassID) do
 			local _, specName = GetSpecializationInfoForClassID(addon.variables.unitClassID, i)
-			table.insert(specTabs, { text = specName, value = i })
+			tinsert(specTabs, { text = specName, value = i })
 		end
 
 		local tabGroup = addon.functions.createContainer("TabGroup", "Flow")
@@ -396,14 +396,14 @@ function addon.Aura.functions.addResourceFrame(container)
 			local cfgList, cfgOrder = {}, {}
 			if dbSpec.HEALTH.enabled == true then
 				cfgList.HEALTH = HEALTH
-				table.insert(cfgOrder, "HEALTH")
+				tinsert(cfgOrder, "HEALTH")
 			end
 			for _, pType in ipairs(addon.Aura.ResourceBars.classPowerTypes) do
 				if available[pType] then
 					local cfg = dbSpec[pType]
 					if cfg and cfg.enabled == true then
 						cfgList[pType] = _G["POWER_TYPE_" .. pType] or _G[pType] or pType
-						table.insert(cfgOrder, pType)
+						tinsert(cfgOrder, pType)
 					end
 				end
 			end
@@ -2123,7 +2123,7 @@ function ResourceBars.ReanchorAll()
 	local spec = addon.variables.unitSpec
 	local types = {}
 	for pType, bar in pairs(powerbar) do
-		if bar then table.insert(types, pType) end
+		if bar then tinsert(types, pType) end
 	end
 
 	-- Build a graph of bar -> bar it anchors to (only EQOL bars)
@@ -2176,7 +2176,7 @@ function ResourceBars.ReanchorAll()
 			edges[node] = nil
 			visiting[node] = nil
 			visited[node] = true
-			table.insert(order, node)
+			tinsert(order, node)
 			return
 		end
 		visiting[node] = true
@@ -2184,7 +2184,7 @@ function ResourceBars.ReanchorAll()
 		if to then dfs(to) end
 		visiting[node] = nil
 		visited[node] = true
-		table.insert(order, node)
+		tinsert(order, node)
 	end
 
 	for _, pType in ipairs(types) do
