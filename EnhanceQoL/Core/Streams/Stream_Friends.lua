@@ -82,8 +82,15 @@ local myRealmKey = normalizeRealmName(myRealm)
 
 local function splitNameRealm(name)
     if not name then return nil, nil end
-    local base, realm = name:match("^([^%-]+)%-(.+)$")
+    -- Names coming from various APIs can sometimes end up with the realm
+    -- appended multiple times (e.g., "Name-Antonidas-Antonidas-...").
+    -- We always want:
+    --   base  = the character name (before the first hyphen)
+    --   realm = the final segment (after the last hyphen), if present
+    local base, remainder = name:match("^([^%-]+)%-(.+)$")
     if base then
+        -- Take only the last segment of the remainder as the realm
+        local realm = remainder:match("([^%-]+)$")
         return base, realm
     end
     return name, nil

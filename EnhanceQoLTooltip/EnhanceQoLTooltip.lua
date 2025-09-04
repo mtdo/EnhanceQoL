@@ -142,7 +142,13 @@ local function checkAdditionalTooltip(tooltip)
 			end
 		end
 	end
-	if addon.db["TooltipShowMythicScore"] and UnitCanAttack("player", "mouseover") == false and addon.Tooltip.variables.maxLevel == UnitLevel("mouseover") then
+	local showMythic = addon.db["TooltipShowMythicScore"] and UnitCanAttack("player", "mouseover") == false and addon.Tooltip.variables.maxLevel == UnitLevel("mouseover")
+	if showMythic and addon.db["TooltipMythicScoreRequireModifier"] then
+		local mod = addon.db["TooltipMythicScoreModifier"] or "SHIFT"
+		local modDown = (mod == "SHIFT" and IsShiftKeyDown()) or (mod == "ALT" and IsAltKeyDown()) or (mod == "CTRL" and IsControlKeyDown())
+		if not modDown then showMythic = false end
+	end
+	if showMythic then
 		local _, _, timeLimit
 		local rating = C_PlayerInfo.GetPlayerMythicPlusRatingSummary("mouseover")
 		if rating then
@@ -562,6 +568,8 @@ local function addUnitFrame(container)
 		{ text = L["TooltipUnitHideInCombat"], var = "TooltipUnitHideInCombat" },
 		{ text = L["TooltipUnitHideInDungeon"], var = "TooltipUnitHideInDungeon" },
 		{ text = L["TooltipShowMythicScore"]:format(DUNGEON_SCORE), var = "TooltipShowMythicScore" },
+		{ text = L["TooltipMythicScoreRequireModifier"]:format(DUNGEON_SCORE), var = "TooltipMythicScoreRequireModifier" },
+		{ text = L["TooltipUnitHideRightClickInstruction"]:format(UNIT_POPUP_RIGHT_CLICK), var = "TooltipUnitHideRightClickInstruction" },
 		{ text = L["TooltipShowClassColor"], var = "TooltipShowClassColor" },
 		{ text = L["TooltipShowNPCID"], var = "TooltipShowNPCID" },
 		-- { text = L["TooltipUnitShowHealthText"], var = "TooltipUnitShowHealthText" },
@@ -570,8 +578,30 @@ local function addUnitFrame(container)
 	table.sort(data, function(a, b) return a.text < b.text end)
 
 	for _, cbData in ipairs(data) do
-		local cbElement = addon.functions.createCheckboxAce(cbData.text, addon.db[cbData.var], function(self, _, value) addon.db[cbData.var] = value end)
+		local cbElement = addon.functions.createCheckboxAce(cbData.text, addon.db[cbData.var], function(self, _, value)
+			addon.db[cbData.var] = value
+			if cbData.text == L["TooltipMythicScoreRequireModifier"]:format(DUNGEON_SCORE) then
+				container:ReleaseChildren()
+				addUnitFrame(container)
+			end
+		end)
 		groupCore:AddChild(cbElement)
+	end
+
+	if addon.db["TooltipMythicScoreRequireModifier"] then
+		-- Dropdown for required modifier key (Shift/Alt/Ctrl) when gating Mythic score
+		local modList = { SHIFT = L["ModifierShift"], ALT = L["ModifierAlt"], CTRL = L["ModifierCtrl"] }
+		local list2, order2 = addon.functions.prepareListForDropdown(modList)
+		local dropMod = addon.functions.createDropdownAce(
+			L["TooltipMythicScoreModifier"]:format(DUNGEON_SCORE),
+			list2,
+			order2,
+			function(self, _, value) addon.db["TooltipMythicScoreModifier"] = self:GetValue() end
+		)
+		dropMod:SetValue(addon.db["TooltipMythicScoreModifier"])
+		dropMod:SetFullWidth(false)
+		dropMod:SetWidth(300)
+		groupCore:AddChild(dropMod)
 	end
 end
 
@@ -675,5 +705,27 @@ hooksecurefunc("QuestMapLogTitleButton_OnEnter", function(self)
 				GameTooltip:Show()
 			end
 		end
+	end
+end)
+
+local function IsUnitTooltip(tt)
+	local owner = tt and tt:GetOwner()
+	if not owner then return false end
+	return owner.unit or (owner.GetAttribute and owner:GetAttribute("unit"))
+end
+
+-- Optionally hide the default "Right-click for options" instruction on unit tooltips
+hooksecurefunc("GameTooltip_AddInstructionLine", function(tt, text)
+	if not addon.db["TooltipUnitHideRightClickInstruction"] then return end
+	if tt ~= GameTooltip then return end
+	if text ~= UNIT_POPUP_RIGHT_CLICK then return end
+	if not IsUnitTooltip(tt) then return end
+
+	local i = tt:NumLines()
+	local line = _G[tt:GetName() .. "TextLeft" .. i]
+	if line and line:GetText() == text then
+		line:SetText("")
+		line:Hide()
+		tt:Show()
 	end
 end)
