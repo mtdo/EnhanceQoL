@@ -37,6 +37,12 @@ local tonumber = tonumber
 local strsplit = strsplit
 local GetTime = GetTime
 local max = math.max
+local wipe, pairs, select = wipe, pairs, select
+local GetScenarioStepInfo = C_ScenarioInfo.GetScenarioStepInfo
+local GetCriteriaInfo = C_ScenarioInfo.GetCriteriaInfo
+local GetBestMapForUnit = C_Map.GetBestMapForUnit
+local UnitAffectingCombat = UnitAffectingCombat
+local UnitIsDeadOrGhost = UnitIsDeadOrGhost
 
 local function NPCIDFromGUID(guid)
 	-- guid: Creature-0-*-*-*-<npcId>-*
@@ -54,16 +60,16 @@ local function BuildWeightsFromMDT()
 	local okIsTeeming, isTeeming = pcall(function() return MDT.IsPresetTeeming and MDT:IsPresetTeeming(preset) end)
 	isTeeming = okIsTeeming and isTeeming or false
 
-	local sData = C_ScenarioInfo.GetScenarioStepInfo()
+	local sData = GetScenarioStepInfo()
 	if not sData or not sData.numCriteria then return end
 
 	for criteriaIndex = 1, sData.numCriteria do
-		local criteriaInfo = C_ScenarioInfo.GetCriteriaInfo(criteriaIndex)
+		local criteriaInfo = GetCriteriaInfo(criteriaIndex)
 		if criteriaInfo and criteriaInfo.isWeightedProgress and criteriaInfo.totalQuantity then MPlus.maxForces = criteriaInfo.totalQuantity end
 	end
 
 	if MPlus.maxForces and MPlus.maxForces > 0 then
-		local mapID = C_Map.GetBestMapForUnit("player")
+		local mapID = GetBestMapForUnit("player")
 		local mdtID = MDT.zoneIdToDungeonIdx[mapID]
 
 		local enemies = MDT.dungeonEnemies and MDT.dungeonEnemies[mdtID]
@@ -83,9 +89,7 @@ local function ResetPull()
 	wipe(MPlus.inPullByNPC)
 	MPlus.pullForces = 0
 	MPlus._lastActivity = GetTime()
-	if addon and addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.RefreshProgressLabel then
-		addon.MythicPlus.functions.RefreshProgressLabel()
-	end
+	if addon and addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.RefreshProgressLabel then addon.MythicPlus.functions.RefreshProgressLabel() end
 end
 
 -- Full recompute: used when weights change
@@ -96,9 +100,7 @@ function RecomputePullForces()
 		if perMob and data.guids then sum = sum + perMob * (data._count or 0) end
 	end
 	MPlus.pullForces = sum
-	if addon and addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.RefreshProgressLabel then
-		addon.MythicPlus.functions.RefreshProgressLabel()
-	end
+	if addon and addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.RefreshProgressLabel then addon.MythicPlus.functions.RefreshProgressLabel() end
 end
 
 local function AddGUIDToPull(guid)
@@ -120,9 +122,7 @@ local function AddGUIDToPull(guid)
 	-- Incremental update
 	MPlus.pullForces = MPlus.pullForces + perMob
 	MPlus._lastActivity = GetTime()
-	if addon and addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.RefreshProgressLabel then
-		addon.MythicPlus.functions.RefreshProgressLabel()
-	end
+	if addon and addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.RefreshProgressLabel then addon.MythicPlus.functions.RefreshProgressLabel() end
 end
 
 local function RemoveGUIDFromPull(guid)
@@ -138,9 +138,7 @@ local function RemoveGUIDFromPull(guid)
 		local perMob = MPlus.weights[npcId]
 		if perMob then MPlus.pullForces = max(0, MPlus.pullForces - perMob) end
 		MPlus._lastActivity = GetTime()
-		if addon and addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.RefreshProgressLabel then
-			addon.MythicPlus.functions.RefreshProgressLabel()
-		end
+		if addon and addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.RefreshProgressLabel then addon.MythicPlus.functions.RefreshProgressLabel() end
 	end
 	-- remove cache entry after using it
 	MPlus.inPullGUID[guid] = nil
@@ -167,9 +165,7 @@ local function isHostileNPC(flags) return band(flags or 0, MASK_HOSTILE) ~= 0 an
 
 -- Track whether the player (or pet) is involved in a CLEU event
 local MASK_MINE = COMBATLOG_OBJECT_AFFILIATION_MINE
-local function isMineInvolved(srcFlags, dstFlags)
-	return band(srcFlags or 0, MASK_MINE) ~= 0 or band(dstFlags or 0, MASK_MINE) ~= 0
-end
+local function isMineInvolved(srcFlags, dstFlags) return band(srcFlags or 0, MASK_MINE) ~= 0 or band(dstFlags or 0, MASK_MINE) ~= 0 end
 
 -- While out of combat, accept only clear combat actions to avoid OOC noise
 local allowedSubOOC = {
@@ -192,17 +188,17 @@ local allowedSub = {
 }
 
 local function SetCombatLogActive(active)
-    if active then
-        f:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-        f:RegisterEvent("PLAYER_REGEN_ENABLED")
-        f:RegisterEvent("PLAYER_DEAD")
-        f:RegisterEvent("PLAYER_UNGHOST")
-    else
-        f:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-        f:UnregisterEvent("PLAYER_REGEN_ENABLED")
-        f:UnregisterEvent("PLAYER_DEAD")
-        f:UnregisterEvent("PLAYER_UNGHOST")
-    end
+	if active then
+		f:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+		f:RegisterEvent("PLAYER_REGEN_ENABLED")
+		f:RegisterEvent("PLAYER_DEAD")
+		f:RegisterEvent("PLAYER_UNGHOST")
+	else
+		f:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+		f:UnregisterEvent("PLAYER_REGEN_ENABLED")
+		f:UnregisterEvent("PLAYER_DEAD")
+		f:UnregisterEvent("PLAYER_UNGHOST")
+	end
 end
 
 local function IsInKeystoneRun()
@@ -225,16 +221,12 @@ local function ActivateRun()
 	if not MPlus._watchdogTicker then
 		MPlus._watchdogTicker = C_Timer.NewTicker(0.5, function()
 			if not MPlus.active then return end
-			if addon and addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.RefreshProgressLabel then
-				addon.MythicPlus.functions.RefreshProgressLabel()
-			end
+			if addon and addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.RefreshProgressLabel then addon.MythicPlus.functions.RefreshProgressLabel() end
 			if (MPlus.pullForces or 0) <= 0 then return end
 			local engaged = UnitAffectingCombat("player") and not UnitIsDeadOrGhost("player")
 			if engaged then return end
 			local last = MPlus._lastActivity or 0
-			if GetTime() - last > 1.5 then
-				ResetPull()
-			end
+			if GetTime() - last > 1.5 then ResetPull() end
 		end)
 	end
 end
@@ -316,28 +308,28 @@ f:SetScript("OnEvent", function(_, ev, arg1)
 		return
 	end
 
-    if ev == "COMBAT_LOG_EVENT_UNFILTERED" then
-        if not MDT or not MPlus.active then return end
-        -- Late MDT init guard: try again with backoff if weights not ready
-        if not MPlus._weightsReady then
-            local now = GetTime()
-            if now >= (MPlus._nextWeightsAttemptTime or 0) then
-                BuildWeightsFromMDT()
-                MPlus._nextWeightsAttemptTime = now + 0.75
-            end
-            if not MPlus._weightsReady then return end
-        end
-        local _, sub, _, srcGUID, _, srcFlags, _, dstGUID, _, dstFlags = CombatLogGetCurrentEventInfo()
-        if not allowedSub[sub] then return end
+	if ev == "COMBAT_LOG_EVENT_UNFILTERED" then
+		if not MDT or not MPlus.active then return end
+		-- Late MDT init guard: try again with backoff if weights not ready
+		if not MPlus._weightsReady then
+			local now = GetTime()
+			if now >= (MPlus._nextWeightsAttemptTime or 0) then
+				BuildWeightsFromMDT()
+				MPlus._nextWeightsAttemptTime = now + 0.75
+			end
+			if not MPlus._weightsReady then return end
+		end
+		local _, sub, _, srcGUID, _, srcFlags, _, dstGUID, _, dstFlags = CombatLogGetCurrentEventInfo()
+		if not allowedSub[sub] then return end
 
-        -- Prevent updates while dead or OOC due to party combat.
-        -- Consider the player "engaged" only when alive and in combat.
-        local engaged = UnitAffectingCombat("player") and not UnitIsDeadOrGhost("player")
-        if not engaged then
-            -- Only accept clear, personal damage events out of combat.
-            if not isMineInvolved(srcFlags, dstFlags) then return end
-            if not allowedSubOOC[sub] then return end
-        end
+		-- Prevent updates while dead or OOC due to party combat.
+		-- Consider the player "engaged" only when alive and in combat.
+		local engaged = UnitAffectingCombat("player") and not UnitIsDeadOrGhost("player")
+		if not engaged then
+			-- Only accept clear, personal damage events out of combat.
+			if not isMineInvolved(srcFlags, dstFlags) then return end
+			if not allowedSubOOC[sub] then return end
+		end
 
 		-- Source
 		if srcGUID and not MPlus.inPullGUID[srcGUID] and isHostileNPC(srcFlags) then
@@ -349,31 +341,29 @@ f:SetScript("OnEvent", function(_, ev, arg1)
 			if not MPlus.inPullGUID[dstGUID] then AddGUIDToPull(dstGUID) end
 			if sub == "UNIT_DIED" or sub == "UNIT_DESTROYED" or sub == "UNIT_DISSIPATES" then RemoveGUIDFromPull(dstGUID) end
 		end
-        return
-    end
+		return
+	end
 
-    if ev == "PLAYER_REGEN_ENABLED" then
-        if not MDT or not MPlus.active then return end
-        -- Reset current pull when leaving combat (player side)
-        ResetPull()
-        return
-    end
+	if ev == "PLAYER_REGEN_ENABLED" then
+		if not MDT or not MPlus.active then return end
+		-- Reset current pull when leaving combat (player side)
+		ResetPull()
+		return
+	end
 
-    if ev == "PLAYER_DEAD" then
-        if not MDT or not MPlus.active then return end
-        -- Hard reset on death to avoid stuck/continuing updates while dead
-        ResetPull()
-        return
-    end
+	if ev == "PLAYER_DEAD" then
+		if not MDT or not MPlus.active then return end
+		-- Hard reset on death to avoid stuck/continuing updates while dead
+		ResetPull()
+		return
+	end
 
-    if ev == "PLAYER_UNGHOST" then
-        if not MDT or not MPlus.active then return end
-        -- Keep UI consistent at 0 after releasing
-        if addon and addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.RefreshProgressLabel then
-        	addon.MythicPlus.functions.RefreshProgressLabel()
-        end
-        return
-    end
+	if ev == "PLAYER_UNGHOST" then
+		if not MDT or not MPlus.active then return end
+		-- Keep UI consistent at 0 after releasing
+		if addon and addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.RefreshProgressLabel then addon.MythicPlus.functions.RefreshProgressLabel() end
+		return
+	end
 end)
 
 -- Toggle registration from the MythicPlus UI
@@ -403,8 +393,6 @@ end
 
 -- Apply initial state based on saved setting
 -- live‑update helper exposed for UI sliders
-addon.MythicPlus.functions.UpdateCurrentPullAppearance = function()
-    UpdateUILabel()
-end
+addon.MythicPlus.functions.UpdateCurrentPullAppearance = function() UpdateUILabel() end
 
 if addon and addon.db and addon.db["mythicPlusCurrentPull"] then addon.MythicPlus.functions.ToggleCurrentPull(true) end

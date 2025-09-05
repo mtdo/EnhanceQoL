@@ -179,7 +179,21 @@ end
 addon.MythicPlus = addon.MythicPlus or {}
 addon.MythicPlus.functions = addon.MythicPlus.functions or {}
 function addon.MythicPlus.functions.WriteProgressLabel(bar)
-	if not bar or not bar.Bar or not bar.Bar.Label or not bar._baseText then return end
+	if not bar or not bar.Bar or not bar.Bar.Label then return end
+	-- Fallback: if base text is not yet known (SetValue not fired), compute it on-demand
+	if not bar._baseText then
+		if not IsInInstance() then return end
+		local _, _, diff = GetInstanceInfo()
+		if diff ~= 8 then return end
+		local sData = C_ScenarioInfo.GetScenarioStepInfo()
+		if not sData then return end
+		local truePercent
+		for criteriaIndex = 1, sData.numCriteria do
+			if not truePercent then truePercent = GetScenarioPercent(criteriaIndex) end
+		end
+		if not truePercent then return end
+		bar._baseText = string.format("%.2f%%", truePercent)
+	end
 	local pull = (addon.MPlusData and addon.MPlusData.pullForces) or 0
 	local suffix = ""
 	if addon.db and addon.db["mythicPlusCurrentPull"] and pull and pull > 0 then
