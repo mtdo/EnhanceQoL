@@ -29,6 +29,14 @@
 
 ---
 
+## [4.10.2] – 2025-09-04
+
+### 🐛 Fixed
+
+- **Resource Bars** were not visible at all
+
+---
+
 ## [4.10.1] – 2025-09-03
 
 ### 🐛 Fixed
