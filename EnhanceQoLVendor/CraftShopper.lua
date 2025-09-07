@@ -31,6 +31,7 @@ local ahCache = {} -- [itemID] = true/false
 local purchasedItems = {} -- [itemID] = true for items already bought via quick buy
 
 local ShowCraftShopperFrameIfNeeded -- forward declaration
+local BuildShoppingList -- forward declaration for early users
 
 local function HasTrackedRecipes()
 	for _, isRecraft in ipairs(isRecraftTbl) do
@@ -56,6 +57,30 @@ local function RegisterHeavyEvents()
 	for _, event in ipairs(heavyEvents) do
 		f:RegisterEvent(event)
 	end
+end
+
+-- Remove stored multipliers for recipes that are no longer tracked
+local function CleanupUntrackedMultipliers()
+    local tracked = {}
+    for _, isRecraft in ipairs(isRecraftTbl) do
+        local recipes = C_TradeSkillUI.GetRecipesTracked(isRecraft) or {}
+        for _, recipeID in ipairs(recipes) do
+            tracked[recipeID] = true
+        end
+    end
+    local removed = false
+    for recipeID, _ in pairs(addon.Vendor.CraftShopper.multipliers or {}) do
+        if not tracked[recipeID] then
+            addon.Vendor.CraftShopper.multipliers[recipeID] = nil
+            removed = true
+        end
+    end
+    if removed then
+        -- Rebuild immediately (not gated by resting) to reflect changes
+        addon.Vendor.CraftShopper.items = BuildShoppingList()
+        if addon.Vendor.CraftShopper.frame then addon.Vendor.CraftShopper.frame:Refresh() end
+        ShowCraftShopperFrameIfNeeded()
+    end
 end
 
 local function UnregisterHeavyEvents()
@@ -100,7 +125,7 @@ local function getSchematic(recipeID, isRecraft)
 	return s
 end
 
-local function BuildShoppingList()
+function BuildShoppingList()
 	local need = {} -- [itemID] = fehlende Menge
 	local multipliers = addon.Vendor.CraftShopper.multipliers or {}
 
@@ -524,35 +549,39 @@ function ShowCraftShopperFrameIfNeeded()
 end
 
 function addon.Vendor.CraftShopper.EnableCraftShopper()
-	f:RegisterEvent("TRACKED_RECIPE_UPDATE")
-	if HasTrackedRecipes() then
-		RegisterHeavyEvents()
-		Rescan()
-	else
-		UnregisterHeavyEvents()
-	end
+    f:RegisterEvent("TRACKED_RECIPE_UPDATE")
+    if HasTrackedRecipes() then
+        RegisterHeavyEvents()
+        Rescan()
+    else
+        UnregisterHeavyEvents()
+    end
+    if _G.EQOLCrafterMultiply and addon.db and addon.db["vendorCraftShopperEnable"] then
+        if ProfessionsFrame and ProfessionsFrame:IsShown() then _G.EQOLCrafterMultiply:Show() end
+    end
 end
 
 function addon.Vendor.CraftShopper.DisableCraftShopper()
-	f:UnregisterEvent("TRACKED_RECIPE_UPDATE")
-	UnregisterHeavyEvents()
-	if pendingScan then
-		pendingScan:Cancel()
-		pendingScan = nil
-	end
-	if addon.Vendor.CraftShopper.frame then addon.Vendor.CraftShopper.frame.frame:Hide() end
+    f:UnregisterEvent("TRACKED_RECIPE_UPDATE")
+    UnregisterHeavyEvents()
+    if pendingScan then
+        pendingScan:Cancel()
+        pendingScan = nil
+    end
+    if addon.Vendor.CraftShopper.frame then addon.Vendor.CraftShopper.frame.frame:Hide() end
+    if _G.EQOLCrafterMultiply then _G.EQOLCrafterMultiply:Hide() end
 end
 
 f:RegisterEvent("PLAYER_LOGIN")
 
 local function addToCraftShopper(el)
-	if not el or not el.GetText then return end
-	local txt = el:GetText()
-	local count = tonumber(txt)
-	if not count or count < 1 then
-		el:SetText("")
-		return
-	end
+    if not el or not el.GetText then return end
+    local txt = el:GetText()
+    local count = tonumber(txt)
+    if count == nil then
+        el:SetText("")
+        return
+    end
 
 	-- Determine current recipeID from the professions UI
 	local recipeID
@@ -564,14 +593,26 @@ local function addToCraftShopper(el)
 		and ProfessionsFrame.CraftingPage.SchematicForm.currentRecipeInfo.recipeID
 	then
 		recipeID = ProfessionsFrame.CraftingPage.SchematicForm.currentRecipeInfo.recipeID
-		print(recipeID)
 	end
 
-	if not recipeID then return end
+    if not recipeID then return end
 
-	-- Store multiplier and ensure recipe is tracked
-	addon.Vendor.CraftShopper.multipliers[recipeID] = math.floor(count)
-	if C_TradeSkillUI and C_TradeSkillUI.SetRecipeTracked then pcall(C_TradeSkillUI.SetRecipeTracked, recipeID, true, false) end
+    count = math.floor(count)
+    if count <= 0 then
+        -- 0 => löschen: Multiplikator entfernen und Rezept untracken
+        addon.Vendor.CraftShopper.multipliers[recipeID] = nil
+        if C_TradeSkillUI and C_TradeSkillUI.SetRecipeTracked then
+            pcall(C_TradeSkillUI.SetRecipeTracked, recipeID, false, false)
+        end
+        el:SetText("")
+    else
+        -- Store multiplier and ensure recipe is tracked
+        addon.Vendor.CraftShopper.multipliers[recipeID] = count
+        if C_TradeSkillUI and C_TradeSkillUI.SetRecipeTracked then
+            pcall(C_TradeSkillUI.SetRecipeTracked, recipeID, true, false)
+        end
+		el:SetText("")
+    end
 
 	-- Update list immediately and show the UI
 	addon.Vendor.CraftShopper.items = BuildShoppingList()
@@ -580,14 +621,14 @@ local function addToCraftShopper(el)
 end
 
 local function createCrafterMultiplyFrame()
-	local fCMF = CreateFrame("frame", "EQOLCrafterMultiply", ProfessionsFrame.CraftingPage.SchematicForm, "BackdropTemplate")
-	-- Compact, unobtrusive container in the top-right of the schematic form
+    local fCMF = CreateFrame("frame", "EQOLCrafterMultiply", ProfessionsFrame.CraftingPage.SchematicForm, "BackdropTemplate")
+    -- Compact, unobtrusive container in the top-right of the schematic form
 
 	local _, _, _, x, y = ProfessionsFrame.CraftingPage.SchematicForm.TrackRecipeCheckbox:GetPoint()
 	local _, height = ProfessionsFrame.CraftingPage.SchematicForm.TrackRecipeCheckbox:GetSize()
 	y = y - height
 
-	fCMF:SetPoint("TOPRIGHT", ProfessionsFrame.CraftingPage.SchematicForm, "TOPRIGHT", 0, y)
+	fCMF:SetPoint("RIGHT", ProfessionsFrame.CraftingPage.SchematicForm.TrackRecipeCheckbox, "LEFT", -5)
 	fCMF:SetSize(180, 32)
 	fCMF:SetFrameStrata("HIGH")
 	fCMF:EnableMouse(true)
@@ -598,7 +639,7 @@ local function createCrafterMultiplyFrame()
 	eb:SetPoint("LEFT", fCMF, "LEFT", 0, 0)
 	eb:SetAutoFocus(false)
 	eb:SetHeight(22)
-	eb:SetWidth(80)
+	eb:SetWidth(60)
 	eb:SetFontObject(ChatFontNormal)
 	eb:SetMaxLetters(5)
 
@@ -619,24 +660,49 @@ local function createCrafterMultiplyFrame()
 		eb:ClearFocus()
 	end)
 
-	-- Ensure sub-widgets are visible
-	eb:Show()
-	btnOK:Show()
-	fCMF:Show()
+    -- Ensure sub-widgets are visible (frame visibility controlled below)
+    eb:Show()
+    btnOK:Show()
+
+    -- Hook to ProfessionsFrame show/hide to toggle our mini frame
+    if ProfessionsFrame and not fCMF._hooksSet then
+        fCMF._hooksSet = true
+        ProfessionsFrame:HookScript("OnShow", function()
+            if addon.db and addon.db["vendorCraftShopperEnable"] and EQOLCrafterMultiply then EQOLCrafterMultiply:Show() end
+        end)
+        ProfessionsFrame:HookScript("OnHide", function()
+            if EQOLCrafterMultiply then EQOLCrafterMultiply:Hide() end
+        end)
+    end
+
+    -- Default hidden; only show when enabled and professions is visible
+    fCMF:Hide()
+    if addon.db and addon.db["vendorCraftShopperEnable"] and ProfessionsFrame:IsShown() then
+        fCMF:Show()
+    end
 end
 
 f:SetScript("OnEvent", function(_, event, arg1, arg2)
 	if event == "PLAYER_LOGIN" then
 		if addon.db["vendorCraftShopperEnable"] then addon.Vendor.CraftShopper.EnableCraftShopper() end
+		-- Ensure we create the mini frame when the professions UI loads
+		if IsAddOnLoaded and IsAddOnLoaded("Blizzard_Professions") then
+			if not EQOLCrafterMultiply then createCrafterMultiplyFrame() end
+		else
+			f:RegisterEvent("ADDON_LOADED")
+		end
 	elseif event == "ADDON_LOADED" and arg1 == "Blizzard_Professions" then
 		if not EQOLCrafterMultiply then createCrafterMultiplyFrame() end
-	elseif event == "TRACKED_RECIPE_UPDATE" then
-		if HasTrackedRecipes() then
-			RegisterHeavyEvents()
-			ScheduleRescan()
-		else
-			UnregisterHeavyEvents()
-			if pendingScan then
+		-- No longer need to listen for further ADDON_LOADED
+		f:UnregisterEvent("ADDON_LOADED")
+elseif event == "TRACKED_RECIPE_UPDATE" then
+    CleanupUntrackedMultipliers()
+    if HasTrackedRecipes() then
+        RegisterHeavyEvents()
+        ScheduleRescan()
+    else
+        UnregisterHeavyEvents()
+        if pendingScan then
 				pendingScan:Cancel()
 				pendingScan = nil
 			end
