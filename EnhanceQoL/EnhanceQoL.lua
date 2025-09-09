@@ -5510,6 +5510,9 @@ local function setAllHooks()
             if addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.applyPotionBarTexture then
                 addon.MythicPlus.functions.applyPotionBarTexture()
             end
+            if addon.Aura and addon.Aura.CastTracker and addon.Aura.CastTracker.functions and addon.Aura.CastTracker.functions.RefreshTextureDropdown then
+                addon.Aura.CastTracker.functions.RefreshTextureDropdown()
+            end
         end
     end)
 end

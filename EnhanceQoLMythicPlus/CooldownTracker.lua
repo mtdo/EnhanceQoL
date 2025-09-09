@@ -63,7 +63,7 @@ local frameAnchor = CreateFrame("StatusBar", nil, UIParent)
 addon.MythicPlus.anchorFrame = frameAnchor
 
 -- Resolve chosen statusbar texture for Potion/Cooldown tracker
-local DEFAULT_POTION_BAR_TEX = "Interface\\TARGETINGFRAME\\UI-StatusBar"
+local DEFAULT_POTION_BAR_TEX = "Interface\\TargetingFrame\\UI-StatusBar"
 
 local function isValidStatusbarPath(path)
     if not path or type(path) ~= "string" or path == "" then return false end

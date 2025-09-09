@@ -633,7 +633,7 @@ local function addPotionTrackerFrame(container)
 		local function buildPotionTextureOptions()
 			local map = {
 				["DEFAULT"] = DEFAULT,
-				["Interface\\TARGETINGFRAME\\UI-StatusBar"] = "Blizzard: UI-StatusBar",
+				["Interface\\TargetingFrame\\UI-StatusBar"] = "Blizzard: UI-StatusBar",
 				["Interface\\Buttons\\WHITE8x8"] = "Flat (white, tintable)",
 				["Interface\\Tooltips\\UI-Tooltip-Background"] = "Dark Flat (Tooltip bg)",
 			}
