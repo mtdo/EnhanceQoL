@@ -12,6 +12,10 @@ local ResourceBars = {}
 addon.Aura.ResourceBars = ResourceBars
 ResourceBars.ui = ResourceBars.ui or {}
 
+-- forward declarations to satisfy luacheck for early function
+local LSM
+local BLIZZARD_TEX
+
 function ResourceBars.RefreshTextureDropdown()
 	local dd = ResourceBars.ui and ResourceBars.ui.textureDropdown
 	if not dd then return end
@@ -40,7 +44,7 @@ function ResourceBars.RefreshTextureDropdown()
 end
 
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Aura")
-local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
+LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
 local AceGUI = addon.AceGUI
 local UnitPower, UnitPowerMax, UnitHealth, UnitHealthMax, UnitGetTotalAbsorbs, GetTime = UnitPower, UnitPowerMax, UnitHealth, UnitHealthMax, UnitGetTotalAbsorbs, GetTime
 local CreateFrame = CreateFrame
@@ -73,7 +77,7 @@ local BAR_STACK_SPACING = -1
 local SEPARATOR_THICKNESS = 1
 local SEP_DEFAULT = { 1, 1, 1, 0.5 }
 local DEFAULT_RB_TEX = "Interface\\Buttons\\WHITE8x8" -- historical default (Solid)
-local BLIZZARD_TEX = "Interface\\TargetingFrame\\UI-StatusBar"
+BLIZZARD_TEX = "Interface\\TargetingFrame\\UI-StatusBar"
 
 local function isValidStatusbarPath(path)
 	if not path or type(path) ~= "string" or path == "" then return false end
