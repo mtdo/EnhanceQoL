@@ -102,7 +102,6 @@ L["Enable a bar above to configure options."] = "Enable a bar above to configure
 L["CastTrackerWidth"] = "Bar Width"
 L["CastTrackerHeight"] = "Bar Height"
 L["CastTrackerColor"] = "Bar Color"
-L["CastTrackerBarTexture"] = "Bar Texture"
 L["CastTrackerTextSize"] = "Text Size"
 L["CastTrackerTextColor"] = "Text Color"
 L["Bar Texture"] = "Bar Texture"

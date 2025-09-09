@@ -1,5 +1,13 @@
 # Changelog
 
+## [4.13.0] – 2025-09-10
+
+### ✨ Added
+
+- **LibSharedMedia support:** **Combat Meter**, **Cast Tracker**, **Potion Tracker**, and **Resource Bars** now support styling via **LibSharedMedia** (bar textures, fonts, sounds).
+
+---
+
 ## [4.12.1] – 2025-09-09
 
 ### 🐛 Fixed
