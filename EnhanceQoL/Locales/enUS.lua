@@ -12,6 +12,15 @@ L["Hide Minimap Button"] = "Hide Minimap Button"
 L["Left-Click to show options"] = "Left-Click to show options"
 L["Right-Click for options"] = "Right-click for options"
 
+-- Latency stream
+L["Latency"] = "Latency"
+L["FPS update interval (s)"] = "FPS update interval (s)"
+L["FPS smoothing window (s)"] = "FPS smoothing window (s)"
+L["Ping update interval (s)"] = "Ping update interval (s)"
+L["Ping display"] = "Ping display"
+L["Max(home, world)"] = "Max(home, world)"
+L["home|world"] = "home | world"
+
 L["Hide Raid Tools"] = "Hide Raid Tools in Party"
 L["repairCost"] = "Repaired items for "
 L["autoRepair"] = "Automatically repair all items"
