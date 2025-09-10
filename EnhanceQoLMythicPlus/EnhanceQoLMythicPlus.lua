@@ -1269,12 +1269,12 @@ local function addTalentFrame(container)
 			})
 
 			local dropShow = addon.functions.createDropdownAce(L["talentReminderShowActiveBuildDropdown"], list, order, function(self, event, key, value)
-				addon.db["talentReminderActiveBuildShowOnly"] = addon.db["talentReminderActiveBuildShowOnly"] or {}
+				if type(addon.db["talentReminderActiveBuildShowOnly"]) ~= "table" then addon.db["talentReminderActiveBuildShowOnly"] = {} end
 				addon.db["talentReminderActiveBuildShowOnly"][key] = value or nil
 				addon.MythicPlus.functions.updateActiveTalentText()
 			end)
 			dropShow:SetMultiselect(true)
-			for c, val in pairs(addon.db["talentReminderActiveBuildShowOnly"] or {}) do
+			for c, val in pairs(type(addon.db["talentReminderActiveBuildShowOnly"]) == "table" and addon.db["talentReminderActiveBuildShowOnly"] or {}) do
 				if val then dropShow:SetItemValue(c, true) end
 			end
 			dropShow:SetFullWidth(false)

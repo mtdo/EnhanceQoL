@@ -1,5 +1,13 @@
 # Changelog
 
+## [4.13.1] – 2025-09-10
+
+### 🐛 Fixed
+
+- **Active Talentbuild:** Wrong default value initilized
+
+---
+
 ## [4.13.0] – 2025-09-10
 
 ### ✨ Added

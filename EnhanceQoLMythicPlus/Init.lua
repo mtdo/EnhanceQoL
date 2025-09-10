@@ -75,11 +75,24 @@ addon.functions.InitDBValue("talentReminderActiveBuildX", 0)
 addon.functions.InitDBValue("talentReminderActiveBuildY", 0)
 addon.functions.InitDBValue("talentReminderActiveBuildSize", 14)
 addon.functions.InitDBValue("talentReminderActiveBuildLocked", false)
-addon.functions.InitDBValue("talentReminderActiveBuildShowOnly", 1)
+-- switched from single number -> table (multiselect)
+addon.functions.InitDBValue("talentReminderActiveBuildShowOnly", {})
 addon.functions.InitDBValue("talentReminderLoadOnReadyCheck", false)
 addon.functions.InitDBValue("talentReminderSoundOnDifference", false)
 addon.functions.InitDBValue("talentReminderUseCustomSound", false)
 addon.functions.InitDBValue("talentReminderCustomSoundFile", "")
+
+-- Backward compatibility migration: convert old numeric value to table
+do
+    local v = addon.db["talentReminderActiveBuildShowOnly"]
+    if type(v) ~= "table" then
+        local newVal = {}
+        if type(v) == "number" and v >= 1 and v <= 3 then
+            newVal[v] = true
+        end
+        addon.db["talentReminderActiveBuildShowOnly"] = newVal
+    end
+end
 
 addon.MythicPlus = {}
 addon.MythicPlus.functions = {}
