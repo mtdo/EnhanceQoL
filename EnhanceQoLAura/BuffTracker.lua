@@ -1817,12 +1817,15 @@ local function importCategory(encoded)
 	addon.db["buffTrackerSounds"][newId] = {}
 	addon.db["buffTrackerSoundsEnabled"][newId] = {}
 	local missing = {}
+	local missingSet = {}
 	if type(data.sounds) == "table" and type(data.soundsEnabled) == "table" then
 		for id, sound in pairs(data.sounds) do
-			if addon.Aura.sounds[sound] then
-				addon.db["buffTrackerSounds"][newId][id] = sound
-				if data.soundsEnabled[id] then addon.db["buffTrackerSoundsEnabled"][newId][id] = true end
-			else
+			local isEnabled = data.soundsEnabled[id] == true
+			-- Always keep the mapping so it persists across installs; only warn if actually enabled
+			addon.db["buffTrackerSounds"][newId][id] = sound
+			if isEnabled then addon.db["buffTrackerSoundsEnabled"][newId][id] = true end
+			if isEnabled and not addon.Aura.sounds[sound] and not missingSet[sound] then
+				missingSet[sound] = true
 				table.insert(missing, tostring(sound))
 			end
 		end
