@@ -817,6 +817,10 @@ local function addTeleportFrame(container)
 				var = "portalShowEngineering",
 			},
 			{
+				text = L["portalUseReavesModule"],
+				var = "portalUseReavesModule",
+			},
+			{
 				text = L["portalShowToyHearthstones"],
 				var = "portalShowToyHearthstones",
 			},

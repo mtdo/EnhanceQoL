@@ -111,6 +111,7 @@ addon.functions.InitDBValue("teleportFrameLocked", true)
 addon.functions.InitDBValue("teleportFrameData", {})
 addon.functions.InitDBValue("teleportCompendiumLocked", true)
 addon.functions.InitDBValue("teleportCompendiumFrameData", {})
+addon.functions.InitDBValue("portalUseReavesModule", false)
 addon.functions.InitDBValue("dungeonScoreFrameLocked", true)
 addon.functions.InitDBValue("dungeonScoreFrameData", {})
 
@@ -536,8 +537,7 @@ addon.MythicPlus.variables.portalCompendium = {
 			[82674] = { text = "HS", isItem = true, itemID = 64457, isHearthstone = true, icon = 458240 },
 			[223444] = { text = "HS", isToy = true, toyID = 140324, isHearthstone = true, icon = 237445, map = 680 },
 
-			[200061] = { text = "HS", isItem = true, itemID = 144341, isEngineering = true, icon = 1405815, isReaves = true },
-			[200061] = { text = "HS", isItem = true, itemID = 132523, isEngineering = true, icon = 1405815, isReaves = true },
+			[200061] = { text = "HS", isItem = true, itemID = { 144341, 132523 }, isEngineering = true, icon = 1405815, isReaves = true },
 		},
 	},
 	[70] = {
@@ -598,6 +598,7 @@ addon.MythicPlus.variables.portalCompendium = {
 			[88347] = { text = "TolB", isMagePortal = true, faction = FACTION_HORDE },
 
 			[80256] = { text = "HS", isItem = true, itemID = 58487, isHearthstone = true, icon = 463898 },
+			[59317] = { text = "HS", isToy = true, toyID = 58487, isHearthstone = true, icon = 133743, map = 125 },
 		},
 	},
 	[40] = {

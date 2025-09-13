@@ -26,6 +26,17 @@ addon.functions.InitDBValue("teleportFavorites", {})
 local GetItemCooldown = C_Item.GetItemCooldown
 local GetItemCount = C_Item.GetItemCount
 
+-- Returns an itemID to use when the data provides multiple possible IDs.
+local function FirstOwnedItemID(itemID)
+	if type(itemID) == "table" then
+		for _, id in ipairs(itemID) do
+			if GetItemCount(id) > 0 then return id end
+		end
+		return itemID[1]
+	end
+	return itemID
+end
+
 local function GetCooldownData(spellInfo)
 	if not spellInfo then return end
 
@@ -42,7 +53,8 @@ local function GetCooldownData(spellInfo)
 		end
 	elseif spellInfo.isItem then
 		if spellInfo.itemID then
-			local startTime, duration, enable = GetItemCooldown(spellInfo.itemID)
+			local id = FirstOwnedItemID(spellInfo.itemID)
+			local startTime, duration, enable = GetItemCooldown(id)
 			cooldownData = {
 				startTime = startTime,
 				duration = duration,
@@ -558,43 +570,87 @@ local function CreatePortalCompendium(frame, compendium)
 				if data.isGnomish then specOk = specOk and hasGnomish end
 				if data.isGoblin then specOk = specOk and hasGoblin end
 
-				local known = (C_SpellBook.IsSpellInSpellBook(spellID) and not data.isToy)
-					or (hasEngineering and specOk and data.toyID and not data.isHearthstone and isToyUsable(data.toyID))
-					or (data.isItem and GetItemCount(data.itemID) > 0)
-					or (data.isHearthstone and isToyUsable(data.toyID))
+				-- Special handling: if an entry has multiple itemIDs, create one button per item
+				if data.isItem and type(data.itemID) == "table" then
+					local baseShow = specOk
+						and (not data.faction or data.faction == faction)
+						and (not data.map or (data.map == aMapID))
+						and (not addon.db["hideActualSeason"] or not portalSpells[spellID])
+						and (addon.db["portalShowRaidTeleports"] or not data.isRaid)
+						and (addon.db["portalShowToyHearthstones"] or not data.isHearthstone)
+						and (addon.db["portalShowEngineering"] or not data.isEngineering)
+						and (addon.db["portalUseReavesModule"] or not data.isReaves)
+						and ((addon.db["portalShowClassTeleport"] and (addon.variables.unitClass == data.isClassTP)) or not data.isClassTP)
+						and ((addon.db["portalShowClassTeleport"] and addon.variables.unitRace == data.isRaceTP) or not data.isRaceTP)
+						and ((addon.db["portalShowMagePortal"] and addon.variables.unitClass == "MAGE") or not data.isMagePortal)
+						and (addon.db["portalShowDungeonTeleports"] or not data.cId)
 
-				local showSpell = specOk
-					and (not data.faction or data.faction == faction)
-					and (not data.map or (data.map == aMapID))
-					and (not addon.db["portalHideMissing"] or (addon.db["portalHideMissing"] and known))
-					and (not addon.db["hideActualSeason"] or not portalSpells[spellID])
-					and (addon.db["portalShowRaidTeleports"] or not data.isRaid)
-					and (addon.db["portalShowToyHearthstones"] or not data.isHearthstone)
-					and (addon.db["portalShowEngineering"] or not data.isEngineering)
-					and ((addon.db["portalShowClassTeleport"] and (addon.variables.unitClass == data.isClassTP)) or not data.isClassTP)
-					and ((addon.db["portalShowClassTeleport"] and addon.variables.unitRace == data.isRaceTP) or not data.isRaceTP)
-					and ((addon.db["portalShowMagePortal"] and addon.variables.unitClass == "MAGE") or not data.isMagePortal)
-					and (addon.db["portalShowDungeonTeleports"] or not data.cId)
+					for _, iid in ipairs(data.itemID) do
+						local knownX = GetItemCount(iid) > 0
+						local showX = baseShow and (not addon.db["portalHideMissing"] or (addon.db["portalHideMissing"] and knownX))
+						if not showX and addon.db.teleportFavoritesIgnoreFilters and favorites[spellID] then
+							showX = (not addon.db["portalHideMissing"] or (addon.db["portalHideMissing"] and knownX))
+						end
+						if showX then
+							table.insert(sortedSpells, {
+								spellID = spellID,
+								text = data.text,
+								iconID = data.iconID,
+								isKnown = knownX,
+								isToy = false,
+								toyID = false,
+								isItem = true,
+								itemID = iid,
+								icon = data.icon or false,
+								isClassTP = data.isClassTP or false,
+								isMagePortal = data.isMagePortal or false,
+								isFavorite = favorites[spellID],
+							})
+						end
+					end
+				else
+					local known = (C_SpellBook.IsSpellInSpellBook(spellID) and not data.isToy)
+						or (hasEngineering and specOk and data.toyID and not data.isHearthstone and isToyUsable(data.toyID))
+						or (data.isItem and GetItemCount(FirstOwnedItemID(data.itemID)) > 0)
+						or (data.isHearthstone and isToyUsable(data.toyID))
 
-				if not showSpell and addon.db.teleportFavoritesIgnoreFilters and favorites[spellID] then
-					showSpell = (not addon.db["portalHideMissing"] or (addon.db["portalHideMissing"] and known))
-				end
+					local showSpell = specOk
+						and (not data.faction or data.faction == faction)
+						and (not data.map or (data.map == aMapID))
+						and (not addon.db["portalHideMissing"] or (addon.db["portalHideMissing"] and known))
+						and (not addon.db["hideActualSeason"] or not portalSpells[spellID])
+						and (addon.db["portalShowRaidTeleports"] or not data.isRaid)
+						and (addon.db["portalShowToyHearthstones"] or not data.isHearthstone)
+						and (addon.db["portalShowEngineering"] or not data.isEngineering)
+						and (addon.db["portalUseReavesModule"] or not data.isReaves)
+						and ((addon.db["portalShowClassTeleport"] and (addon.variables.unitClass == data.isClassTP)) or not data.isClassTP)
+						and ((addon.db["portalShowClassTeleport"] and addon.variables.unitRace == data.isRaceTP) or not data.isRaceTP)
+						and ((addon.db["portalShowMagePortal"] and addon.variables.unitClass == "MAGE") or not data.isMagePortal)
+						and (addon.db["portalShowDungeonTeleports"] or not data.cId)
 
-				if showSpell then
-					table.insert(sortedSpells, {
-						spellID = spellID,
-						text = data.text,
-						iconID = data.iconID,
-						isKnown = known,
-						isToy = data.isToy or false,
-						toyID = data.toyID or false,
-						isItem = data.isItem or false,
-						itemID = data.itemID or false,
-						icon = data.icon or false,
-						isClassTP = data.isClassTP or false,
-						isMagePortal = data.isMagePortal or false,
-						isFavorite = favorites[spellID],
-					})
+					if not showSpell and addon.db.teleportFavoritesIgnoreFilters and favorites[spellID] then
+						showSpell = (not addon.db["portalHideMissing"] or (addon.db["portalHideMissing"] and known))
+					end
+
+					if showSpell then
+						local chosenItemID
+						if data.isItem then chosenItemID = FirstOwnedItemID(data.itemID) end
+
+						table.insert(sortedSpells, {
+							spellID = spellID,
+							text = data.text,
+							iconID = data.iconID,
+							isKnown = known,
+							isToy = data.isToy or false,
+							toyID = data.toyID or false,
+							isItem = data.isItem or false,
+							itemID = chosenItemID or data.itemID or false,
+							icon = data.icon or false,
+							isClassTP = data.isClassTP or false,
+							isMagePortal = data.isMagePortal or false,
+							isFavorite = favorites[spellID],
+						})
+					end
 				end
 			end
 			table.sort(sortedSpells, function(a, b)
@@ -736,8 +792,10 @@ local function CreatePortalCompendium(frame, compendium)
 					end
 				elseif spellData.isItem then
 					if spellData.isKnown then
+						local useID = FirstOwnedItemID(spellData.itemID)
+						button.itemID = useID
 						button:SetAttribute("type1", "macro")
-						button:SetAttribute("macrotext1", "/use item:" .. spellData.itemID)
+						button:SetAttribute("macrotext1", "/use item:" .. useID)
 						button:SetAttribute("type2", nil)
 						button:SetAttribute("macrotext2", nil)
 					end
@@ -772,7 +830,8 @@ local function CreatePortalCompendium(frame, compendium)
 						if spellData.isToy then
 							GameTooltip:SetToyByItemID(spellData.toyID)
 						elseif spellData.isItem then
-							GameTooltip:SetItemByID(spellData.itemID)
+							local tid = FirstOwnedItemID(spellData.itemID)
+							GameTooltip:SetItemByID(tid)
 						else
 							GameTooltip:SetSpellByID(spellID)
 						end

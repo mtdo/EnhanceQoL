@@ -14,6 +14,8 @@
   - Delver's Mana-Bound Ethergate
   - The Last Relic of Argus
   - Mobile Telemancy Beacon (Zone based - Only in Suramar)
+  - The Schools of Arcane Magic - Mastery (Zone based - Only in Dalaran WotLK)
+  - Reaves Module: Wormhole Generator Mode (Special option)
 
 ---
 
@@ -22,7 +24,7 @@
 ### ✨ Added
 
 - **Drink Macro:** Option to use Mana-Potions in combat
-  - *±80 mana potions* known
+  - _±80 mana potions_ known
   - 10 missing mana drinks of 11.2.5 were added
 
 ---
