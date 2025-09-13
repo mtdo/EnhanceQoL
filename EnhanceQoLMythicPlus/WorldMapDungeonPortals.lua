@@ -170,15 +170,18 @@ local function EnsurePanel(parent)
         panel.BorderFrame = bf
     end
 
-    local title = panel:CreateFontString(nil, "ARTWORK", "Game15Font_Shadow")
-    title:SetPoint("BOTTOM", panel.BorderFrame, "TOP", -1, 3)
+    local title = panel:CreateFontString(nil, "OVERLAY", "Game15Font_Shadow")
+    -- Keep title inside the frame, slightly below top edge
+    title:SetPoint("TOP", panel, "TOP", 0, -6)
     title:SetText(L["DungeonCompendium"] or "Dungeon Portals")
     panel.Title = title
 
 	-- Scroll area
     local s = CreateFrame("ScrollFrame", "EQOLWorldMapDungeonPortalsScrollFrame", panel, "ScrollFrameTemplate")
-    s:SetPoint("TOPLEFT")
-    s:SetPoint("BOTTOMRIGHT")
+    -- Inset to keep background and scrollbar inside border
+    s:ClearAllPoints()
+    s:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, -28)
+    s:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -28, 8)
 
     -- Background inside the scrollframe similar to MapLegend
     if not s.Background then
@@ -192,8 +195,8 @@ local function EnsurePanel(parent)
     -- Align scrollbar like MapLegend: x=+8, topY=+2, bottomY=-4
     if s.ScrollBar and not s._eqolBarAnchored then
         s.ScrollBar:ClearAllPoints()
-        s.ScrollBar:SetPoint("TOPLEFT", s, "TOPRIGHT", 8, 2)
-        s.ScrollBar:SetPoint("BOTTOMLEFT", s, "BOTTOMRIGHT", 8, -4)
+        s.ScrollBar:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -8, -24)
+        s.ScrollBar:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -8, 6)
         s._eqolBarAnchored = true
     end
 
@@ -324,14 +327,14 @@ local function PopulatePanel()
     local y = -25 -- topPadding like MapLegend
     local xStart = 12 -- leftPadding like MapLegend
 	local x = xStart
-	local scrollW = panel.Scroll:GetWidth()
+    local scrollW = panel.Scroll:GetWidth()
 	if not scrollW or scrollW <= 1 then
 		local pw = panel:GetWidth() or 0
 		if pw <= 1 then pw = (panel:GetParent() and panel:GetParent():GetWidth()) or 0 end
 		scrollW = (pw > 1 and pw or 330) - 30
 	end
-	local maxWidth = math.max(100, scrollW - 50)
-	local perRow = math.max(1, math.floor(maxWidth / 44))
+    local maxWidth = math.max(100, scrollW - 12)
+    local perRow = math.max(1, math.floor(maxWidth / 44))
 	local countInRow = 0
 
 	local function nextRow()
@@ -341,10 +344,10 @@ local function PopulatePanel()
 	end
 
 	for _, section in ipairs(sections) do
-		local header = scrollBox:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-		header:SetPoint("TOPLEFT", 8, y)
-		header:SetText(section.title)
-		y = y - 18
+        local header = scrollBox:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        header:SetPoint("TOPLEFT", xStart - 2, y)
+        header:SetText(section.title)
+        y = y - 18
 
 		for _, entry in ipairs(section.items) do
 			if countInRow >= perRow then nextRow() end
