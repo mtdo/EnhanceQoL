@@ -101,6 +101,42 @@ addon.MythicPlus.Buttons = {}
 addon.MythicPlus.nrOfButtons = 0
 addon.MythicPlus.variables = {}
 
+-- Default Hearthstone name (6948), loaded safely even if uncached
+addon.MythicPlus.variables.hearthstoneName = nil
+
+-- Returns cached name immediately if available; otherwise ensures it is loaded
+-- and invokes optional callback once resolved. Also caches the result.
+function addon.MythicPlus.functions.EnsureDefaultHearthstoneName(callback)
+	-- Try cache first
+	if addon.MythicPlus.variables.hearthstoneName then
+		if callback then callback(addon.MythicPlus.variables.hearthstoneName) end
+		return addon.MythicPlus.variables.hearthstoneName
+	end
+
+	-- Attempt synchronous fetch (works if client has it cached)
+	local name = C_Item and C_Item.GetItemInfo and C_Item.GetItemInfo(6948)
+	if name then
+		addon.MythicPlus.variables.hearthstoneName = name
+		if callback then callback(name) end
+		return name
+	end
+
+	-- Fallback: request load and resolve asynchronously
+	if Item and Item.CreateFromItemID then
+		local eItem = Item:CreateFromItemID(6948)
+		eItem:ContinueOnItemLoad(function()
+			local loadedName = (C_Item and C_Item.GetItemInfo and C_Item.GetItemInfo(6948)) or addon.MythicPlus.variables.hearthstoneName
+			addon.MythicPlus.variables.hearthstoneName = loadedName
+			if callback then callback(loadedName) end
+		end)
+	end
+
+	return nil
+end
+
+-- Prime the cache early during init
+addon.MythicPlus.functions.EnsureDefaultHearthstoneName()
+
 -- Teleports
 addon.functions.InitDBValue("teleportFrame", false)
 addon.functions.InitDBValue("portalHideMissing", false)
@@ -441,11 +477,11 @@ addon.MythicPlus.variables.portalCompendium = {
 			[445444] = { text = "PSF", cId = { [499] = true }, mapID = 2649, locID = 2215, x = 0.4129, y = 0.4939, zoneID = 2308 },
 			[445441] = { text = "DFC", cId = { [504] = true }, mapID = 2651, locID = 2214, x = 0.5528, y = 0.2152, zoneID = 2303 },
 			[445443] = { text = "ROOK", cId = { [500] = true }, mapID = 2648, locID = 2339, x = 0.3185, y = 0.3576, zoneID = 2316 },
-			[448126] = { text = "ENGI", isToy = true, toyID = 221966, isEngineering = true },
+			[448126] = { text = "ENGI", isToy = true, toyID = 221966, isEngineering = true, zoneID = 2274 },
 			[446540] = { text = "DORN", isClassTP = "MAGE", locID = 2339, x = 0.4249, y = 0.2905, zoneID = 2339 },
 			[446534] = { text = "DORN", isMagePortal = true, locID = 2339, x = 0.4249, y = 0.2905, zoneID = 2339 },
 			[1226482] = { text = "LOU", isRaid = true, locID = 2346, x = 0.4151, y = 0.4880, zoneID = 2346 },
-			[1223041] = { text = "HS", isItem = true, itemID = 234389, isRaid = true, icon = 3718248, map = 2406, zoneID = 2406 },
+			[1223041] = { text = addon.MythicPlus.variables.hearthstoneName or "HS", isItem = true, itemID = 234389, isRaid = true, icon = 3718248, map = 2406, zoneID = 2406 },
 			[1239155] = { text = "MFO", isRaid = true, locID = 2371, x = 0.4153, y = 0.2141, zoneID = 2460 },
 			[467470] = { text = "DELVE", isToy = true, toyID = 230850 },
 
@@ -466,16 +502,16 @@ addon.MythicPlus.variables.portalCompendium = {
 			},
 			[393256] = { text = "RLP", cId = { [399] = true }, mapID = 2521, locID = 2022, x = 0.6006, y = 0.7568, zoneID = 2095 },
 			[393262] = { text = "NO", cId = { [400] = true }, mapID = 2516, locID = 2023, x = 0.6078, y = 0.3891, zoneID = 2093 },
-			[393267] = { text = "BH", cId = { [405] = true }, mapID = 2520, locID = 2024, x = 0.1140, y = 0.4860 , zoneID = 2096 },
+			[393267] = { text = "BH", cId = { [405] = true }, mapID = 2520, locID = 2024, x = 0.1140, y = 0.4860, zoneID = 2096 },
 			[393273] = { text = "AA", cId = { [402] = true }, mapID = 2526, locID = 2025, x = 0.5827, y = 0.4239, zoneID = 2097 },
-			[393276] = { text = "NELT", cId = { [404] = true }, locID = 2022, x = 0.2572, y = 0.5631 }, -- bad name for zoneid
-			[393279] = { text = "AV", cId = { [401] = true }, locID = 2024, x = 0.3878, y = 0.6438 }, -- bad name for zoneid
-			[393283] = { text = "HOI", cId = { [406] = true }, locID = 2025, x = 0.5911, y = 0.6050 },
-			[393222] = { text = "ULD", cId = { [403] = true }, locID = 15, x = 0.4112, y = 0.1023 },
-			[432254] = { text = "VOTI", isRaid = true, locID = 2025, x = 0.7465, y = 0.5512 },
-			[432258] = { text = "AMIR", isRaid = true, locID = 2200, x = 0.2730, y = 0.3109 },
-			[432257] = { text = "ASC", isRaid = true, locID = 2133, x = 0.4846, y = 0.1208 },
-			[386379] = { text = "ENGI", isToy = true, toyID = 198156, isEngineering = true },
+			[393276] = { text = "NELT", cId = { [404] = true }, locID = 2022, zoneID = 2080, x = 0.2572, y = 0.5631 },
+			[393279] = { text = "AV", cId = { [401] = true }, locID = 2024, zoneID = 2073, x = 0.3878, y = 0.6438 },
+			[393283] = { text = "HOI", cId = { [406] = true }, locID = 2025, x = 0.5911, y = 0.6050, zoneID = 2082 },
+			[393222] = { text = "ULD", cId = { [403] = true }, locID = 15, x = 0.4112, y = 0.1023, zoneID = 2071 },
+			[432254] = { text = "VOTI", isRaid = true, locID = 2025, x = 0.7465, y = 0.5512, zoneID = 2119 },
+			[432258] = { text = "AMIR", isRaid = true, locID = 2200, x = 0.2730, y = 0.3109, zoneID = 2232 },
+			[432257] = { text = "ASC", isRaid = true, locID = 2133, x = 0.4846, y = 0.1208, zoneID = 2166 },
+			[386379] = { text = "ENGI", isToy = true, toyID = 198156, isEngineering = true, zoneID = 1978 },
 			-- Valdrakken (Dragonflight)
 			[395277] = { text = "Vald", isClassTP = "MAGE", locID = 2112, x = 0.5432, y = 0.4788 },
 			[395289] = { text = "Vald", isMagePortal = true, locID = 2112, x = 0.5432, y = 0.4788 },
@@ -484,14 +520,14 @@ addon.MythicPlus.variables.portalCompendium = {
 	[100] = {
 		headline = EXPANSION_NAME8,
 		spells = {
-			[354462] = { text = "NW", cId = { [376] = true }, locID = 1533, x = 0.4010, y = 0.5523 },
-			[354463] = { text = "PF", cId = { [379] = true }, locID = 1536, x = 0.5923, y = 0.6492 },
-			[354464] = { text = "MISTS", cId = { [375] = true }, locID = 1565, x = 0.3543, y = 0.5416 },
-			[354465] = { text = "HOA", cId = { [378] = true }, mapID = 2287, locID = 1525, x = 0.7835, y = 0.4895 },
-			[354466] = { text = "SOA", cId = { [381] = true }, locID = 1533, x = 0.5851, y = 0.2851 },
-			[354467] = { text = "TOP", cId = { [382] = true }, mapID = 2293, locID = 1536, x = 0.5934, y = 0.6492 },
-			[354468] = { text = "DOS", cId = { [377] = true }, locID = 1565, x = 0.6855, y = 0.6653 },
-			[354469] = { text = "SD", cId = { [380] = true }, locID = 1525, x = 0.5109, y = 0.2994 },
+			[354462] = { text = "NW", cId = { [376] = true }, locID = 1533, x = 0.4010, y = 0.5523, zoneID = 1666 },
+			[354463] = { text = "PF", cId = { [379] = true }, locID = 1536, x = 0.5923, y = 0.6492, zoneID = 1674 },
+			[354464] = { text = "MISTS", cId = { [375] = true }, locID = 1565, x = 0.3543, y = 0.5416, zoneID = 1669 },
+			[354465] = { text = "HOA", cId = { [378] = true }, mapID = 2287, locID = 1525, x = 0.7835, y = 0.4895, zoneID = 1663 },
+			[354466] = { text = "SOA", cId = { [381] = true }, locID = 1533, x = 0.5851, y = 0.2851, zoneID = 1693 },
+			[354467] = { text = "TOP", cId = { [382] = true }, mapID = 2293, locID = 1536, x = 0.5301, y = 0.5279, zoneID = 1683 },
+			[354468] = { text = "DOS", cId = { [377] = true }, locID = 1565, x = 0.6855, y = 0.6653, zoneID = 1679 },
+			[354469] = { text = "SD", cId = { [380] = true }, locID = 1525, x = 0.5109, y = 0.2994, zoneID = 1675 },
 			[367416] = {
 				text = "TAZA",
 				cId = { [391] = true, [392] = true },
@@ -501,62 +537,97 @@ addon.MythicPlus.variables.portalCompendium = {
 				x = 0.6355,
 				y = 0.7016,
 			},
-			[373190] = { text = "CN", isRaid = true, locID = 1525, x = 0.4631, y = 0.4142 }, -- Raids
-			[373192] = { text = "SFO", isRaid = true, locID = 1970, x = 0.8039, y = 0.5344 }, -- Raids
-			[373191] = { text = "SOD", isRaid = true, locID = 1543, x = 0.6963, y = 0.3192 }, -- Raids
-			[324031] = { text = "ENGI", isToy = true, toyID = 172924, isEngineering = true },
+			[373190] = { text = "CN", isRaid = true, locID = 1525, x = 0.4631, y = 0.4142, zoneID = 1735 }, -- Raids
+			[373192] = { text = "SFO", isRaid = true, locID = 1970, x = 0.8039, y = 0.5344, zoneID = 2047 }, -- Raids
+			[373191] = { text = "SOD", isRaid = true, locID = 1543, x = 0.6963, y = 0.3192, zoneID = 1998 }, -- Raids
+			[324031] = { text = "ENGI", isToy = true, toyID = 172924, isEngineering = true, zoneID = 1550 },
 			-- Oribos (Shadowlands)
-			[344587] = { text = "Orib", isClassTP = "MAGE", locID = 1670, x = 0.5229, y = 0.7460 },
-			[344597] = { text = "Orib", isMagePortal = true, locID = 1670, x = 0.5229, y = 0.7460 },
+			[344587] = { text = "Orib", isClassTP = "MAGE", locID = 1670, x = 0.5229, y = 0.7460, zoneID = 1670 },
+			[344597] = { text = "Orib", isMagePortal = true, locID = 1670, x = 0.5229, y = 0.7460, zoneID = 1670 },
 		},
 	},
 	[90] = {
 		headline = EXPANSION_NAME7,
 		spells = {
-			[410071] = { text = "FH", cId = { [245] = true }, locID = 895, x = 0.8445, y = 0.7880 },
-			[410074] = { text = "UR", cId = { [251] = true }, locID = 863, x = 0.5109, y = 0.6456 },
-			[373274] = { text = "WORK", cId = { [369] = true, [370] = true }, mapID = 2097, locID = 1462, x = 0.7285, y = 0.3647 },
-			[424167] = { text = "WM", cId = { [248] = true }, locID = 896, x = 0.3364, y = 0.1244 },
-			[424187] = { text = "AD", cId = { [244] = true }, locID = 862, x = 0.4350, y = 0.3946 },
-			[445418] = { text = "SIEG", faction = FACTION_ALLIANCE, cId = { [353] = true }, locID = 1161, x = 0.7560, y = 0.1926 },
-			[464256] = { text = "SIEG", faction = FACTION_HORDE, cId = { [353] = true }, locID = 895, x = 0.8829, y = 0.5097 },
-			[467553] = { text = "ML", faction = FACTION_ALLIANCE, cId = { [247] = true }, mapID = 1594, locID = 862, x = 0.3928, y = 0.7148 },
-			[467555] = { text = "ML", faction = FACTION_HORDE, cId = { [247] = true }, mapID = 1594, locID = 862, x = 0.5607, y = 0.5981 },
-			[299083] = { text = "ENGI", isToy = true, toyID = 168807, isEngineering = true },
-			[299084] = { text = "ENGI", isToy = true, toyID = 168808, isEngineering = true },
+			[410071] = { text = "FH", cId = { [245] = true }, locID = 895, x = 0.8445, y = 0.7880, zoneID = 936 },
+			[410074] = { text = "UR", cId = { [251] = true }, locID = 863, x = 0.5109, y = 0.6456, zoneID = 1041 },
+			[373274] = { text = "WORK", cId = { [369] = true, [370] = true }, mapID = 2097, locID = 1462, x = 0.7285, y = 0.3647, zoneID = 1490 },
+			[424167] = { text = "WM", cId = { [248] = true }, locID = 896, x = 0.3364, y = 0.1244, zoneID = 1015 },
+			[424187] = { text = "AD", cId = { [244] = true }, locID = 862, x = 0.4350, y = 0.3946, zoneID = 934 },
+			[445418] = { text = "SIEG", faction = FACTION_ALLIANCE, cId = { [353] = true }, locID = 1161, x = 0.7560, y = 0.1926, zoneID = 1162 },
+			[464256] = { text = "SIEG", faction = FACTION_HORDE, cId = { [353] = true }, locID = 895, x = 0.8829, y = 0.5097, zoneID = 1162 },
+			[467553] = { text = "ML", faction = FACTION_ALLIANCE, cId = { [247] = true }, mapID = 1594, locID = 862, x = 0.3928, y = 0.7148, zoneID = 1010 },
+			[467555] = { text = "ML", faction = FACTION_HORDE, cId = { [247] = true }, mapID = 1594, locID = 862, x = 0.5607, y = 0.5981, zoneID = 1010 },
+			[299083] = { text = "ENGI", isToy = true, toyID = 168807, isEngineering = true, zoneID = 876 },
+			[299084] = { text = "ENGI", isToy = true, toyID = 168808, isEngineering = true, zoneID = 875 },
 			-- Boralus (BfA)
-			[281403] = { text = "Borl", isClassTP = "MAGE", faction = FACTION_ALLIANCE, locID = 1161, x = 0.6960, y = 0.1996 },
-			[281400] = { text = "Borl", isMagePortal = true, faction = FACTION_ALLIANCE, locID = 1161, x = 0.6960, y = 0.1996 },
+			[281403] = { text = "Borl", isClassTP = "MAGE", faction = FACTION_ALLIANCE, locID = 1161, x = 0.6960, y = 0.1996, zoneID = 1161 },
+			[281400] = { text = "Borl", isMagePortal = true, faction = FACTION_ALLIANCE, locID = 1161, x = 0.6960, y = 0.1996, zoneID = 1161 },
 			-- Dazar'alor (BfA)
-			[281404] = { text = "Daza", isClassTP = "MAGE", faction = FACTION_HORDE, locID = 1165, x = 0.4978, y = 0.4114 },
-			[281402] = { text = "Daza", isMagePortal = true, faction = FACTION_HORDE, locID = 1165, x = 0.4978, y = 0.4114 },
-			[396591] = { text = "HS", isItem = true, itemID = 202046, isHearthstone = true, icon = 2203919 },
+			[281404] = { text = "Daza", isClassTP = "MAGE", faction = FACTION_HORDE, locID = 1165, x = 0.4978, y = 0.4114, zoneID = 1165 },
+			[281402] = { text = "Daza", isMagePortal = true, faction = FACTION_HORDE, locID = 1165, x = 0.4978, y = 0.4114, zoneID = 1165 },
+			[396591] = { text = "HS", isItem = true, itemID = 202046, isHearthstone = true, icon = 2203919, zoneID = 942, x = 0.4069, y = 0.3647 },
 
-			[289284] = { text = "HS", isItem = true, itemID = 166560, isHearthstone = true, icon = 804960, equipSlot = 11, faction = FACTION_ALLIANCE, locID = 1161, x = 0.6960, y = 0.1996 },
-			[289283] = { text = "HS", isItem = true, itemID = 166559, isHearthstone = true, icon = 804962, equipSlot = 11, faction = FACTION_HORDE, locID = 1165, x = 0.4978, y = 0.4114 },
+			[289284] = {
+				text = addon.MythicPlus.variables.hearthstoneName or "HS",
+				isItem = true,
+				itemID = 166560,
+				isHearthstone = true,
+				icon = 804960,
+				equipSlot = 11,
+				faction = FACTION_ALLIANCE,
+				locID = 1161,
+				x = 0.6960,
+				y = 0.1996,
+				zoneID = 1161,
+			},
+			[289283] = {
+				text = addon.MythicPlus.variables.hearthstoneName or "HS",
+				isItem = true,
+				itemID = 166559,
+				isHearthstone = true,
+				icon = 804962,
+				equipSlot = 11,
+				faction = FACTION_HORDE,
+				locID = 1165,
+				x = 0.4978,
+				y = 0.4114,
+				zoneID = 1165,
+			},
 		},
 	},
 	[80] = {
 		headline = EXPANSION_NAME6,
 		spells = {
-			[424153] = { text = "BRH", cId = { [199] = true }, locID = 641, x = 0.3711, y = 0.5028 },
-			[393766] = { text = "COS", cId = { [210] = true }, locID = 680, x = 0.5062, y = 0.6545 },
-			[424163] = { text = "DHT", cId = { [198] = true }, locID = 641, x = 0.5899, y = 0.3109 },
-			[393764] = { text = "HOV", cId = { [200] = true }, locID = 634, x = 0.7254, y = 0.7047 },
-			[410078] = { text = "NL", cId = { [206] = true }, locID = 650, x = 0.4942, y = 0.6832 },
-			[373262] = { text = "KARA", cId = { [227] = true, [234] = true }, locID = 42, x = 0.4705, y = 0.7485 },
+			[424153] = { text = "BRH", cId = { [199] = true }, locID = 641, x = 0.3711, y = 0.5028, zoneID = 751 },
+			[393766] = { text = "COS", cId = { [210] = true }, locID = 680, x = 0.5062, y = 0.6545, zoneID = 761 },
+			[424163] = { text = "DHT", cId = { [198] = true }, locID = 641, x = 0.5899, y = 0.3109, zoneID = 733 },
+			[393764] = { text = "HOV", cId = { [200] = true }, locID = 634, x = 0.7254, y = 0.7047, zoneID = 704 },
+			[410078] = { text = "NL", cId = { [206] = true }, locID = 650, x = 0.4942, y = 0.6832, zoneID = 731 },
+			[373262] = { text = "KARA", cId = { [227] = true, [234] = true }, locID = 42, x = 0.4705, y = 0.7485, zoneID = 350 },
 			[250796] = { text = "ENGI", isToy = true, toyID = 151652, isEngineering = true },
-			[222695] = { text = "DALA", isToy = true, toyID = 140192, isHearthstone = true, icon = 1444943, locID = 627, x = 0.6042, y = 0.4440 },
+			[222695] = { text = "DALA", isToy = true, toyID = 140192, isHearthstone = true, icon = 1444943, locID = 627, x = 0.6042, y = 0.4440, zoneID = 627 },
 			-- Dalaran (Broken Isles, Legion)
-			[224869] = { text = "DalB", isClassTP = "MAGE", locID = 627, x = 0.6042, y = 0.4440 },
-			[224871] = { text = "DalB", isMagePortal = true, locID = 627, x = 0.6042, y = 0.4440 },
+			[224869] = { text = "DalB", isClassTP = "MAGE", locID = 627, x = 0.6042, y = 0.4440, zoneID = 627 },
+			[224871] = { text = "DalB", isMagePortal = true, locID = 627, x = 0.6042, y = 0.4440, zoneID = 627 },
 
 			[227334] = { text = "FMW", isItem = true, itemID = 141605, isHearthstone = true, icon = 132161 },
-			[82674] = { text = "HS", isItem = true, itemID = 64457, isHearthstone = true, icon = 458240 },
-			[223444] = { text = "HS", isToy = true, toyID = 140324, isHearthstone = true, icon = 237445, map = 680, locID = 680, x = 0.3732, y = 0.4405 },
+			[82674] = { text = addon.MythicPlus.variables.hearthstoneName or "HS", isItem = true, itemID = 64457, isHearthstone = true, icon = 458240 },
+			[223444] = { text = addon.MythicPlus.variables.hearthstoneName or "HS", isToy = true, toyID = 140324, isHearthstone = true, icon = 237445, map = 680, locID = 680, x = 0.3732, y = 0.4405 },
 
-			[200061] = { text = "ENGI", isItem = true, itemID = { 144341, 132523 }, isEngineering = true, icon = 1405815, isReaves = true },
-			[231054] = { text = "HS", isItem = true, itemID = 142469, isHearthstone = true, icon = 1391739, equipSlot = 11, locID = 42, x = 0.4705, y = 0.7485 },
+			[200061] = { text = "ENGI", isItem = true, itemID = { 144341, 132523 }, isEngineering = true, icon = 1405815, isReaves = true, zoneID = 619 },
+			[231054] = {
+				text = addon.MythicPlus.variables.hearthstoneName or "HS",
+				isItem = true,
+				itemID = 142469,
+				isHearthstone = true,
+				icon = 1391739,
+				equipSlot = 11,
+				locID = 42,
+				x = 0.4705,
+				y = 0.7485,
+				zoneID = 350,
+			},
 		},
 	},
 	[70] = {
@@ -606,11 +677,27 @@ addon.MythicPlus.variables.portalCompendium = {
 			[132625] = { text = "VALE", isMagePortal = true, faction = FACTION_HORDE },
 
 			-- Alliance beacon
-			[140295] = { text = "HS", isToy = true, toyID = 95567, isHearthstone = true, icon = 801132, map = { [504] = true, [508] = true }, faction = FACTION_ALLIANCE },
+			[140295] = {
+				text = addon.MythicPlus.variables.hearthstoneName or "HS",
+				isToy = true,
+				toyID = 95567,
+				isHearthstone = true,
+				icon = 801132,
+				map = { [504] = true, [508] = true },
+				faction = FACTION_ALLIANCE,
+			},
 			-- Horde beacon
-			[140300] = { text = "HS", isToy = true, toyID = 95568, isHearthstone = true, icon = 838819, map = { [504] = true, [508] = true }, faction = FACTION_HORDE },
+			[140300] = {
+				text = addon.MythicPlus.variables.hearthstoneName or "HS",
+				isToy = true,
+				toyID = 95568,
+				isHearthstone = true,
+				icon = 838819,
+				map = { [504] = true, [508] = true },
+				faction = FACTION_HORDE,
+			},
 
-			[145430] = { text = "HS", isItem = true, itemID = 103678, isHearthstone = true, icon = 643915, equipSlot = 13 },
+			[145430] = { text = addon.MythicPlus.variables.hearthstoneName or "HS", isItem = true, itemID = 103678, isHearthstone = true, icon = 643915, equipSlot = 13 },
 		},
 	},
 	[50] = {
@@ -630,8 +717,8 @@ addon.MythicPlus.variables.portalCompendium = {
 
 			[54406] = { text = "DALA", isItem = true, itemID = { 40585, 48957, 45691, 51557 }, isHearthstone = true, icon = 133415, equipSlot = 11 },
 
-			[89597] = { text = "HS", isItem = true, itemID = 63379, isHearthstone = true, icon = 456571, faction = FACTION_ALLIANCE, equipSlot = 19 },
-			[89598] = { text = "HS", isItem = true, itemID = 63378, isHearthstone = true, icon = 456564, faction = FACTION_HORDE, equipSlot = 19 },
+			[89597] = { text = addon.MythicPlus.variables.hearthstoneName or "HS", isItem = true, itemID = 63379, isHearthstone = true, icon = 456571, faction = FACTION_ALLIANCE, equipSlot = 19 },
+			[89598] = { text = addon.MythicPlus.variables.hearthstoneName or "HS", isItem = true, itemID = 63378, isHearthstone = true, icon = 456564, faction = FACTION_HORDE, equipSlot = 19 },
 		},
 	},
 	[40] = {
@@ -661,7 +748,7 @@ addon.MythicPlus.variables.portalCompendium = {
 			[36941] = { text = "ENGI", isToy = true, toyID = 30544, isEngineering = true, isGnomish = true },
 			[36890] = { text = "ENGI", isToy = true, toyID = 30542, isEngineering = true, isGoblin = true },
 
-			[41234] = { text = "HS", isItem = true, itemID = 32757, isHearthstone = true, icon = 133279, equipSlot = 2 },
+			[41234] = { text = addon.MythicPlus.variables.hearthstoneName or "HS", isItem = true, itemID = 32757, isHearthstone = true, icon = 133279, equipSlot = 2 },
 			-- Atiesh variants are class-specific: map IDs by class so we can pick the right one
 			[28148] = {
 				text = "KARA",
@@ -672,7 +759,7 @@ addon.MythicPlus.variables.portalCompendium = {
 				icon = 135226,
 				equipSlot = 16,
 			},
-			[39937] = { text = "HS", isItem = true, itemID = 28585, isHearthstone = true, icon = 132566, equipSlot = 8 },
+			[39937] = { text = addon.MythicPlus.variables.hearthstoneName or "HS", isItem = true, itemID = 28585, isHearthstone = true, icon = 132566, equipSlot = 8 },
 		},
 	},
 	[20] = {
@@ -705,8 +792,8 @@ addon.MythicPlus.variables.portalCompendium = {
 			[1221356] = { text = "OG", isItem = true, itemID = 63353, isHearthstone = true, icon = 461813, equipSlot = 15, faction = FACTION_HORDE },
 			[1221357] = { text = "OG", isItem = true, itemID = 63207, isHearthstone = true, icon = 461814, equipSlot = 15, faction = FACTION_HORDE },
 
-			[49844] = { text = "HS", isItem = true, itemID = 37863, isHearthstone = true, icon = 133015, zoneID = 242 }, -- Grim Guzzler
-			[71436] = { text = "HS", isItem = true, itemID = 50287, isHearthstone = true, icon = 132578, equipSlot = 8 }, -- Boots of the Bay
+			[49844] = { text = addon.MythicPlus.variables.hearthstoneName or "HS", isItem = true, itemID = 37863, isHearthstone = true, icon = 133015, zoneID = 242 }, -- Grim Guzzler
+			[71436] = { text = addon.MythicPlus.variables.hearthstoneName or "HS", isItem = true, itemID = 50287, isHearthstone = true, icon = 132578, equipSlot = 8 }, -- Boots of the Bay
 
 			[139437] = { text = "BP", isItem = true, itemID = 95051, isHearthstone = true, icon = 133345, faction = FACTION_ALLIANCE, equipSlot = 11 },
 			[139432] = { text = "BA", isItem = true, itemID = 95050, isHearthstone = true, icon = 133345, faction = FACTION_HORDE, equipSlot = 11 },
@@ -716,7 +803,7 @@ addon.MythicPlus.variables.portalCompendium = {
 		headline = CLASS,
 		spells = {
 			[193759] = { text = "CLASS", isClassTP = "MAGE" },
-			[193753] = { text = "CLASS", isClassTP = "DRUID" },
+			[193753] = { text = "CLASS", isClassTP = "DRUID", x = 0.5492, y = 0.6276, zoneID = 715 },
 			[50977] = { text = "CLASS", isClassTP = "DEATHKNIGHT" },
 			[556] = { text = "CLASS", isClassTP = "SHAMAN" },
 			[126892] = { text = "CLASS", isClassTP = "MONK" },
@@ -819,7 +906,7 @@ function addon.MythicPlus.functions.setRandomHearthstone()
 	end
 	homeSection.spells = homeSection.spells or {}
 	homeSection.spells[RANDOM_HS_ID] = {
-		text = "HS",
+		text = addon.MythicPlus.variables.hearthstoneName or "HS",
 		isItem = hs.isItem or false,
 		itemID = hs.id,
 		isToy = hs.isToy or false,
