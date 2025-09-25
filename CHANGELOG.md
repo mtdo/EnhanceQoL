@@ -4,10 +4,10 @@
 
 ### 🧭 Major change — Teleport Compendium (redesign)
 
-- **Legacy window removed.** The old standalone Teleport Compendium UI has been **fully retired**.
-- **Now built into the World Map.** Open the World Map (`M`) and click the **Teleport** icon in the right dock to open the new panel.
-- **Native look & feel.** Uses Blizzard’s layout, scrolling and categories (Favorites, Home, expansions) for a seamless experience.
-- **Cleaner & faster.** Fewer custom frames, lower taint risk, and better compatibility with other UI mods/skins.
+- **Legacy window removed:** The old standalone Teleport Compendium UI has been **fully retired**.
+- **Now built into the World Map:** Open the World Map (`M`) and click the **Teleport** icon in the right dock to open the new panel.
+- **Native look & feel:** Uses Blizzard’s layout, scrolling and categories (Favorites, Home, expansions) for a seamless experience.
+- **Cleaner & faster:** Fewer custom frames, lower taint risk, and better compatibility with other UI mods/skins.
 
 ### ✨ Added
 
@@ -23,7 +23,7 @@
   ▸ Optional border in **square** minimap mode.
 - **Game Menu:** Scaling option for the Game Menu.
 - **Health Macro:**  
-  ▸ Option to use **combat potions** in combat.  
+  ▸ Option to use **combat potions/custom spells** in combat.  
   ▸ Customizable priority: **custom spells**, **potions**, **healthstones**, **combat potions**.
 - **Boss Frame Health Text:** Always show **percent**, **value**, or **both** on boss frames **independent** of the global CVar.  
   ▸ Especially useful if you keep `statusText = 0`. If you set `statusText = 1` (Blizzard “always show”), this is usually redundant.
