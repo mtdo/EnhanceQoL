@@ -21,6 +21,8 @@
 - **Health Macro:** Option to use **combat potions** in combat
 - **Health Macro:** Custom priority order to allow either _custom spells_, _potions_, _healthstones_ or _combat potions_ to be used
 
+- **Mailbox Address book:** Option to add an address book to the send mail frame which consists of your alt chars
+
 - **GameMenu size:** Option to scale the Game Menu
 
 - **Castbars:** Option to hide Player, Target and Focus-castbar
