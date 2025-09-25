@@ -347,6 +347,40 @@ frame:RegisterEvent("BAG_UPDATE_COOLDOWN")
 local pendingUpdate = false
 frame:SetScript("OnEvent", function(_, event, arg1)
 	if event == "PLAYER_LOGIN" then
+		-- Migrate old settings to new priority model
+		local function migrateOldPriority()
+			if addon.db.healthPriorityOrder ~= nil then return end
+			local hasSpells = addon.db.healthUseCustomSpells == true
+			local prefer = addon.db.healthPreferFirstPrefs
+			local preferStone = false
+			local preferSpells = false
+			if prefer == nil then
+				preferStone = addon.db.healthPreferStoneFirst == true
+			else
+				preferStone = prefer.stones == true
+				preferSpells = prefer.spells == true
+			end
+			local tmp = {}
+			local function addOnce(cat)
+				if not cat or cat == "none" then return end
+				for _, v in ipairs(tmp) do if v == cat then return end end
+				table.insert(tmp, cat)
+			end
+			-- Order from legacy prefs: preferSpells puts spell first
+			if preferSpells and hasSpells then addOnce("spell") end
+			-- default: stones, then potions
+			addOnce("stone")
+			addOnce("potion")
+			-- include spells somewhere if enabled but not preferred first
+			if hasSpells and not preferSpells then addOnce("spell") end
+			-- combat potion if enabled
+			if addon.db.healthUseCombatPotions then addOnce("combatpotion") end
+			-- clamp to 4 slots and pad with none
+			while #tmp > 4 do table.remove(tmp) end
+			for i = #tmp + 1, 4 do tmp[i] = "none" end
+			addon.db.healthPriorityOrder = tmp
+		end
+		migrateOldPriority()
 		if addon.Recuperate and addon.Recuperate.Update then addon.Recuperate.Update() end
 		if addon.Health and addon.Health.functions and addon.Health.functions.refreshTalentCache then addon.Health.functions.refreshTalentCache() end
 		addon.Health.functions.updateAllowedHealth()
@@ -529,9 +563,33 @@ function addon.Health.functions.addHealthFrame(container)
 
 	group:AddChild(addon.functions.createSpacerAce())
 	local gold = { r = 1, g = 0.843, b = 0 }
-	local hint = addon.functions.createLabelAce(L["healthMacroBestFirst"], gold, nil, 14)
+	local function buildPriorityHint()
+		local labels = {
+			spell = L["CategoryCustomSpells"] or (L["Custom Spells"] or "Custom Spells"),
+			stone = L["CategoryHealthstones"] or (L["Prefer Healthstone first"] or "Healthstones"),
+			potion = L["CategoryPotions"] or "Potions",
+			combatpotion = L["CategoryCombatPotions"] or (L["Use Combat potions for health macro"] or "Combat potions"),
+		}
+		local order = addon.db.healthPriorityOrder or {}
+		local parts = {}
+		for i = 1, 4 do
+			local c = order[i]
+			if c and c ~= "none" then
+				if c == "spell" and not addon.db.healthUseCustomSpells then
+					-- skip when custom spells disabled
+				elseif c == "combatpotion" and not addon.db.healthUseCombatPotions then
+					-- skip when combat potions disabled
+				else
+					table.insert(parts, labels[c] or c)
+				end
+			end
+		end
+		if #parts == 0 then return (L["healthMacroWillUse"] or "Will use (in order): %s"):format(L["None"] or "None") end
+		return (L["healthMacroWillUse"] or "Will use (in order): %s"):format(table.concat(parts, ", "))
+	end
+	local hint = addon.functions.createLabelAce(buildPriorityHint(), gold, nil, 14)
 	hint:SetFullWidth(true)
-    group:AddChild(hint)
+	group:AddChild(hint)
 
     if addon.variables.unitClass == "WARLOCK" then
         group:AddChild(addon.functions.createSpacerAce())
