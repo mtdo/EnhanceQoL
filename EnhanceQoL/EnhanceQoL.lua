@@ -623,6 +623,46 @@ end
 local itemCount = 0
 local ilvlSum = 0
 
+local function removeInspectElements()
+	if nil == InspectPaperDollFrame then return end
+	itemCount = 0
+	ilvlSum = 0
+	if InspectPaperDollFrame.ilvl then InspectPaperDollFrame.ilvl:SetText("") end
+	local itemSlotsInspectList = {
+		[1] = InspectHeadSlot,
+		[2] = InspectNeckSlot,
+		[3] = InspectShoulderSlot,
+		[15] = InspectBackSlot,
+		[5] = InspectChestSlot,
+		[9] = InspectWristSlot,
+		[10] = InspectHandsSlot,
+		[6] = InspectWaistSlot,
+		[7] = InspectLegsSlot,
+		[8] = InspectFeetSlot,
+		[11] = InspectFinger0Slot,
+		[12] = InspectFinger1Slot,
+		[13] = InspectTrinket0Slot,
+		[14] = InspectTrinket1Slot,
+		[16] = InspectMainHandSlot,
+		[17] = InspectSecondaryHandSlot,
+	}
+
+	for key, element in pairs(itemSlotsInspectList) do
+		if element.ilvl then element.ilvl:SetFormattedText("") end
+		if element.ilvlBackground then element.ilvlBackground:Hide() end
+		if element.enchant then element.enchant:SetText("") end
+		if element.borderGradient then element.borderGradient:Hide() end
+		if element.gems and #element.gems > 0 then
+			for i = 1, #element.gems do
+				element.gems[i]:UnregisterAllEvents()
+				element.gems[i]:SetScript("OnUpdate", nil)
+				element.gems[i]:Hide()
+			end
+		end
+	end
+	collectgarbage("collect")
+end
+
 local tooltipCache = {}
 
 local function fmtToPattern(fmt)
@@ -1376,6 +1416,20 @@ local function addMinimapFrame(container)
 	local data = {
 		{
 			parent = "",
+			var = "enableWayCommand",
+			type = "CheckBox",
+			desc = L["enableWayCommandDesc"],
+			callback = function(self, _, value)
+				addon.db["enableWayCommand"] = value
+				if value then
+					addon.functions.registerWayCommand()
+				else
+					addon.variables.requireReload = true
+				end
+			end,
+		},
+		{
+			parent = SPECIALIZATION,
 			var = "enableLootspecQuickswitch",
 			type = "CheckBox",
 			desc = L["enableLootspecQuickswitchDesc"],
@@ -1417,7 +1471,7 @@ local function addMinimapFrame(container)
 
 		-- Multi-select dropdown: Hide minimap elements
 		{
-			parent = "",
+			parent = HUD_EDIT_MODE_MINIMAP_LABEL,
 			var = "minimapHideElements",
 			type = "Dropdown",
 			text = L["minimapHideElements"],
@@ -1969,21 +2023,7 @@ local function addUnitFrame(container)
 	scroll:DoLayout()
 end
 
-local function addDynamicFlightFrame(container)
-	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
-	container:AddChild(wrapper)
-
-	local groupCore = addon.functions.createContainer("InlineGroup", "List")
-	wrapper:AddChild(groupCore)
-
-	local cb = addon.functions.createCheckboxAce(L["hideDynamicFlightBar"]:format(DYNAMIC_FLIGHT), addon.db["hideDynamicFlightBar"], function(self, _, value)
-		addon.db["hideDynamicFlightBar"] = value
-		addon.functions.toggleDynamicFlightBar(addon.db["hideDynamicFlightBar"])
-	end)
-	groupCore:AddChild(cb)
-end
-
-local function addAuctionHouseFrame(container)
+local function addVendorMainFrame(container)
 	local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
 	scroll:SetFullWidth(true)
 	scroll:SetFullHeight(true)
@@ -1993,6 +2033,7 @@ local function addAuctionHouseFrame(container)
 	scroll:AddChild(wrapper)
 
 	local groupCore = addon.functions.createContainer("InlineGroup", "List")
+	groupCore:SetTitle(BUTTON_LAG_AUCTIONHOUSE)
 	wrapper:AddChild(groupCore)
 
 	local data = {
@@ -2018,17 +2059,49 @@ local function addAuctionHouseFrame(container)
 		local cbElement = addon.functions.createCheckboxAce(cbData.text, addon.db[cbData.var], cbData.func, desc)
 		groupCore:AddChild(cbElement)
 	end
-end
 
--- Merchant UI (extended grid) options
-local function addMerchantFrame(container)
-	local data = {
+	local groupConvenience = addon.functions.createContainer("InlineGroup", "List")
+	groupConvenience:SetTitle(L["Convenience"])
+	wrapper:AddChild(groupConvenience)
+
+	data = {
 		{
-			parent = MERCHANT,
+			var = "autoRepair",
+			text = L["autoRepair"],
+			type = "CheckBox",
+			desc = L["autoRepairDesc"],
+			func = function(self, _, value) addon.db["autoRepair"] = value end,
+		},
+		{
+			var = "sellAllJunk",
+			text = L["sellAllJunk"],
+			type = "CheckBox",
+			desc = L["sellAllJunkDesc"],
+			func = function(self, _, value)
+				addon.db["sellAllJunk"] = value
+				if value then checkBagIgnoreJunk() end
+			end,
+		},
+	}
+	table.sort(data, function(a, b) return a.text < b.text end)
+
+	for _, cbData in ipairs(data) do
+		local desc
+		if cbData.desc then desc = cbData.desc end
+		local cbElement = addon.functions.createCheckboxAce(cbData.text, addon.db[cbData.var], cbData.func, desc)
+		groupConvenience:AddChild(cbElement)
+	end
+
+	local groupMerchant = addon.functions.createContainer("InlineGroup", "List")
+	groupMerchant:SetTitle(MERCHANT)
+	wrapper:AddChild(groupMerchant)
+	data = {
+		{
 			var = "enableExtendedMerchant",
 			type = "CheckBox",
+			text = L["enableExtendedMerchant"],
 			desc = L["enableExtendedMerchantDesc"],
-			callback = function(self, _, value)
+			func = function(self, _, value)
 				addon.db["enableExtendedMerchant"] = value
 				if addon.Merchant then
 					if value and addon.Merchant.Enable then
@@ -2039,25 +2112,31 @@ local function addMerchantFrame(container)
 						addon.functions.checkReloadFrame()
 					end
 				end
-				container:ReleaseChildren()
-				addMerchantFrame(container)
 			end,
 		},
 	}
 
-	addon.functions.createWrapperData(data, container, L)
-end
+	table.sort(data, function(a, b) return a.text < b.text end)
 
--- Mailbox address book options
-local function addMailboxFrame(container)
-	local data = {
+	for _, cbData in ipairs(data) do
+		local desc
+		if cbData.desc then desc = cbData.desc end
+		local cbElement = addon.functions.createCheckboxAce(cbData.text, addon.db[cbData.var], cbData.func, desc)
+		groupMerchant:AddChild(cbElement)
+	end
+
+	--Mailbox
+	local groupMailbox = addon.functions.createContainer("InlineGroup", "List")
+	groupMailbox:SetTitle(MINIMAP_TRACKING_MAILBOX)
+	wrapper:AddChild(groupMailbox)
+	data = {
 		{
 			parent = MINIMAP_TRACKING_MAILBOX,
 			var = "enableMailboxAddressBook",
 			type = "CheckBox",
 			text = L["enableMailboxAddressBook"],
 			desc = L["enableMailboxAddressBookDesc"],
-			callback = function(self, _, value)
+			func = function(self, _, value)
 				addon.db["enableMailboxAddressBook"] = value
 				if addon.Mailbox then
 					if addon.Mailbox.SetEnabled then addon.Mailbox:SetEnabled(value) end
@@ -2065,18 +2144,24 @@ local function addMailboxFrame(container)
 					if value and addon.Mailbox.RefreshList then addon.Mailbox:RefreshList() end
 				end
 				container:ReleaseChildren()
-				addMailboxFrame(container)
+				addVendorMainFrame(container)
 			end,
 		},
 	}
+	table.sort(data, function(a, b) return a.text < b.text end)
 
-	local wrapper = addon.functions.createWrapperData(data, container, L)
+	for _, cbData in ipairs(data) do
+		local desc
+		if cbData.desc then desc = cbData.desc end
+		local cbElement = addon.functions.createCheckboxAce(cbData.text, addon.db[cbData.var], cbData.func, desc)
+		groupMailbox:AddChild(cbElement)
+	end
 
 	if addon.db["enableMailboxAddressBook"] then
 		-- Build a small management group to delete entries
 		local group = addon.functions.createContainer("InlineGroup", "List")
 		group:SetTitle(L["mailboxRemoveHeader"])
-		wrapper:AddChild(group)
+		groupMailbox:AddChild(group)
 
 		local tList = {}
 		for key, rec in pairs(addon.db["mailboxContacts"]) do
@@ -2107,6 +2192,86 @@ local function addMailboxFrame(container)
 		end)
 		group:AddChild(btn)
 	end
+
+	--Money
+
+	local groupMoney = addon.functions.createContainer("InlineGroup", "List")
+	groupMoney:SetTitle(MONEY)
+	wrapper:AddChild(groupMoney)
+
+	local cbEnable = addon.functions.createCheckboxAce(L["enableMoneyTracker"], addon.db["enableMoneyTracker"], function(_, _, v)
+		addon.db["enableMoneyTracker"] = v
+		container:ReleaseChildren()
+		addVendorMainFrame(container)
+	end, L["enableMoneyTrackerDesc"])
+	groupMoney:AddChild(cbEnable)
+
+	if addon.db["enableMoneyTracker"] then
+		local groupMoneySub = addon.functions.createContainer("InlineGroup", "List")
+		groupMoney:AddChild(groupMoneySub)
+
+		local cbGoldOnly = addon.functions.createCheckboxAce(L["showOnlyGoldOnMoney"], addon.db["showOnlyGoldOnMoney"], function(_, _, v) addon.db["showOnlyGoldOnMoney"] = v end)
+		groupMoneySub:AddChild(cbGoldOnly)
+
+		-- Character removal list (moved from Bags)
+		local tList = {}
+		for guid, v in pairs(addon.db["moneyTracker"]) do
+			if guid ~= UnitGUID("player") then
+				local col = (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[v.class] or { r = 1, g = 1, b = 1 }
+				local displayName = string.format("|cff%02x%02x%02x%s-%s|r", (col.r or 1) * 255, (col.g or 1) * 255, (col.b or 1) * 255, v.name or "?", v.realm or "?")
+				tList[guid] = displayName
+			end
+		end
+
+		local list, order = addon.functions.prepareListForDropdown(tList)
+		local dropRemove = addon.functions.createDropdownAce(L["moneyTrackerRemovePlayer"], list, order, nil)
+		local btnRemove = addon.functions.createButtonAce(REMOVE, 100, function()
+			local sel = dropRemove:GetValue()
+			if sel and addon.db["moneyTracker"][sel] then
+				addon.db["moneyTracker"][sel] = nil
+				local tList2 = {}
+				for guid, v in pairs(addon.db["moneyTracker"]) do
+					if guid ~= UnitGUID("player") then
+						local col = (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[v.class] or { r = 1, g = 1, b = 1 }
+						local displayName = string.format("|cff%02x%02x%02x%s-%s|r", (col.r or 1) * 255, (col.g or 1) * 255, (col.b or 1) * 255, v.name or "?", v.realm or "?")
+						tList2[guid] = displayName
+					end
+				end
+				local nl, no = addon.functions.prepareListForDropdown(tList2)
+				dropRemove:SetList(nl, no)
+				dropRemove:SetValue(nil)
+			end
+		end)
+		groupMoneySub:AddChild(dropRemove)
+		groupMoneySub:AddChild(btnRemove)
+	end
+
+	scroll:DoLayout()
+end
+
+-- Mailbox address book options
+local function addMailboxFrame(container)
+	local data = {
+		{
+			parent = MINIMAP_TRACKING_MAILBOX,
+			var = "enableMailboxAddressBook",
+			type = "CheckBox",
+			text = L["enableMailboxAddressBook"],
+			desc = L["enableMailboxAddressBookDesc"],
+			callback = function(self, _, value)
+				addon.db["enableMailboxAddressBook"] = value
+				if addon.Mailbox then
+					if addon.Mailbox.SetEnabled then addon.Mailbox:SetEnabled(value) end
+					if value and addon.Mailbox.AddSelfToContacts then addon.Mailbox:AddSelfToContacts() end
+					if value and addon.Mailbox.RefreshList then addon.Mailbox:RefreshList() end
+				end
+				container:ReleaseChildren()
+				addMailboxFrame(container)
+			end,
+		},
+	}
+
+	local wrapper = addon.functions.createWrapperData(data, container, L)
 end
 
 local function addActionBarFrame(container, d)
@@ -2346,6 +2511,16 @@ local function addUIFrame(container)
 		},
 		{
 			parent = "",
+			var = "hideDynamicFlightBar",
+			text = L["hideDynamicFlightBar"]:format(DYNAMIC_FLIGHT),
+			type = "CheckBox",
+			callback = function(self, _, value)
+				addon.db["hideDynamicFlightBar"] = value
+				addon.functions.toggleDynamicFlightBar(addon.db["hideDynamicFlightBar"])
+			end,
+		},
+		{
+			parent = "",
 			var = "hideBagsBar",
 			type = "CheckBox",
 			callback = function(self, _, value)
@@ -2469,8 +2644,14 @@ local function addBagFrame(container)
 	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
 	container:AddChild(wrapper)
 
+	local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
+	scroll:SetFullWidth(true)
+	scroll:SetFullHeight(true)
+	wrapper:AddChild(scroll)
+
 	local groupCore = addon.functions.createContainer("InlineGroup", "List")
-	wrapper:AddChild(groupCore)
+	groupCore:SetTitle(INFO)
+	scroll:AddChild(groupCore)
 
 	local data = {
 		{
@@ -2491,6 +2672,8 @@ local function addBagFrame(container)
 					if frame:IsShown() then addon.functions.updateBags(frame) end
 				end
 				if ContainerFrameCombinedBags:IsShown() then addon.functions.updateBags(ContainerFrameCombinedBags) end
+				container:ReleaseChildren()
+				addBagFrame(container)
 			end,
 		},
 		{
@@ -2623,16 +2806,18 @@ local function addBagFrame(container)
 		BOTTOMRIGHT = L["bottomRight"],
 	}
 	local order = { "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT" }
-	local dropIlvlPos = addon.functions.createDropdownAce(L["bagIlvlPosition"], list, order, function(self, _, value)
-		addon.db["bagIlvlPosition"] = value
-		for _, frame in ipairs(ContainerFrameContainer.ContainerFrames) do
-			if frame:IsShown() then addon.functions.updateBags(frame) end
-		end
-		if ContainerFrameCombinedBags:IsShown() then addon.functions.updateBags(ContainerFrameCombinedBags) end
-	end)
-	dropIlvlPos:SetValue(addon.db["bagIlvlPosition"])
-	dropIlvlPos:SetRelativeWidth(0.4)
-	groupCore:AddChild(dropIlvlPos)
+	if addon.db["showIlvlOnBagItems"] then
+		local dropIlvlPos = addon.functions.createDropdownAce(L["bagIlvlPosition"], list, order, function(self, _, value)
+			addon.db["bagIlvlPosition"] = value
+			for _, frame in ipairs(ContainerFrameContainer.ContainerFrames) do
+				if frame:IsShown() then addon.functions.updateBags(frame) end
+			end
+			if ContainerFrameCombinedBags:IsShown() then addon.functions.updateBags(ContainerFrameCombinedBags) end
+		end)
+		dropIlvlPos:SetValue(addon.db["bagIlvlPosition"])
+		dropIlvlPos:SetRelativeWidth(0.4)
+		groupCore:AddChild(dropIlvlPos)
+	end
 
 	if addon.db["showUpgradeArrowOnBagItems"] then
 		local dropUpPos = addon.functions.createDropdownAce(L["bagUpgradeIconPosition"], list, order, function(self, _, value)
@@ -2652,63 +2837,78 @@ local function addBagFrame(container)
 		dropUpPos:SetRelativeWidth(0.4)
 		groupCore:AddChild(dropUpPos)
 	end
-end
 
--- Vendors & Economy: Money options
-local function addMoneyFrame(container)
-	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
-	container:AddChild(wrapper)
+	local groupConfirmation = addon.functions.createContainer("InlineGroup", "List")
+	groupConfirmation:SetTitle(L["Confirmations"])
+	scroll:AddChild(groupConfirmation)
 
-	local groupCore = addon.functions.createContainer("InlineGroup", "List")
-	wrapper:AddChild(groupCore)
+	-- Confirmation
+	data = {
+		{
+			parent = "",
+			var = "deleteItemFillDialog",
+			text = L["deleteItemFillDialog"]:format(DELETE_ITEM_CONFIRM_STRING),
+			type = "CheckBox",
+			desc = L["deleteItemFillDialogDesc"],
+			callback = function(self, _, value) addon.db["deleteItemFillDialog"] = value end,
+		},
+		{
+			parent = "",
+			var = "confirmPatronOrderDialog",
+			text = (L["confirmPatronOrderDialog"]):format(PROFESSIONS_CRAFTER_ORDER_TAB_NPC),
+			type = "CheckBox",
+			desc = L["confirmPatronOrderDialogDesc"],
+			callback = function(self, _, value) addon.db["confirmPatronOrderDialog"] = value end,
+		},
+		{
+			parent = "",
+			var = "confirmTimerRemovalTrade",
+			text = L["confirmTimerRemovalTrade"],
+			type = "CheckBox",
+			desc = L["confirmTimerRemovalTradeDesc"],
+			callback = function(self, _, value) addon.db["confirmTimerRemovalTrade"] = value end,
+		},
+		{
+			parent = "",
+			var = "confirmReplaceEnchant",
+			text = L["confirmReplaceEnchant"],
+			type = "CheckBox",
+			desc = L["confirmReplaceEnchantDesc"],
+			callback = function(self, _, value) addon.db["confirmReplaceEnchant"] = value end,
+		},
+		{
+			parent = "",
+			var = "confirmSocketReplace",
+			text = L["confirmSocketReplace"],
+			type = "CheckBox",
+			desc = L["confirmSocketReplaceDesc"],
+			callback = function(self, _, value) addon.db["confirmSocketReplace"] = value end,
+		},
+	}
 
-	local cbEnable = addon.functions.createCheckboxAce(L["enableMoneyTracker"], addon.db["enableMoneyTracker"], function(_, _, v)
-		addon.db["enableMoneyTracker"] = v
-		container:ReleaseChildren()
-		addMoneyFrame(container)
-	end, L["enableMoneyTrackerDesc"])
-	groupCore:AddChild(cbEnable)
-
-	if addon.db["enableMoneyTracker"] then
-		local groupMoney = addon.functions.createContainer("InlineGroup", "List")
-		groupMoney:SetTitle(MONEY)
-		wrapper:AddChild(groupMoney)
-
-		local cbGoldOnly = addon.functions.createCheckboxAce(L["showOnlyGoldOnMoney"], addon.db["showOnlyGoldOnMoney"], function(_, _, v) addon.db["showOnlyGoldOnMoney"] = v end)
-		groupMoney:AddChild(cbGoldOnly)
-
-		-- Character removal list (moved from Bags)
-		local tList = {}
-		for guid, v in pairs(addon.db["moneyTracker"]) do
-			if guid ~= UnitGUID("player") then
-				local col = (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[v.class] or { r = 1, g = 1, b = 1 }
-				local displayName = string.format("|cff%02x%02x%02x%s-%s|r", (col.r or 1) * 255, (col.g or 1) * 255, (col.b or 1) * 255, v.name or "?", v.realm or "?")
-				tList[guid] = displayName
-			end
+	table.sort(data, function(a, b)
+		local textA = a.var
+		local textB = b.var
+		if a.text then
+			textA = a.text
+		else
+			textA = L[a.var]
 		end
+		if b.text then
+			textB = b.text
+		else
+			textB = L[b.var]
+		end
+		return textA < textB
+	end)
 
-		local list, order = addon.functions.prepareListForDropdown(tList)
-		local dropRemove = addon.functions.createDropdownAce(L["moneyTrackerRemovePlayer"], list, order, nil)
-		local btnRemove = addon.functions.createButtonAce(REMOVE, 100, function()
-			local sel = dropRemove:GetValue()
-			if sel and addon.db["moneyTracker"][sel] then
-				addon.db["moneyTracker"][sel] = nil
-				local tList2 = {}
-				for guid, v in pairs(addon.db["moneyTracker"]) do
-					if guid ~= UnitGUID("player") then
-						local col = (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[v.class] or { r = 1, g = 1, b = 1 }
-						local displayName = string.format("|cff%02x%02x%02x%s-%s|r", (col.r or 1) * 255, (col.g or 1) * 255, (col.b or 1) * 255, v.name or "?", v.realm or "?")
-						tList2[guid] = displayName
-					end
-				end
-				local nl, no = addon.functions.prepareListForDropdown(tList2)
-				dropRemove:SetList(nl, no)
-				dropRemove:SetValue(nil)
-			end
-		end)
-		groupMoney:AddChild(dropRemove)
-		groupMoney:AddChild(btnRemove)
+	for _, checkboxData in ipairs(data) do
+		local desc
+		if checkboxData.desc then desc = checkboxData.desc end
+		local cbautoChooseQuest = addon.functions.createCheckboxAce(checkboxData.text, addon.db[checkboxData.var], checkboxData.callback, desc)
+		groupConfirmation:AddChild(cbautoChooseQuest)
 	end
+	scroll:DoLayout()
 end
 
 local function addCharacterFrame(container)
@@ -2971,60 +3171,6 @@ local function getMiscOptions()
 			callback = function(self, _, value) addon.db["automaticallyOpenContainer"] = value end,
 		},
 		--@end-debug@
-		{
-			parent = "",
-			var = "autoRepair",
-			type = "CheckBox",
-			desc = L["autoRepairDesc"],
-			callback = function(self, _, value) addon.db["autoRepair"] = value end,
-		},
-		{
-			parent = "",
-			var = "sellAllJunk",
-			type = "CheckBox",
-			desc = L["sellAllJunkDesc"],
-			callback = function(self, _, value)
-				addon.db["sellAllJunk"] = value
-				if value then checkBagIgnoreJunk() end
-			end,
-		},
-		{
-			parent = "",
-			var = "deleteItemFillDialog",
-			text = L["deleteItemFillDialog"]:format(DELETE_ITEM_CONFIRM_STRING),
-			type = "CheckBox",
-			desc = L["deleteItemFillDialogDesc"],
-			callback = function(self, _, value) addon.db["deleteItemFillDialog"] = value end,
-		},
-		{
-			parent = "",
-			var = "confirmPatronOrderDialog",
-			text = (L["confirmPatronOrderDialog"]):format(PROFESSIONS_CRAFTER_ORDER_TAB_NPC),
-			type = "CheckBox",
-			desc = L["confirmPatronOrderDialogDesc"],
-			callback = function(self, _, value) addon.db["confirmPatronOrderDialog"] = value end,
-		},
-		{
-			parent = "",
-			var = "confirmTimerRemovalTrade",
-			type = "CheckBox",
-			desc = L["confirmTimerRemovalTradeDesc"],
-			callback = function(self, _, value) addon.db["confirmTimerRemovalTrade"] = value end,
-		},
-		{
-			parent = "",
-			var = "confirmReplaceEnchant",
-			type = "CheckBox",
-			desc = L["confirmReplaceEnchantDesc"],
-			callback = function(self, _, value) addon.db["confirmReplaceEnchant"] = value end,
-		},
-		{
-			parent = "",
-			var = "confirmSocketReplace",
-			type = "CheckBox",
-			desc = L["confirmSocketReplaceDesc"],
-			callback = function(self, _, value) addon.db["confirmSocketReplace"] = value end,
-		},
 	}
 	return data
 end
@@ -3521,24 +3667,6 @@ local function addQuestFrame(container, d)
 	groupNPC:AddChild(btnAddNPC)
 	groupNPC:AddChild(dropIncludeList)
 	groupNPC:AddChild(btnRemoveNPC)
-end
-
-local function addMapFrame(container)
-	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
-	container:AddChild(wrapper)
-
-	local groupCore = addon.functions.createContainer("InlineGroup", "List")
-	wrapper:AddChild(groupCore)
-
-	local cbElement = addon.functions.createCheckboxAce(L["enableWayCommand"], addon.db["enableWayCommand"], function(self, _, value)
-		addon.db["enableWayCommand"] = value
-		if value then
-			addon.functions.registerWayCommand()
-		else
-			addon.variables.requireReload = true
-		end
-	end, L["enableWayCommandDesc"])
-	groupCore:AddChild(cbElement)
 end
 
 local function addSocialFrame(container)
@@ -6127,8 +6255,6 @@ local function CreateUI()
 				text = L["ItemsInventory"],
 				children = {
 					{ value = "loot", text = L["Loot"] },
-					-- "container" will be conditionally added below if available
-					{ value = "confirmations", text = L["Confirmations"] },
 				},
 			},
 			-- Gear & Upgrades
@@ -6140,13 +6266,6 @@ local function CreateUI()
 			{
 				value = "economy",
 				text = L["VendorsEconomy"],
-				children = {
-					{ value = "merchant", text = MERCHANT },
-					{ value = "auctionhouse", text = BUTTON_LAG_AUCTIONHOUSE },
-					{ value = "mailbox", text = MINIMAP_TRACKING_MAILBOX },
-					{ value = "convenience", text = L["Convenience"] },
-					{ value = "money", text = MONEY },
-				},
 			},
 			-- Combat & Dungeons
 			{
@@ -6157,9 +6276,6 @@ local function CreateUI()
 			{
 				value = "nav",
 				text = L["MapNavigation"],
-				children = {
-					{ value = "minimap", text = MINIMAP_LABEL },
-				},
 			},
 			-- UI & Input
 			{
@@ -6218,11 +6334,7 @@ local function CreateUI()
 			addCharacterFrame(container)
 		-- Vendors & Economy
 		elseif group == "general\001economy" then
-			addCategoryIntro(container, "VendorsEconomy", "VendorsEconomyIntro")
-		elseif group == "general\001economy\001merchant" then
-			addMerchantFrame(container)
-		elseif group == "general\001economy\001auctionhouse" then
-			addAuctionHouseFrame(container)
+			addVendorMainFrame(container)
 		elseif group == "general\001economy\001mailbox" then
 			addMailboxFrame(container)
 		elseif string.sub(group, 1, string.len("general\001economy\001selling")) == "general\001economy\001selling" then
@@ -6230,10 +6342,6 @@ local function CreateUI()
 			addon.Vendor.functions.treeCallback(container, group)
 		elseif group == "general\001economy\001craftshopper" then
 			addon.Vendor.functions.treeCallback(container, group)
-		elseif group == "general\001economy\001convenience" then
-			addMiscSubsetFrame(container, { "autoRepair", "sellAllJunk" })
-		elseif group == "general\001economy\001money" then
-			addMoneyFrame(container)
 		-- Combat & Dungeons
 		elseif group == "general\001combat" then
 			addDungeonFrame(container)
@@ -6242,18 +6350,6 @@ local function CreateUI()
 			addon.MythicPlus.functions.treeCallback(container, group)
 		-- Map & Navigation
 		elseif group == "general\001nav" then
-			-- Flatten simple subpages: create a single scroll wrapper, then render both sections
-			local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
-			scroll:SetFullWidth(true)
-			scroll:SetFullHeight(true)
-			container:AddChild(scroll)
-
-			local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
-			scroll:AddChild(wrapper)
-
-			addMapFrame(wrapper)
-			addDynamicFlightFrame(wrapper)
-		elseif group == "general\001nav\001minimap" then
 			addMinimapFrame(container)
 		elseif group == "general\001nav\001teleports" then
 			addon.MythicPlus.functions.treeCallback(container, group)
