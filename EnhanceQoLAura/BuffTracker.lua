@@ -1981,7 +1981,7 @@ end
 function addon.Aura.functions.buildCategoryOptions(container, catId)
 	local cat = getCategory(catId)
 	if not cat then return end
-	local core = addon.functions.createContainer("InlineGroup", "Flow")
+	local core = addon.functions.createContainer("InlineGroup", "List")
 	container:AddChild(core)
 
 	local enableCB = addon.functions.createCheckboxAce(L["EnableBuffTracker"]:format(cat.name), addon.db["buffTrackerEnabled"][catId], function(self, _, val)
@@ -2174,8 +2174,8 @@ function addon.Aura.functions.buildBuffOptions(container, catId, buffId)
 
 	local wrapper = addon.functions.createContainer("SimpleGroup", "List")
 	groupCore:AddChild(wrapper)
-	wrapper:SetFullWidth(true)
-	wrapper:SetFullHeight(true)
+	-- wrapper:SetFullWidth(true)
+	-- wrapper:SetFullHeight(true)
 
 	local label = AceGUI:Create("Label")
 	local buffText = buff.name or ""
@@ -2619,6 +2619,7 @@ function addon.Aura.functions.addBuffTrackerOptions(container)
 	treeGroup:SetFullWidth(true)
 	treeGroup:SetTreeWidth(200, true)
 	treeGroup:SetTree(getCategoryTree())
+	treeGroup:SetLayout("Fill")
 	treeGroup:SetCallback("OnGroupSelected", function(widget, _, value)
 		-- Handle click on pseudo‑node for adding new categories
 		if value == "ADD_CATEGORY" then
@@ -2690,7 +2691,7 @@ function addon.Aura.functions.addBuffTrackerOptions(container)
 		addon.db["buffTrackerSelectedCategory"] = catId
 		widget:ReleaseChildren()
 
-		local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
+		local scroll = addon.functions.createContainer("ScrollFrame", "List")
 		scroll:SetFullWidth(true)
 		scroll:SetFullHeight(true)
 		widget:AddChild(scroll)
