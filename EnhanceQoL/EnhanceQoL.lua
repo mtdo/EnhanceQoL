@@ -1143,6 +1143,7 @@ local function addChatFrame(container)
 	scroll:SetFullWidth(true)
 	scroll:SetFullHeight(true)
 	container:AddChild(scroll)
+	scroll:PauseLayout()
 
 	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
 	scroll:AddChild(wrapper)
@@ -1409,6 +1410,7 @@ local function addChatFrame(container)
 		hint:SetText("|cffffd700" .. L["RightClickCloseTab"] .. "|r ")
 		groupCoreSettingSub:AddChild(hint)
 	end
+	scroll:ResumeLayout()
 	scroll:DoLayout()
 end
 
