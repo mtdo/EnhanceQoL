@@ -62,6 +62,15 @@ local function getBossHB(i)
     return hb, f
 end
 
+-- PlayerFrame helper
+local function getPlayerHB()
+    local f = _G.PlayerFrame
+    if not f or not f.PlayerFrameContent then return end
+    local main = f.PlayerFrameContent.PlayerFrameContentMain
+    local hb = main and main.HealthBarsContainer and main.HealthBarsContainer.HealthBar
+    return hb, f
+end
+
 local function applyText(hb, text)
     if not hb or not text then return end
     local t = hb.TextString or hb.HealthBarText
@@ -87,6 +96,11 @@ function BossFrames:UpdateAll()
     for i = 1, n do
         self:UpdateBossIndex(i)
     end
+    -- Also update player frame
+    local hb = getPlayerHB()
+    if hb then
+        applyText(hb, fmt(self.mode, UnitHealth("player"), UnitHealthMax("player")))
+    end
 end
 
 function BossFrames:HideAll()
@@ -100,6 +114,14 @@ function BossFrames:HideAll()
             if hb.LeftText then hb.LeftText:Hide() end
             if hb.RightText then hb.RightText:Hide() end
         end
+    end
+    -- Hide player text as well
+    local phb = getPlayerHB()
+    if phb then
+        local t = phb.TextString or phb.HealthBarText
+        if t then t:Hide() end
+        if phb.LeftText then phb.LeftText:Hide() end
+        if phb.RightText then phb.RightText:Hide() end
     end
 end
 
@@ -128,6 +150,36 @@ function BossFrames:HookBars()
                     if not addon.BossFrames.enabled or addon.BossFrames.mode == "OFF" or isStatusTextEnabled() then return end
                     if not UnitExists(("boss%d"):format(idx)) then return end
                     textString:SetText(fmt(addon.BossFrames.mode, UnitHealth(("boss%d"):format(idx)), UnitHealthMax(("boss%d"):format(idx))))
+                    textString:Show()
+                    if statusBar.LeftText then statusBar.LeftText:Hide() end
+                    if statusBar.RightText then statusBar.RightText:Hide() end
+                end)
+            end
+        end
+    end
+
+    -- Hook PlayerFrame health bar similarly
+    do
+        local hb = getPlayerHB()
+        if hb and not self.hooked[hb] then
+            self.hooked[hb] = true
+            if hb.UpdateTextStringWithValues then
+                hooksecurefunc(hb, "UpdateTextStringWithValues", function(bar, textString)
+                    if not addon or not addon.BossFrames then return end
+                    if not addon.BossFrames.enabled or addon.BossFrames.mode == "OFF" or isStatusTextEnabled() then return end
+                    if not textString or not UnitExists("player") then return end
+                    textString:SetText(fmt(addon.BossFrames.mode, UnitHealth("player"), UnitHealthMax("player")))
+                    textString:Show()
+                    if bar.LeftText then bar.LeftText:Hide() end
+                    if bar.RightText then bar.RightText:Hide() end
+                end)
+            else
+                hooksecurefunc("TextStatusBar_UpdateTextStringWithValues", function(statusBar, textString)
+                    if statusBar ~= hb or not textString then return end
+                    if not addon or not addon.BossFrames then return end
+                    if not addon.BossFrames.enabled or addon.BossFrames.mode == "OFF" or isStatusTextEnabled() then return end
+                    if not UnitExists("player") then return end
+                    textString:SetText(fmt(addon.BossFrames.mode, UnitHealth("player"), UnitHealthMax("player")))
                     textString:Show()
                     if statusBar.LeftText then statusBar.LeftText:Hide() end
                     if statusBar.RightText then statusBar.RightText:Hide() end
@@ -192,9 +244,14 @@ BossFrames.frame:SetScript("OnEvent", function(_, event, arg1, arg2)
     if event == "PLAYER_LOGIN" or event == "INSTANCE_ENCOUNTER_ENGAGE_UNIT" then
         addon.BossFrames:HookBars()
         addon.BossFrames:UpdateAll()
-    elseif (event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH") and arg1 and arg1:match("^boss%d$") then
-        local i = tonumber(arg1:match("^boss(%d)$"))
-        if i then addon.BossFrames:UpdateBossIndex(i) end
+    elseif (event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH") then
+        if arg1 == "player" then
+            local hb = getPlayerHB()
+            if hb then applyText(hb, fmt(addon.BossFrames.mode, UnitHealth("player"), UnitHealthMax("player"))) end
+        elseif arg1 and arg1:match("^boss%d$") then
+            local i = tonumber(arg1:match("^boss(%d)$"))
+            if i then addon.BossFrames:UpdateBossIndex(i) end
+        end
     elseif event == "CVAR_UPDATE" then
         local name = tostring(arg1 or "")
         if name:lower() == "statustext" then

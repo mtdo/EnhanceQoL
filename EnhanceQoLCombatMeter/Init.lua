@@ -17,9 +17,10 @@ local TEXTURE_PATH = "Interface\\AddOns\\EnhanceQoLCombatMeter\\Texture\\"
 local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
 
 addon.variables.statusTable.groups["combatmeter"] = true
-addon.functions.addToTree(nil, {
-	value = "combatmeter",
-	text = L["Combat Meter"],
+-- Place Combat Meter under Combat & Dungeons
+addon.functions.addToTree("combat", {
+    value = "combatmeter",
+    text = L["Combat Meter"],
 })
 
 local function addGeneralFrame(container)

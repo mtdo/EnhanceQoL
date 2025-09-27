@@ -394,9 +394,10 @@ local function addGeneralFrame(container)
 	end
 end
 addon.variables.statusTable.groups["mouse"] = true
-addon.functions.addToTree(nil, {
-	value = "mouse",
-	text = MOUSE_LABEL,
+-- Place Mouse under UI & Input
+addon.functions.addToTree("ui", {
+    value = "mouse",
+    text = MOUSE_LABEL,
 })
 
 function addon.Mouse.functions.treeCallback(container, group)

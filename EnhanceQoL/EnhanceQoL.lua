@@ -6407,101 +6407,69 @@ local function CreateUI()
 	end)
 	addon.treeGroupData = {}
 
-	-- Create the TreeGroup
+	-- Create the TreeGroup with new top-level navigation
 	addon.treeGroup = AceGUI:Create("TreeGroup")
+
+	-- Top: Combat & Dungeons (children added by sub-addons like Aura, Mythic+, Drink, CombatMeter)
+	addon.functions.addToTree(nil, { value = "combat", text = L["CombatDungeons"] })
+
+	-- Top: Items & Inventory (core pages + Vendors & Economy)
 	addon.functions.addToTree(nil, {
-		value = "general",
-		text = L["General"],
+		value = "items",
+		text = L["ItemsInventory"],
 		children = {
-			-- Items & Inventory
-			{
-				value = "items",
-				text = L["ItemsInventory"],
-				children = {
-					{ value = "loot", text = L["Loot"] },
-				},
-			},
-			-- Gear & Upgrades
-			{
-				value = "gear",
-				text = L["GearUpgrades"],
-			},
-			-- Vendors & Economy
-			{
-				value = "economy",
-				text = L["VendorsEconomy"],
-			},
-			-- Combat & Dungeons
-			{
-				value = "combat",
-				text = L["CombatDungeons"],
-			},
-			-- Map & Navigation
-			{
-				value = "nav",
-				text = L["MapNavigation"],
-			},
-			-- UI & Input
-			{
-				value = "ui",
-				text = L["UIInput"],
-				children = {
-					{ value = "actionbar", text = ACTIONBARS_LABEL },
-					{ value = "chatframe", text = HUD_EDIT_MODE_CHAT_FRAME_LABEL },
-					{ value = "unitframe", text = UNITFRAME_LABEL },
-					{ value = "datapanel", text = "Datapanel" },
-				},
-			},
-			-- Quests & Social
-			{ value = "quest", text = L["Quest"] },
-			{ value = "social", text = L["Social"] },
-			-- System
-			{
-				value = "system",
-				text = L["System"],
-			},
+			{ value = "loot", text = L["Loot"] },
+			{ value = "gear", text = L["GearUpgrades"] },
+			{ value = "economy", text = L["VendorsEconomy"] },
 		},
 	})
 
-	-- TODO new structure
-	addon.functions.addToTree(nil, {
-		value = "combat",
-		text = L["CombatDungeons"],
-	})
-
-	addon.functions.addToTree(
-		nil, -- Items & Inventory
-		{
-			value = "items",
-			text = L["ItemsInventory"],
-			children = {
-				{ value = "loot", text = L["Loot"] },
-				{
-					value = "gear",
-					text = L["GearUpgrades"],
-				},
-				{
-					value = "economy",
-					text = L["VendorsEconomy"],
-				},
-			},
-		}
-	)
+	-- Top: Map & Navigation (Teleports added by Mythic+)
 	addon.functions.addToTree(nil, {
 		value = "nav",
 		text = L["MapNavigation"],
+		children = {
+			{ value = "quest", text = L["Quest"] },
+		},
 	})
+
+	-- Top: UI & Input
 	addon.functions.addToTree(nil, {
 		value = "ui",
 		text = L["UIInput"],
+		children = {
+			{ value = "actionbar", text = ACTIONBARS_LABEL },
+			{ value = "chatframe", text = HUD_EDIT_MODE_CHAT_FRAME_LABEL },
+			{ value = "unitframe", text = UNITFRAME_LABEL },
+			{ value = "datapanel", text = "Datapanel" },
+			{ value = "social", text = L["Social"] },
+			{ value = "system", text = L["System"] },
+		},
 	})
+
+	-- Top: Media & Sound (only if at least one media addon is available)
+	local addMediaRoot = false
+	if addon.SharedMedia and addon.SharedMedia.functions and addon.SharedMedia.functions.treeCallback then
+		addMediaRoot = true
+	else
+		local ok1, reason1 = true, nil
+		local ok2, reason2 = true, nil
+		if C_AddOns and C_AddOns.IsAddOnLoadable then
+			ok1, reason1 = C_AddOns.IsAddOnLoadable("EnhanceQoLSharedMedia")
+			ok2, reason2 = C_AddOns.IsAddOnLoadable("EnhanceQoLSound")
+		end
+		if ok1 or reason1 == "DEMAND_LOADED" or ok2 or reason2 == "DEMAND_LOADED" then addMediaRoot = true end
+	end
+	if addon.Sounds and addon.Sounds.functions and addon.Sounds.functions.treeCallback then addMediaRoot = true end
+	if addMediaRoot then addon.functions.addToTree(nil, { value = "media", text = "Media & Sound" }) end
 
 	-- Conditionally add "Container Actions" under Items if it exists
 	if hasMiscOption("automaticallyOpenContainer") then
-		addon.functions.addToTree("general\001items", { value = "container", text = L["ContainerActions"] }, true)
-		-- true = noSort; we keep earlier order (loot before container)
+		addon.functions.addToTree("items", { value = "container", text = L["ContainerActions"] }, true)
 		addon.treeGroup:SetTree(addon.treeGroupData)
 	end
+
+	-- Top: Profiles
 	table.insert(addon.treeGroupData, {
 		value = "profiles",
 		text = L["Profiles"],
@@ -6512,13 +6480,13 @@ local function CreateUI()
 		container:ReleaseChildren() -- Entfernt vorherige Inhalte
 		-- Prüfen, welche Gruppe ausgewählt wurde
 		-- Items & Inventory
-		if group == "general\001items" then
+		if group == "items" then
 			addBagFrame(container)
-		elseif group == "general\001items\001loot" then
+		elseif group == "items\001loot" then
 			addLootFrame(container, true)
-		elseif group == "general\001items\001container" then
+		elseif group == "items\001container" then
 			addMiscSubsetFrame(container, { "automaticallyOpenContainer" })
-		elseif group == "general\001items\001confirmations" then
+		elseif group == "items\001confirmations" then
 			addMiscSubsetFrame(container, {
 				"deleteItemFillDialog",
 				"confirmReplaceEnchant",
@@ -6527,47 +6495,66 @@ local function CreateUI()
 				"confirmTimerRemovalTrade",
 			})
 		-- Gear & Upgrades
-		elseif group == "general\001gear" then
+		elseif group == "items\001gear" then
 			addCharacterFrame(container)
 		-- Vendors & Economy
-		elseif group == "general\001economy" then
+		elseif group == "items\001economy" then
 			addVendorMainFrame2(container)
-		elseif group == "general\001economy\001mailbox" then
+		elseif group == "items\001economy\001mailbox" then
 			addMailboxFrame(container)
-		elseif string.sub(group, 1, string.len("general\001economy\001selling")) == "general\001economy\001selling" then
+		elseif string.sub(group, 1, string.len("items\001economy\001selling")) == "items\001economy\001selling" then
 			-- Forward Selling (Auto-Sell) pages to Vendor UI
 			addon.Vendor.functions.treeCallback(container, group)
-		elseif group == "general\001economy\001craftshopper" then
+		elseif group == "items\001economy\001craftshopper" then
 			addon.Vendor.functions.treeCallback(container, group)
 		-- Combat & Dungeons
-		elseif group == "general\001combat" then
+		elseif group == "combat" then
 			addDungeonFrame(container)
-		-- Forward former Dungeon (Mythic+) subpages directly under Combat
-		elseif string.sub(group, 1, string.len("general\001combat\001")) == "general\001combat\001" then
-			addon.MythicPlus.functions.treeCallback(container, group)
+		-- Forward Combat subtree for modules (Mythic+, Aura, Drink, CombatMeter)
+		elseif string.sub(group, 1, string.len("combat\001")) == "combat\001" then
+			-- Normalize and dispatch for known combat modules
+			if string.find(group, "mythicplus", 1, true) then
+				addon.MythicPlus.functions.treeCallback(container, group)
+			elseif group:find("combat\001resourcebar", 1, true) or group:find("combat\001bufftracker", 1, true) or group:find("combat\001casttracker", 1, true) or group:find("combat\001cooldownnotify", 1, true) then
+				addon.Aura.functions.treeCallback(container, group)
+			elseif string.find(group, "\001drink", 1, true) or string.sub(group, 1, 5) == "drink" or group:find("combat\001drink", 1, true) then
+				local pos = group:find("drink", 1, true)
+				addon.Drinks.functions.treeCallback(container, group:sub(pos))
+			elseif string.find(group, "\001combatmeter", 1, true) or string.sub(group, 1, 11) == "combatmeter" or group:find("combat\001combatmeter", 1, true) then
+				local pos = group:find("combatmeter", 1, true)
+				addon.CombatMeter.functions.treeCallback(container, group:sub(pos))
+			else
+				-- Fallback to Mythic+ for other combat children
+				addon.MythicPlus.functions.treeCallback(container, group)
+			end
 		-- Map & Navigation
-		elseif group == "general\001nav" then
+		elseif group == "nav" then
 			addMinimapFrame(container)
-		elseif group == "general\001nav\001teleports" then
+		elseif group == "nav\001teleports" then
 			addon.MythicPlus.functions.treeCallback(container, group)
 		-- UI & Input
-		elseif group == "general\001ui" then
+		elseif group == "ui" then
 			addUIFrame(container)
-		elseif group == "general\001ui\001actionbar" then
+		elseif group == "ui\001actionbar" then
 			addActionBarFrame(container)
-		elseif group == "general\001ui\001chatframe" then
+		elseif group == "ui\001chatframe" then
 			addChatFrame(container)
-		elseif group == "general\001ui\001unitframe" then
+		elseif group == "ui\001unitframe" then
 			addUnitFrame2(container)
-		elseif group == "general\001ui\001datapanel" then
+		elseif group == "ui\001datapanel" then
 			buildDatapanelFrame(container)
-		-- Quests & Social
-		elseif group == "general\001quest" then
-			addQuestFrame(container, true) -- Ruft die Funktion zum Hinzufügen der Quest-Optionen auf
-		elseif group == "general\001social" then
+		elseif group == "ui\001mouse" then
+			addon.Mouse.functions.treeCallback(container, "mouse")
+		elseif group == "ui\001tooltip" then
+			addon.Tooltip.functions.treeCallback(container, group:sub(4)) -- pass "tooltip..."
+		-- Quests under Map & Navigation
+		elseif group == "nav\001quest" then
+			addQuestFrame(container, true)
+		-- Social under UI
+		elseif group == "ui\001social" then
 			addSocialFrame(container)
 		-- System
-		elseif group == "general\001system" then
+		elseif group == "ui\001system" then
 			addCVarFrame(container, true)
 		elseif group == "profiles" then
 			local sub = AceGUI:Create("SimpleGroup")
@@ -6575,8 +6562,15 @@ local function CreateUI()
 			sub:SetFullHeight(true)
 			container:AddChild(sub)
 			AceConfigDlg:Open("EQOL_Profiles", sub)
-		elseif string.match(group, "^tooltip") then
-			addon.Tooltip.functions.treeCallback(container, group)
+		-- Media & Sound wrappers
+		elseif group == "media" then
+			-- Show Shared Media content directly when available
+			if addon.SharedMedia and addon.SharedMedia.functions and addon.SharedMedia.functions.treeCallback then
+				addon.SharedMedia.functions.treeCallback(container, "media")
+			end
+		elseif string.sub(group, 1, string.len("media\001")) == "media\001" then
+			-- Route any Media children to Sound module (flattened categories)
+			if addon.Sounds and addon.Sounds.functions and addon.Sounds.functions.treeCallback then addon.Sounds.functions.treeCallback(container, group) end
 		elseif string.match(group, "^vendor") then
 			addon.Vendor.functions.treeCallback(container, group)
 		elseif string.match(group, "^drink") then
@@ -6595,14 +6589,16 @@ local function CreateUI()
 			addon.CombatMeter.functions.treeCallback(container, group)
 		elseif string.match(group, "^move") then
 			addon.LayoutTools.functions.treeCallback(container, group)
+		elseif string.sub(group, 1, string.len("ui\001move")) == "ui\001move" then
+			addon.LayoutTools.functions.treeCallback(container, group:sub(4))
 		end
 	end)
 	addon.treeGroup:SetStatusTable(addon.variables.statusTable)
-	addon.variables.statusTable.groups["general"] = true
+	addon.variables.statusTable.groups["items"] = true
 	frame:AddChild(addon.treeGroup)
 
 	-- Select a meaningful default page
-	addon.treeGroup:SelectByPath("general")
+	addon.treeGroup:SelectByPath("items")
 
 	-- Datenobjekt fr den Minimap-Button
 	local EnhanceQoLLDB = LDB:NewDataObject("EnhanceQoL", {

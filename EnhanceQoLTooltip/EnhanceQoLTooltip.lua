@@ -637,7 +637,8 @@ UpdateInspectEventRegistration()
 
 addon.variables.statusTable.groups["tooltip"] = true
 
-addon.functions.addToTree(nil, {
+-- Place Tooltip under UI & Input
+addon.functions.addToTree("ui", {
     value = "tooltip",
     text = L["Tooltip"],
 })

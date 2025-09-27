@@ -1281,7 +1281,7 @@ function addon.MythicPlus.functions.refreshTalentFrameIfOpen()
 	if not activeTalentContainer then return end
     local sel = addon.variables.statusTable.selected or ""
     local pos = sel:find("mythicplus\001talents", 1, true)
-    if pos == 1 or sel:find("general\001mythicplus\001talents", 1, true) or sel:find("general\001combat\001talents", 1, true) then
+    if pos == 1 or sel:find("general\001mythicplus\001talents", 1, true) or sel:find("general\001combat\001talents", 1, true) or sel:find("combat\001talents", 1, true) then
         activeTalentContainer:ReleaseChildren()
         addTalentFrame(activeTalentContainer)
     end
@@ -1300,18 +1300,16 @@ local mpChildren = {
     { value = "objectivetracker", text = HUD_EDIT_MODE_OBJECTIVE_TRACKER_LABEL },
 }
 
-for _, child in ipairs(mpChildren) do
-    addon.functions.addToTree("general\001combat", child, true)
-end
+for _, child in ipairs(mpChildren) do addon.functions.addToTree("combat", child, true) end
 
 -- Place Group Filter under Party
-addon.functions.addToTree("general\001combat", { value = "groupfilter", text = L["groupFilter"] }, true)
+addon.functions.addToTree("combat", { value = "groupfilter", text = L["groupFilter"] }, true)
 
 -- Place Potion Tracker under Party (works everywhere)
-addon.functions.addToTree("general\001combat", { value = "potiontracker", text = L["Potion Tracker"] }, true)
+addon.functions.addToTree("combat", { value = "potiontracker", text = L["Potion Tracker"] }, true)
 
 -- Place Teleports under Map & Navigation
-addon.functions.addToTree("general\001nav", { value = "teleports", text = L["Teleports"] }, true)
+addon.functions.addToTree("nav", { value = "teleports", text = L["Teleports"] }, true)
 
 function addon.MythicPlus.functions.treeCallback(container, group)
 	container:ReleaseChildren() -- Entfernt vorherige Inhalte

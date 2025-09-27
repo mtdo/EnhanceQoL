@@ -163,15 +163,13 @@ end
 -- Setze den Event-Handler
 frameLoad:SetScript("OnEvent", eventHandler)
 
-addon.functions.addToTree(nil, {
-	value = "drink",
-	text = L["Drink Macro"],
-})
+-- Place Drink Macro under Combat & Dungeons
+addon.functions.addToTree("combat", { value = "drink", text = MACROS })
 
 -- Add child entry for Health Macro under Drink Macro
-addon.functions.addToTree("drink", {
-	value = "health",
-	text = L["Health Macro"],
+addon.functions.addToTree("combat\001drink", {
+    value = "health",
+    text = L["Health Macro"],
 })
 addon.variables.statusTable.groups["drink"] = true
 

@@ -557,21 +557,21 @@ local function addGeneralFrame(container)
 	scroll:DoLayout()
 end
 
--- Integrate Vendor into General -> Vendors & Economy -> Selling (Auto‑Sell)
--- addon.variables.statusTable.groups["general\001economy"] = true
--- addon.variables.statusTable.groups["general\001economy\001selling"] = true
+-- Integrate Vendor into Items -> Vendors & Economy -> Selling (Auto‑Sell)
+-- addon.variables.statusTable.groups["items\001economy"] = true
+-- addon.variables.statusTable.groups["items\001economy\001selling"] = true
 
 -- Add a dedicated Craft Shopper node under Vendors & Economy
-addon.functions.addToTree("general\001economy", { value = "craftshopper", text = L["vendorCraftShopperTitle"] })
+addon.functions.addToTree("items\001economy", { value = "craftshopper", text = L["vendorCraftShopperTitle"] })
 
 -- Create the Selling node under Vendors & Economy
-addon.functions.addToTree("general\001economy", {
-	value = "selling",
-	text = L["SellingAutoSell"] or "Selling (Auto-Sell)",
+addon.functions.addToTree("items\001economy", {
+    value = "selling",
+    text = L["SellingAutoSell"] or "Selling (Auto-Sell)",
 }, true)
 
 -- Add Vendor pages under Selling
-local sellingPath = "general\001economy\001selling"
+local sellingPath = "items\001economy\001selling"
 addon.functions.addToTree(sellingPath, { value = "common", text = ITEM_QUALITY_COLORS[1].hex .. _G["ITEM_QUALITY1_DESC"] .. "|r" }, true)
 addon.functions.addToTree(sellingPath, { value = "uncommon", text = ITEM_QUALITY_COLORS[2].hex .. _G["ITEM_QUALITY2_DESC"] .. "|r" }, true)
 addon.functions.addToTree(sellingPath, { value = "rare", text = ITEM_QUALITY_COLORS[3].hex .. _G["ITEM_QUALITY3_DESC"] .. "|r" }, true)
@@ -603,15 +603,15 @@ function addon.Vendor.functions.treeCallback(container, group)
 	local _, avgItemLevelEquipped = GetAverageItemLevel()
 	addon.Vendor.variables.avgItemLevelEquipped = avgItemLevelEquipped
 	-- Normalize to old paths so existing logic can be reused
-	local prefix = "general\001economy\001selling"
-	if group == prefix then group = "vendor" end
-	if group:sub(1, #prefix + 1) == prefix .. "\001" then group = "vendor" .. group:sub(#prefix + 1) end
+    local prefix = "items\001economy\001selling"
+    if group == prefix then group = "vendor" end
+    if group:sub(1, #prefix + 1) == prefix .. "\001" then group = "vendor" .. group:sub(#prefix + 1) end
 
 	-- Prüfen, welche Gruppe ausgewählt wurde
 	if group == "vendor" then
 		addGeneralFrame(container)
-	elseif group == "general\001economy\001craftshopper" or group == "vendor\001craftshopper" then
-		addCraftShopperConfig(container)
+    elseif group == "items\001economy\001craftshopper" or group == "vendor\001craftshopper" then
+        addCraftShopperConfig(container)
 	elseif group == "vendor\001common" then
 		addVendorFrame(container, 1)
 	elseif group == "vendor\001uncommon" then
