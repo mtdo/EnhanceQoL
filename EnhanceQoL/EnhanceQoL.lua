@@ -1941,8 +1941,6 @@ end
 
 -- New modular Unit Frames UI builder
 local function addUnitFrame2(container)
-	local ui = { groups = {} }
-
 	local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
 	scroll:SetFullWidth(true)
 	scroll:SetFullHeight(true)
@@ -1950,25 +1948,32 @@ local function addUnitFrame2(container)
 
 	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
 	scroll:AddChild(wrapper)
-
 	local function doLayout()
 		if scroll and scroll.DoLayout then scroll:DoLayout() end
 	end
+	wrapper:PauseLayout()
+
+	local groups = {}
 
 	local function ensureGroup(key, title)
-		local g = ui.groups[key]
-		if not g then
+		local g, known
+		if groups[key] then
+			g = groups[key]
+			groups[key]:PauseLayout()
+			groups[key]:ReleaseChildren()
+			known = true
+		else
 			g = addon.functions.createContainer("InlineGroup", "List")
 			g:SetTitle(title)
-			ui.groups[key] = g
 			wrapper:AddChild(g)
+			groups[key] = g
 		end
-		g:ReleaseChildren()
-		return g
+
+		return g, known
 	end
 
 	local function buildHitIndicator()
-		local g = ensureGroup("hit", COMBAT_TEXT_LABEL)
+		local g, known = ensureGroup("hit", COMBAT_TEXT_LABEL)
 		local data = {
 			{
 				var = "hideHitIndicatorPlayer",
@@ -1996,11 +2001,14 @@ local function addUnitFrame2(container)
 			local w = addon.functions.createCheckboxAce(cb.text, addon.db[cb.var], cb.func)
 			g:AddChild(w)
 		end
-		doLayout()
+		if known then
+			g:ResumeLayout()
+			doLayout()
+		end
 	end
 
 	local function buildCore()
-		local g = ensureGroup("core", "")
+		local g, known = ensureGroup("core", "")
 		local labelHeadline = addon.functions.createLabelAce("|cffffd700" .. L["UnitFrameHideExplain"] .. "|r", nil, nil, 14)
 		labelHeadline:SetFullWidth(true)
 		g:AddChild(labelHeadline)
@@ -2014,11 +2022,14 @@ local function addUnitFrame2(container)
 			end, desc)
 			g:AddChild(w)
 		end
-		doLayout()
+		if known then
+			g:ResumeLayout()
+			doLayout()
+		end
 	end
 
 	local function buildBoss()
-		local g = ensureGroup("boss", L["Boss Frames"] or "Boss Frames")
+		local g, known = ensureGroup("boss", L["Boss Frames"] or "Boss Frames")
 		local dd = AceGUI:Create("Dropdown")
 		dd:SetLabel(L["BossHealthText"] or "Boss health text")
 		local bossList = { OFF = VIDEO_OPTIONS_DISABLED, PERCENT = STATUS_TEXT_PERCENT, ABS = STATUS_TEXT_VALUE, BOTH = STATUS_TEXT_BOTH }
@@ -2034,11 +2045,14 @@ local function addUnitFrame2(container)
 		local note = addon.functions.createLabelAce("|cffffd700" .. (L["BossHealthCVarNote"] or "This setting has no effect if 'statusText' CVar is enabled.") .. "|r", nil, nil, 10)
 		note:SetFullWidth(true)
 		g:AddChild(note)
-		doLayout()
+		if known then
+			g:ResumeLayout()
+			doLayout()
+		end
 	end
 
 	local function buildCoreUF()
-		local g = ensureGroup("coreUF", "")
+		local g, known = ensureGroup("coreUF", "")
 		local labelHeadlineUF = addon.functions.createLabelAce("|cffffd700" .. L["UnitFrameUFExplain"] .. "|r", nil, nil, 14)
 		labelHeadlineUF:SetFullWidth(true)
 		g:AddChild(labelHeadlineUF)
@@ -2123,11 +2137,14 @@ local function addUnitFrame2(container)
 			g:AddChild(cbHidePlayer)
 		end
 
-		doLayout()
+		if known then
+			g:ResumeLayout()
+			doLayout()
+		end
 	end
 
 	local function buildCast()
-		local g = ensureGroup("cast", L["CastBars"] or "Cast Bars")
+		local g, known = ensureGroup("cast", L["CastBars"] or "Cast Bars")
 		local dd = AceGUI:Create("Dropdown")
 		dd:SetLabel(L["castBarsToHide"] or "Cast bars to hide")
 		local list = {
@@ -2150,7 +2167,10 @@ local function addUnitFrame2(container)
 			end
 		end
 		g:AddChild(dd)
-		doLayout()
+		if known then
+			g:ResumeLayout()
+			doLayout()
+		end
 	end
 
 	buildHitIndicator()
@@ -2158,6 +2178,8 @@ local function addUnitFrame2(container)
 	buildBoss()
 	buildCoreUF()
 	buildCast()
+	wrapper:ResumeLayout()
+	doLayout()
 end
 
 -- New modular Vendor & Economy UI builder
