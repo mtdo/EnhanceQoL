@@ -426,11 +426,18 @@ end)
 
 -- UI section for Health Macro (mounted under Drink Macro)
 function addon.Health.functions.addHealthFrame(container)
-	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
-	container:AddChild(wrapper)
-
-	local group = addon.functions.createContainer("InlineGroup", "List")
-	wrapper:AddChild(group)
+    local group
+    local embedded = container and container._eqolEmbed
+    if embedded then
+        group = container
+        if group.PauseLayout then group:PauseLayout() end
+        group:ReleaseChildren()
+    else
+        local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
+        container:AddChild(wrapper)
+        group = addon.functions.createContainer("InlineGroup", "List")
+        wrapper:AddChild(group)
+    end
 
 	local cb = addon.functions.createCheckboxAce(L["Enable Health Macro"], addon.db["healthMacroEnabled"], function(_, _, value)
 		addon.db["healthMacroEnabled"] = value
@@ -441,7 +448,10 @@ function addon.Health.functions.addHealthFrame(container)
 	group:AddChild(cb)
 
 	-- If disabled, render nothing else
-	if not addon.db["healthMacroEnabled"] then return end
+    if not addon.db["healthMacroEnabled"] then
+        if embedded and group.ResumeLayout then group:ResumeLayout() end
+        return
+    end
 
 	-- Use Healthstone and Potion is superseded by priority UI; hidden
 
@@ -480,7 +490,7 @@ function addon.Health.functions.addHealthFrame(container)
 		end
 		addon.Health.functions.updateHealthMacro(false)
 	end)
-	group:AddChild(cbCombatPot)
+    group:AddChild(cbCombatPot)
 
 	-- Priority ordering UI (overrides legacy preferences/useBoth when set)
 	do
@@ -513,8 +523,10 @@ function addon.Health.functions.addHealthFrame(container)
 					else
 						list[k] = labels[k]
 						table.insert(order, k)
-					end
-				end
+    end
+
+    if embedded and group.ResumeLayout then group:ResumeLayout() end
+end
 			end
 			-- Always include none
 			list["none"] = labels.none

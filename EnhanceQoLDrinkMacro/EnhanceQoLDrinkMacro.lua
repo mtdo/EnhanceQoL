@@ -342,8 +342,275 @@ local function addDrinkFrame(container)
 		end
 	end
 
+	local function buildHealth()
+		local g, known = ensureGroup("health", L["Health Macro"])
+		-- Rebuild only the Health group using ensureGroup
+
+		-- Enable first
+		local cbEnable = addon.functions.createCheckboxAce(L["Enable Health Macro"], addon.db.healthMacroEnabled, function(_, _, v)
+			addon.db.healthMacroEnabled = v
+			addon.Health.functions.updateHealthMacro(false)
+			buildHealth()
+		end)
+		g:AddChild(cbEnable)
+
+		if not addon.db.healthMacroEnabled then
+			if known then
+				g:ResumeLayout()
+				doLayout()
+			end
+			return
+		end
+
+		-- Recuperate out of combat
+		local cbRecup = addon.functions.createCheckboxAce(L["Use Recuperate out of combat"], addon.db.healthUseRecuperate, function(_, _, value)
+			addon.db.healthUseRecuperate = value
+			addon.Health.functions.updateHealthMacro(false)
+		end)
+		g:AddChild(cbRecup)
+
+		-- Combat potions toggle
+		local cbCombatPot = addon.functions.createCheckboxAce(L["Use Combat potions for health macro"], addon.db.healthUseCombatPotions, function(_, _, value)
+			addon.db.healthUseCombatPotions = value
+			addon.db.healthPriorityOrder = addon.db.healthPriorityOrder or { "stone", "potion", value and "combatpotion" or "none", "none" }
+			if value then
+				local exists = false
+				for i = 1, 4 do
+					if addon.db.healthPriorityOrder[i] == "combatpotion" then
+						exists = true
+						break
+					end
+				end
+				if not exists then
+					for i = 1, 4 do
+						if addon.db.healthPriorityOrder[i] == "none" then
+							addon.db.healthPriorityOrder[i] = "combatpotion"
+							break
+						end
+					end
+				end
+			else
+				for i = 1, 4 do
+					if addon.db.healthPriorityOrder[i] == "combatpotion" then addon.db.healthPriorityOrder[i] = "none" end
+				end
+			end
+			addon.Health.functions.updateHealthMacro(false)
+			buildHealth()
+		end)
+		g:AddChild(cbCombatPot)
+
+		-- Priority order UI
+		do
+			local labels = {
+				spell = L["CategoryCustomSpells"] or (L["Custom Spells"] or "Custom Spells"),
+				stone = L["CategoryHealthstones"] or (L["Prefer Healthstone first"] or "Healthstones"),
+				potion = L["CategoryPotions"] or "Potions",
+				combatpotion = L["CategoryCombatPotions"] or (L["Use Combat potions for health macro"] or "Combat potions"),
+				none = L["None"] or "None",
+			}
+			local baseOrder = { "stone", "potion", "combatpotion", "spell" }
+			addon.db.healthPriorityOrder = addon.db.healthPriorityOrder or { "stone", "potion", addon.db.healthUseCombatPotions and "combatpotion" or "none", "none" }
+
+			local function availableFor(slot)
+				local used = {}
+				for i = 1, slot - 1 do
+					local c = addon.db.healthPriorityOrder[i]
+					if c and c ~= "none" then used[c] = true end
+				end
+				local list, order = {}, {}
+				for _, k in ipairs(baseOrder) do
+					if not used[k] then
+						if k == "spell" and not addon.db.healthUseCustomSpells then
+						elseif k == "combatpotion" and not addon.db.healthUseCombatPotions then
+						else
+							list[k] = labels[k]
+							table.insert(order, k)
+						end
+					end
+				end
+				list["none"] = labels.none
+				table.insert(order, "none")
+				return list, order
+			end
+
+			local function onPick(self, _, val, idx)
+				addon.db.healthPriorityOrder[idx] = val
+				if val ~= "none" then
+					for j = 1, 4 do
+						if j ~= idx and addon.db.healthPriorityOrder[j] == val then addon.db.healthPriorityOrder[j] = "none" end
+					end
+				end
+				addon.Health.functions.updateHealthMacro(false)
+				buildHealth()
+			end
+
+			local header = addon.functions.createLabelAce(L["PriorityOrder"] or "Priority order", nil, nil, 12)
+			header:SetFullWidth(true)
+			g:AddChild(header)
+			for i = 1, 4 do
+				local list, order = availableFor(i)
+				local lbl = (L["PrioritySlot"] or "Priority %d"):format(i)
+				local drop = addon.functions.createDropdownAce(lbl, list, order, function(self, _, val) onPick(self, _, val, i) end)
+				local cur = addon.db.healthPriorityOrder[i] or "none"
+				if not list[cur] then cur = "none" end
+				drop:SetValue(cur)
+				drop:SetFullWidth(false)
+				drop:SetWidth(260)
+				g:AddChild(drop)
+			end
+		end
+
+		-- Reset condition
+		local resetList = { combat = L["Reset: Combat"], target = L["Reset: Target"], ["10"] = L["Reset: 10s"], ["30"] = L["Reset: 30s"], ["60"] = L["Reset: 60s"] }
+		local resetOrder = { "combat", "target", "10", "30", "60" }
+		local dropReset = addon.functions.createDropdownAce(L["Reset condition"], resetList, resetOrder, function(self, _, val)
+			addon.db.healthReset = val
+			self:SetValue(val)
+			addon.Health.functions.updateHealthMacro(false)
+		end)
+		dropReset:SetValue(addon.db.healthReset)
+		g:AddChild(dropReset)
+
+		-- Place on bar helper text
+		g:AddChild(addon.functions.createSpacerAce())
+		local label = addon.functions.createLabelAce(string.format(L["healthMacroPlaceOnBar"], "EnhanceQoLHealthMacro"), nil, nil, 12)
+		label:SetFullWidth(true)
+		g:AddChild(label)
+
+		-- Priority hint
+		g:AddChild(addon.functions.createSpacerAce())
+		local gold = { r = 1, g = 0.843, b = 0 }
+		local function buildPriorityHint()
+			local labels = {
+				spell = L["CategoryCustomSpells"] or (L["Custom Spells"] or "Custom Spells"),
+				stone = L["CategoryHealthstones"] or (L["Prefer Healthstone first"] or "Healthstones"),
+				potion = L["CategoryPotions"] or "Potions",
+				combatpotion = L["CategoryCombatPotions"] or (L["Use Combat potions for health macro"] or "Combat potions"),
+			}
+			local order = addon.db.healthPriorityOrder or {}
+			local parts = {}
+			for i = 1, 4 do
+				local c = order[i]
+				if c and c ~= "none" then
+					if c == "spell" and not addon.db.healthUseCustomSpells then
+					elseif c == "combatpotion" and not addon.db.healthUseCombatPotions then
+					else
+						table.insert(parts, labels[c] or c)
+					end
+				end
+			end
+			if #parts == 0 then return (L["healthMacroWillUse"] or "Will use (in order): %s"):format(L["None"] or "None") end
+			return (L["healthMacroWillUse"] or "Will use (in order): %s"):format(table.concat(parts, ", "))
+		end
+		local hint = addon.functions.createLabelAce(buildPriorityHint(), gold, nil, 14)
+		hint:SetFullWidth(true)
+		g:AddChild(hint)
+
+		if addon.variables.unitClass == "WARLOCK" then
+			g:AddChild(addon.functions.createSpacerAce())
+			local tip = addon.functions.createLabelAce(L["healthMacroTipReset"], nil, nil, 12)
+			tip:SetFullWidth(true)
+			g:AddChild(tip)
+		end
+
+		-- Custom spells UI
+		g:AddChild(addon.functions.createSpacerAce())
+		local cbUseSpells = addon.functions.createCheckboxAce(L["Use custom spells"] or "Use custom spells", addon.db.healthUseCustomSpells, function(_, _, value)
+			addon.db.healthUseCustomSpells = value
+			addon.db.healthPriorityOrder = addon.db.healthPriorityOrder or { "stone", "potion", addon.db.healthUseCombatPotions and "combatpotion" or "none", "none" }
+			if value then
+				local exists = false
+				for i = 1, 4 do
+					if addon.db.healthPriorityOrder[i] == "spell" then
+						exists = true
+						break
+					end
+				end
+				if not exists then
+					for i = 1, 4 do
+						if addon.db.healthPriorityOrder[i] == "none" then
+							addon.db.healthPriorityOrder[i] = "spell"
+							break
+						end
+					end
+				end
+			else
+				for i = 1, 4 do
+					if addon.db.healthPriorityOrder[i] == "spell" then addon.db.healthPriorityOrder[i] = "none" end
+				end
+			end
+			addon.Health.functions.updateHealthMacro(false)
+			buildHealth()
+		end)
+		g:AddChild(cbUseSpells)
+
+		if addon.db.healthUseCustomSpells then
+			local edit = addon.functions.createEditboxAce(L["Add SpellID"] or "Add SpellID", nil, function(self, _, text)
+				local sid = tonumber(text)
+				if sid then
+					local info = C_Spell.GetSpellInfo(sid)
+					if info and info.name then
+						addon.db.healthCustomSpells = addon.db.healthCustomSpells or {}
+						local exists = false
+						for _, v in ipairs(addon.db.healthCustomSpells) do
+							if v == sid then
+								exists = true
+								break
+							end
+						end
+						if not exists then table.insert(addon.db.healthCustomSpells, sid) end
+						self:SetText("")
+						addon.Health.functions.updateHealthMacro(false)
+						buildHealth()
+					end
+				end
+			end)
+			g:AddChild(edit)
+
+			local spells = addon.db.healthCustomSpells or {}
+			for _, sid in ipairs(spells) do
+				local row = addon.functions.createContainer("SimpleGroup", "Flow")
+				row:SetFullWidth(true)
+				local lbl = addon.functions.createLabelAce("", nil, nil, 12)
+				local info = C_Spell.GetSpellInfo(sid)
+				if info and info.name then
+					lbl:SetText((L["Custom Spells"] and "" or "") .. info.name .. " (" .. sid .. ")")
+				else
+					lbl:SetText((L["Custom Spells"] and "" or "") .. "Unknown" .. " (" .. sid .. ")")
+				end
+				lbl:SetRelativeWidth(0.8)
+				row:AddChild(lbl)
+
+				local removeIcon = LibStub("AceGUI-3.0"):Create("Icon")
+				removeIcon:SetLabel("")
+				removeIcon:SetImage("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
+				removeIcon:SetImageSize(16, 16)
+				removeIcon:SetRelativeWidth(0.2)
+				removeIcon:SetHeight(16)
+				removeIcon:SetCallback("OnClick", function()
+					for i, v in ipairs(addon.db.healthCustomSpells) do
+						if v == sid then
+							table.remove(addon.db.healthCustomSpells, i)
+							break
+						end
+					end
+					addon.Health.functions.updateHealthMacro(false)
+					buildHealth()
+				end)
+				row:AddChild(removeIcon)
+				g:AddChild(row)
+			end
+		end
+
+		if known then
+			g:ResumeLayout()
+			doLayout()
+		end
+	end
+
 	buildCore()
 	buildReminder()
+	buildHealth()
 	wrapper:ResumeLayout()
 	doLayout()
 end
@@ -355,6 +622,6 @@ function addon.Drinks.functions.treeCallback(container, group)
 	if group == "drink" then
 		addDrinkFrame(container)
 	elseif group == "drink\001health" then
-		if addon.Health and addon.Health.functions and addon.Health.functions.addHealthFrame then addon.Health.functions.addHealthFrame(container) end
+		addDrinkFrame(container) -- legacy path now shows combined view
 	end
 end
