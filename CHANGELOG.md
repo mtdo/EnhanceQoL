@@ -8,6 +8,7 @@
 - DataPanels: Per‑panel toggle to hide the panel border.
 - Items & Inventory → Bags: Option “Close bags when opening the Auction House”.
   - Disabled by default. Enable to automatically close all bags when the Auction House opens.
+- Auratracker: New condition to check if you have learned a spell
 
 ### 🔄 Changed
 
