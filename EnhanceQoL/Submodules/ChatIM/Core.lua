@@ -1,3 +1,4 @@
+-- luacheck: globals ChatFrame_ContainsMessageGroup FCF_OpenNewWindow FCF_UnDockFrame ChatFrame_RemoveAllMessageGroups NUM_CHAT_WINDOWS ChatFrame_RemoveMessageGroup ChatFrame_AddMessageGroup FCF_Close
 local parentAddonName = "EnhanceQoL"
 local addonName, addon = ...
 if _G[parentAddonName] then
