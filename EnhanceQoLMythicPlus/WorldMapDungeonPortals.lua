@@ -114,6 +114,49 @@ end
 -- Panel creation -----------------------------------------------------------
 local panel -- content frame
 local scrollBox
+-- Safe visibility toggles (avoid Show/Hide taint during combat)
+local function SafeSetVisible(frame, visible)
+	if not frame then return end
+	if InCombatLockdown and InCombatLockdown() then
+		frame._eqolPendingVisible = visible and true or false
+		frame:SetAlpha(visible and 1 or 0)
+		return
+	end
+	if visible then
+		frame:Show()
+	else
+		frame:Hide()
+	end
+end
+local function SetCombatScrolling(enabled)
+	if not panel or not panel.Scroll then return end
+	local s = panel.Scroll
+	if enabled then
+		s:EnableMouse(true)
+		s:EnableMouseWheel(true)
+		if s.ScrollBar then
+			s.ScrollBar.allowScroll = true
+			if s.ScrollBar.Back then s.ScrollBar.Back:Enable() end
+			if s.ScrollBar.Forward then s.ScrollBar.Forward:Enable() end
+		end
+	else
+		-- In combat, suppress any scrolling to avoid protected SetVerticalScroll taint
+		s:EnableMouse(false)
+		s:EnableMouseWheel(false)
+		if s.ScrollBar then
+			s.ScrollBar.allowScroll = false
+			if s.ScrollBar.Back then s.ScrollBar.Back:Disable() end
+			if s.ScrollBar.Forward then s.ScrollBar.Forward:Disable() end
+		end
+	end
+end
+
+local function SetButtonsInteractable(enabled)
+	if not panel or not panel._allButtons then return end
+	for _, b in ipairs(panel._allButtons) do
+		if b and b.EnableMouse then b:EnableMouse(enabled and true or false) end
+	end
+end
 local function EnsurePanel(parent)
 	local targetParent = QuestMapFrame or parent
 	if panel and panel:GetParent() ~= targetParent then panel:SetParent(targetParent) end
@@ -149,7 +192,7 @@ local function EnsurePanel(parent)
 	panel:SetToplevel(true)
 	panel:EnableMouse(true)
 	panel:EnableMouseWheel(true)
-	panel:Hide()
+	SafeSetVisible(panel, false)
 
 	-- Border & Title are positioned after Scroll creation
 
@@ -190,10 +233,26 @@ local function EnsurePanel(parent)
 	panel.Content = content
 	panel.Scroll = s
 
+	-- Combat click blocker overlay (prevents any interaction while in combat)
+	if not panel.Blocker then
+		local blocker = CreateFrame("Frame", nil, panel, "BackdropTemplate")
+		blocker:SetAllPoints(s)
+		blocker:EnableMouse(true)
+		blocker:EnableMouseWheel(true)
+		blocker:Hide()
+		panel.Blocker = blocker
+	end
+
 	-- Ensure our interactive content renders above any sibling art
 	local baseLevel = panel:GetFrameLevel() or 1
 	s:SetFrameLevel(baseLevel + 1)
 	content:SetFrameLevel(baseLevel + 2)
+
+	-- Respect combat lockdown: prevent scrolling interactions during combat
+	if InCombatLockdown and InCombatLockdown() then
+		SetCombatScrolling(false)
+		if panel.Blocker then panel.Blocker:Show() end
+	end
 
 	-- Now that Scroll exists, create/anchor the border precisely around it
 	if not panel.BorderFrame then
@@ -632,6 +691,9 @@ local function PopulatePanel()
 	-- update scroll child extents
 	scrollBox:SetHeight(math.abs(yOffset) + topPadding)
 	if panel.Scroll and panel.Scroll.UpdateScrollChildRect then panel.Scroll:UpdateScrollChildRect() end
+
+	-- Respect combat: disable all button interactions while in combat
+	if InCombatLockdown and InCombatLockdown() then SetButtonsInteractable(false) end
 end
 
 -- Tab creation -------------------------------------------------------------
@@ -734,7 +796,7 @@ local function EnsureTab(parent, anchorTo)
 			QuestMapFrame:SetDisplayMode(DISPLAY_MODE)
 		else
 			-- Fallback: show our panel if SetDisplayMode not available
-			panel:Show()
+			SafeSetVisible(panel, true)
 			f:RefreshPanel()
 			if tabButton.SetChecked then tabButton:SetChecked(true) end
 		end
@@ -748,8 +810,8 @@ function f:TryInit()
 	-- Only ensure injection when enabled
 	if not QuestMapFrame then return end
 	if not addon.db or not addon.db["teleportsWorldMapEnabled"] then
-		if panel then panel:Hide() end
-		if tabButton then tabButton:Hide() end
+		if panel then SafeSetVisible(panel, false) end
+		if tabButton then SafeSetVisible(tabButton, false) end
 		return
 	end
 
@@ -844,11 +906,11 @@ function f:TryInit()
 		EventRegistry:RegisterCallback("QuestLog.SetDisplayMode", function(_, mode)
 			if mode == DISPLAY_MODE then
 				if tabButton and tabButton.SetChecked then tabButton:SetChecked(true) end
-				if panel then panel:Show() end
+				if panel then SafeSetVisible(panel, true) end
 				f:RefreshPanel()
 			else
 				if tabButton and tabButton.SetChecked then tabButton:SetChecked(false) end
-				if panel then panel:Hide() end
+				if panel then SafeSetVisible(panel, false) end
 			end
 		end, f)
 		f._eqolDisplayEvent = true
@@ -857,8 +919,8 @@ end
 
 function f:RefreshPanel()
 	if not addon.db or not addon.db["teleportsWorldMapEnabled"] then
-		if panel then panel:Hide() end
-		if tabButton then tabButton:Hide() end
+		if panel then SafeSetVisible(panel, false) end
+		if tabButton then SafeSetVisible(tabButton, false) end
 		return
 	end
 	if not panel or not panel:IsShown() then return end
@@ -875,6 +937,28 @@ end
 
 -- Events to build/refresh --------------------------------------------------
 f:SetScript("OnEvent", function(self, event, arg1)
+	if event == "PLAYER_REGEN_DISABLED" then
+		SetCombatScrolling(false)
+		SetButtonsInteractable(false)
+		if panel and panel.Blocker then panel.Blocker:Show() end
+		-- Avoid Show/Hide while in combat
+		return
+	elseif event == "PLAYER_REGEN_ENABLED" then
+		SetCombatScrolling(true)
+		SetButtonsInteractable(true)
+		if panel and panel.Blocker then panel.Blocker:Hide() end
+		-- Apply any deferred visibility changes now that combat ended
+		if panel and panel._eqolPendingVisible ~= nil then
+			SafeSetVisible(panel, panel._eqolPendingVisible)
+			panel._eqolPendingVisible = nil
+		end
+		if tabButton and tabButton._eqolPendingVisible ~= nil then
+			SafeSetVisible(tabButton, tabButton._eqolPendingVisible)
+			tabButton._eqolPendingVisible = nil
+		end
+		if WorldMapFrame and WorldMapFrame:IsShown() and addon.db and addon.db["teleportsWorldMapEnabled"] then C_Timer.After(0, function() f:RefreshPanel() end) end
+		-- fall through to allow refresh if map is visible
+	end
 	if event == "ADDON_LOADED" and arg1 == "Blizzard_WorldMap" then
 		-- Late-load: attach our OnShow hook once the World Map exists
 		if WorldMapFrame and not WorldMapFrame._eqolTeleportHook then
@@ -888,8 +972,8 @@ f:SetScript("OnEvent", function(self, event, arg1)
 					end
 					C_Timer.After(0, function() f:RefreshPanel() end)
 				else
-					if panel then panel:Hide() end
-					if tabButton then tabButton:Hide() end
+					if panel then SafeSetVisible(panel, false) end
+					if tabButton then SafeSetVisible(tabButton, false) end
 				end
 			end)
 			WorldMapFrame._eqolTeleportHook = true
@@ -917,6 +1001,8 @@ f:SetScript("OnEvent", function(self, event, arg1)
 end)
 
 f:RegisterEvent("ADDON_LOADED")
+f:RegisterEvent("PLAYER_REGEN_DISABLED")
+f:RegisterEvent("PLAYER_REGEN_ENABLED")
 f:RegisterEvent("SPELLS_CHANGED")
 f:RegisterEvent("BAG_UPDATE_DELAYED")
 f:RegisterEvent("TOYS_UPDATED")
@@ -935,8 +1021,8 @@ if WorldMapFrame and not WorldMapFrame._eqolTeleportHook then
 			end
 			C_Timer.After(0, function() f:RefreshPanel() end)
 		else
-			if panel then panel:Hide() end
-			if tabButton then tabButton:Hide() end
+			if panel then SafeSetVisible(panel, false) end
+			if tabButton then SafeSetVisible(tabButton, false) end
 		end
 	end)
 	WorldMapFrame._eqolTeleportHook = true
@@ -962,8 +1048,8 @@ function addon.MythicPlus.functions.RefreshWorldMapTeleportPanel()
 					end
 					C_Timer.After(0, function() f:RefreshPanel() end)
 				else
-					if panel then panel:Hide() end
-					if tabButton then tabButton:Hide() end
+					if panel then SafeSetVisible(panel, false) end
+					if tabButton then SafeSetVisible(tabButton, false) end
 				end
 			end)
 			WorldMapFrame._eqolTeleportHook = true
@@ -987,7 +1073,7 @@ function addon.MythicPlus.functions.RefreshWorldMapTeleportPanel()
 		end
 
 		if WorldMapFrame:IsShown() then
-			if tabButton then tabButton:Show() end
+			if tabButton then SafeSetVisible(tabButton, true) end
 			if QuestMapFrame and QuestMapFrame.SetDisplayMode then QuestMapFrame:SetDisplayMode(DISPLAY_MODE) end
 			f:RefreshPanel()
 		else

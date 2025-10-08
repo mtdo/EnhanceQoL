@@ -22,6 +22,13 @@ function addon.functions.getIDFromGUID(unitId)
 	return npcID
 end
 
+-- Global helper: detect Timerunner (Timerunning Season active)
+-- Safe-guard for older clients without the API
+function addon.functions.IsTimerunner()
+	if type(PlayerGetTimerunningSeasonID) == "function" then return PlayerGetTimerunningSeasonID() ~= nil end
+	return false
+end
+
 function addon.functions.toggleRaidTools(value, self)
 	if value == false and (UnitInParty("player") or UnitInRaid("player")) then
 		self:Show()
@@ -254,54 +261,54 @@ function addon.functions.createWrapperData(data, container, L)
 				widget:SetWidth(checkboxData.width or 100)
 				if checkboxData.callback then widget:SetCallback("OnClick", checkboxData.callback) end
 				group:AddChild(widget)
-		elseif checkboxData.type == "Label" then
-			widget = AceGUI:Create("Label")
-			widget:SetText(checkboxData.text or (checkboxData.var and L[checkboxData.var]) or "")
-			widget:SetFont(addon.variables.defaultFont, 12, "OUTLINE")
-			widget:SetFullWidth(true)
-			group:AddChild(widget)
-		elseif checkboxData.type == "Dropdown" then
-			widget:SetLabel(checkboxData.text or "")
-			if checkboxData.order then
-				widget:SetList(checkboxData.list, checkboxData.order)
-			else
-				widget:SetList(checkboxData.list)
-			end
-			widget:SetFullWidth(true)
-			if checkboxData.callback then widget:SetCallback("OnValueChanged", checkboxData.callback) end
-			group:AddChild(widget)
-			if checkboxData.value then widget:SetValue(checkboxData.value) end
-			if checkboxData.relWidth then widget:SetRelativeWidth(checkboxData.relWidth) end
-		elseif checkboxData.type == "ColorPicker" then
-			widget = AceGUI:Create("ColorPicker")
-			widget:SetLabel(checkboxData.text or "")
-			local c = checkboxData.value or { r = 1, g = 1, b = 1 }
-			widget:SetColor(c.r or 1, c.g or 1, c.b or 1)
-			widget:SetCallback("OnValueChanged", function(_, _, r, g, b)
-				if checkboxData.callback then checkboxData.callback(r, g, b) end
-			end)
-			group:AddChild(widget)
-		elseif checkboxData.type == "Slider" then
-			widget = AceGUI:Create("Slider")
-			local value = checkboxData.value or 0
-			local labelBase = checkboxData.text or ""
-			local function setLabel(val)
-				if checkboxData.showValue == false then
-					widget:SetLabel(labelBase)
+			elseif checkboxData.type == "Label" then
+				widget = AceGUI:Create("Label")
+				widget:SetText(checkboxData.text or (checkboxData.var and L[checkboxData.var]) or "")
+				widget:SetFont(addon.variables.defaultFont, 12, "OUTLINE")
+				widget:SetFullWidth(true)
+				group:AddChild(widget)
+			elseif checkboxData.type == "Dropdown" then
+				widget:SetLabel(checkboxData.text or "")
+				if checkboxData.order then
+					widget:SetList(checkboxData.list, checkboxData.order)
 				else
-					widget:SetLabel(string.format("%s: %s", labelBase, tostring(val)))
+					widget:SetList(checkboxData.list)
 				end
+				widget:SetFullWidth(true)
+				if checkboxData.callback then widget:SetCallback("OnValueChanged", checkboxData.callback) end
+				group:AddChild(widget)
+				if checkboxData.value then widget:SetValue(checkboxData.value) end
+				if checkboxData.relWidth then widget:SetRelativeWidth(checkboxData.relWidth) end
+			elseif checkboxData.type == "ColorPicker" then
+				widget = AceGUI:Create("ColorPicker")
+				widget:SetLabel(checkboxData.text or "")
+				local c = checkboxData.value or { r = 1, g = 1, b = 1 }
+				widget:SetColor(c.r or 1, c.g or 1, c.b or 1)
+				widget:SetCallback("OnValueChanged", function(_, _, r, g, b)
+					if checkboxData.callback then checkboxData.callback(r, g, b) end
+				end)
+				group:AddChild(widget)
+			elseif checkboxData.type == "Slider" then
+				widget = AceGUI:Create("Slider")
+				local value = checkboxData.value or 0
+				local labelBase = checkboxData.text or ""
+				local function setLabel(val)
+					if checkboxData.showValue == false then
+						widget:SetLabel(labelBase)
+					else
+						widget:SetLabel(string.format("%s: %s", labelBase, tostring(val)))
+					end
+				end
+				setLabel(value)
+				widget:SetValue(value)
+				widget:SetSliderValues(checkboxData.min or 0, checkboxData.max or 100, checkboxData.step or 1)
+				widget:SetFullWidth(true)
+				widget:SetCallback("OnValueChanged", function(self, _, val)
+					setLabel(val)
+					if checkboxData.callback then checkboxData.callback(self, _, val) end
+				end)
+				group:AddChild(widget)
 			end
-			setLabel(value)
-			widget:SetValue(value)
-			widget:SetSliderValues(checkboxData.min or 0, checkboxData.max or 100, checkboxData.step or 1)
-			widget:SetFullWidth(true)
-			widget:SetCallback("OnValueChanged", function(self, _, val)
-				setLabel(val)
-				if checkboxData.callback then checkboxData.callback(self, _, val) end
-			end)
-			group:AddChild(widget)
-		end
 			if checkboxData.gv then addon.elements[checkboxData.gv] = widget end
 		end
 	end
@@ -311,77 +318,79 @@ function addon.functions.createWrapperData(data, container, L)
 end
 
 function addon.functions.addToTree(parentValue, newElement, noSort)
-    -- Sortiere die Knoten alphabetisch nach `text`, rekursiv für alle Kinder
-    local function sortChildrenRecursively(children)
-        if noSort then return end
-        table.sort(children, function(a, b) return string.lower(a.text) < string.lower(b.text) end)
-        for _, child in ipairs(children) do
-            if child.children then sortChildrenRecursively(child.children) end
-        end
-    end
+	-- Sortiere die Knoten alphabetisch nach `text`, rekursiv für alle Kinder
+	local function sortChildrenRecursively(children)
+		if noSort then return end
+		table.sort(children, function(a, b) return string.lower(a.text) < string.lower(b.text) end)
+		for _, child in ipairs(children) do
+			if child.children then sortChildrenRecursively(child.children) end
+		end
+	end
 
-    -- Hilfsfunktion: finde einen Knoten per Pfad (value1\001value2 ...)
-    local function findNodeByPath(tree, path)
-        local segments = {}
-        for seg in string.gmatch(path, "[^\001]+") do table.insert(segments, seg) end
-        if #segments == 0 then return nil end
+	-- Hilfsfunktion: finde einen Knoten per Pfad (value1\001value2 ...)
+	local function findNodeByPath(tree, path)
+		local segments = {}
+		for seg in string.gmatch(path, "[^\001]+") do
+			table.insert(segments, seg)
+		end
+		if #segments == 0 then return nil end
 
-        local function findIn(children, idx)
-            for _, node in ipairs(children) do
-                if node.value == segments[idx] then
-                    if idx == #segments then
-                        return node
-                    elseif node.children then
-                        local found = findIn(node.children, idx + 1)
-                        if found then return found end
-                    end
-                end
-            end
-            return nil
-        end
+		local function findIn(children, idx)
+			for _, node in ipairs(children) do
+				if node.value == segments[idx] then
+					if idx == #segments then
+						return node
+					elseif node.children then
+						local found = findIn(node.children, idx + 1)
+						if found then return found end
+					end
+				end
+			end
+			return nil
+		end
 
-        return findIn(tree, 1)
-    end
+		return findIn(tree, 1)
+	end
 
-    -- Durchlaufe die Baumstruktur, um den Parent-Knoten zu finden (mit optionalem Pfad)
-    local function addToTreeSimple(tree)
-        for _, node in ipairs(tree) do
-            if node.value == parentValue then
-                node.children = node.children or {}
-                table.insert(node.children, newElement)
-                sortChildrenRecursively(node.children)
-                return true
-            elseif node.children then
-                if addToTreeSimple(node.children) then return true end
-            end
-        end
-        return false
-    end
+	-- Durchlaufe die Baumstruktur, um den Parent-Knoten zu finden (mit optionalem Pfad)
+	local function addToTreeSimple(tree)
+		for _, node in ipairs(tree) do
+			if node.value == parentValue then
+				node.children = node.children or {}
+				table.insert(node.children, newElement)
+				sortChildrenRecursively(node.children)
+				return true
+			elseif node.children then
+				if addToTreeSimple(node.children) then return true end
+			end
+		end
+		return false
+	end
 
-    -- Prüfen, ob parentValue `nil` ist (neuer Parent wird benötigt)
-    if not parentValue then
-        table.insert(addon.treeGroupData, newElement)
-        sortChildrenRecursively(addon.treeGroupData)
-        addon.treeGroup:SetTree(addon.treeGroupData)
-        addon.treeGroup:RefreshTree()
-        return
-    end
+	-- Prüfen, ob parentValue `nil` ist (neuer Parent wird benötigt)
+	if not parentValue then
+		table.insert(addon.treeGroupData, newElement)
+		sortChildrenRecursively(addon.treeGroupData)
+		addon.treeGroup:SetTree(addon.treeGroupData)
+		addon.treeGroup:RefreshTree()
+		return
+	end
 
-    -- Versuche zuerst, per Pfad exakten Knoten zu finden
-    local parentNode
-    if string.find(parentValue, "\001", 1, true) then parentNode = findNodeByPath(addon.treeGroupData, parentValue) end
-    if parentNode then
-        parentNode.children = parentNode.children or {}
-        table.insert(parentNode.children, newElement)
-        sortChildrenRecursively(parentNode.children)
-    else
-        -- Fallback: alte Logik (suche ersten Treffer per value)
-        addToTreeSimple(addon.treeGroupData)
-    end
+	-- Versuche zuerst, per Pfad exakten Knoten zu finden
+	local parentNode
+	if string.find(parentValue, "\001", 1, true) then parentNode = findNodeByPath(addon.treeGroupData, parentValue) end
+	if parentNode then
+		parentNode.children = parentNode.children or {}
+		table.insert(parentNode.children, newElement)
+		sortChildrenRecursively(parentNode.children)
+	else
+		-- Fallback: alte Logik (suche ersten Treffer per value)
+		addToTreeSimple(addon.treeGroupData)
+	end
 
-    sortChildrenRecursively(addon.treeGroupData)
-    addon.treeGroup:SetTree(addon.treeGroupData)
-    addon.treeGroup:RefreshTree()
+	sortChildrenRecursively(addon.treeGroupData)
+	addon.treeGroup:SetTree(addon.treeGroupData)
+	addon.treeGroup:RefreshTree()
 end
 
 local tooltipCache = {}
@@ -592,15 +601,17 @@ local function updateButtonInfo(itemButton, bag, slot, frameName)
 								end
 							else
 								-- empty slot counts as 0
-								if baseline == nil then baseline = 0 else baseline = math.min(baseline, 0) end
+								if baseline == nil then
+									baseline = 0
+								else
+									baseline = math.min(baseline, 0)
+								end
 							end
 						end
 					end
 
 					local isUpgrade = false
-					if baseline ~= nil and itemLevelText and tonumber(itemLevelText) then
-						isUpgrade = tonumber(itemLevelText) > baseline
-					end
+					if baseline ~= nil and itemLevelText and tonumber(itemLevelText) then isUpgrade = tonumber(itemLevelText) > baseline end
 
 					if isUpgrade then
 						if not itemButton.ItemUpgradeIcon then
@@ -609,17 +620,17 @@ local function updateButtonInfo(itemButton, bag, slot, frameName)
 							itemButton.ItemUpgradeIcon:SetSize(14, 14)
 						end
 						itemButton.ItemUpgradeIcon:SetTexture("Interface\\AddOns\\EnhanceQoL\\Icons\\upgradeilvl.tga")
-                    itemButton.ItemUpgradeIcon:ClearAllPoints()
-                    local posUp = addon.db["bagUpgradeIconPosition"] or "BOTTOMRIGHT"
-                    if posUp == "TOPRIGHT" then
-                        itemButton.ItemUpgradeIcon:SetPoint("TOPRIGHT", itemButton, "TOPRIGHT", -1, -2)
-                    elseif posUp == "TOPLEFT" then
-                        itemButton.ItemUpgradeIcon:SetPoint("TOPLEFT", itemButton, "TOPLEFT", 2, -2)
-                    elseif posUp == "BOTTOMLEFT" then
-                        itemButton.ItemUpgradeIcon:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
-                    else -- BOTTOMRIGHT
-                        itemButton.ItemUpgradeIcon:SetPoint("BOTTOMRIGHT", itemButton, "BOTTOMRIGHT", -1, 2)
-                    end
+						itemButton.ItemUpgradeIcon:ClearAllPoints()
+						local posUp = addon.db["bagUpgradeIconPosition"] or "BOTTOMRIGHT"
+						if posUp == "TOPRIGHT" then
+							itemButton.ItemUpgradeIcon:SetPoint("TOPRIGHT", itemButton, "TOPRIGHT", -1, -2)
+						elseif posUp == "TOPLEFT" then
+							itemButton.ItemUpgradeIcon:SetPoint("TOPLEFT", itemButton, "TOPLEFT", 2, -2)
+						elseif posUp == "BOTTOMLEFT" then
+							itemButton.ItemUpgradeIcon:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
+						else -- BOTTOMRIGHT
+							itemButton.ItemUpgradeIcon:SetPoint("BOTTOMRIGHT", itemButton, "BOTTOMRIGHT", -1, 2)
+						end
 						itemButton.ItemUpgradeIcon:Show()
 					else
 						if itemButton.ItemUpgradeIcon then itemButton.ItemUpgradeIcon:Hide() end
@@ -1153,6 +1164,13 @@ function addon.functions.registerWayCommand()
 end
 
 function addon.functions.catalystChecks()
+	-- No catalyst charges exist for Timerunners; ensure hidden
+	if addon.functions.IsTimerunner() then
+		addon.variables.catalystID = nil
+		if addon.general and addon.general.iconFrame then addon.general.iconFrame:Hide() end
+		return
+	end
+
 	local mId = C_MythicPlus.GetCurrentSeason()
 	if mId == -1 then
 		C_MythicPlus.RequestMapInfo()

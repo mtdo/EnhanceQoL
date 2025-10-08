@@ -96,6 +96,9 @@ local function GetCooldownData(spellInfo)
 end
 
 local function getCurrentSeasonPortal()
+	-- Timerunners have no current-season portals; skip population
+	if addon and addon.functions and addon.functions.IsTimerunner and addon.functions.IsTimerunner() then return end
+
 	local cModeIDs = C_ChallengeMode.GetMapTable()
 	local cModeIDLookup = {}
 	for _, id in ipairs(cModeIDs) do
@@ -192,6 +195,8 @@ frameAnchor:SetBackdropColor(0, 0, 0, 0.8) -- Dunkler Hintergrund mit 80% Transp
 frameAnchor:SetMovable(true)
 frameAnchor:EnableMouse(true)
 frameAnchor:SetClampedToScreen(true)
+-- Ensure hidden by default for Timerunners
+if addon and addon.functions and addon.functions.IsTimerunner and addon.functions.IsTimerunner() then frameAnchor:Hide() end
 frameAnchor:RegisterForDrag("LeftButton")
 frameAnchor:SetScript("OnDragStart", function(self)
 	if addon.db.teleportFrameLocked then return end
@@ -734,6 +739,9 @@ end
 -- mirroring availability rules from the compendium. Returns
 -- { title = string, items = { entries... } }
 function addon.MythicPlus.functions.BuildCurrentSeasonTeleportSection()
+	-- Do not show the current season list for Timerunners
+	if addon and addon.functions and addon.functions.IsTimerunner and addon.functions.IsTimerunner() then return nil end
+
 	-- Determine active challenge map IDs for this season
 	local activeSet = {}
 	local mt = C_ChallengeMode and C_ChallengeMode.GetMapTable and C_ChallengeMode.GetMapTable() or {}
@@ -1005,6 +1013,8 @@ local function CreateRioScore()
 		_G["EQOLDungeonScoreFrame"]:SetParent(nil)
 		_G["EQOLDungeonScoreFrame"] = nil
 	end
+	-- Skip creating the Mythic+ Dungeons/Score frame for Timerunners
+	if addon and addon.functions and addon.functions.IsTimerunner and addon.functions.IsTimerunner() then return end
 	if addon.variables.maxLevel ~= UnitLevel("player") then return end
 
 	if addon.db["groupfinderShowDungeonScoreFrame"] == true then
@@ -1387,6 +1397,11 @@ function addon.MythicPlus.functions.toggleFrame()
 		doAfterCombat = true
 	else
 		doAfterCombat = false
+		-- Never show teleport frame for Timerunners
+		if addon and addon.functions and addon.functions.IsTimerunner and addon.functions.IsTimerunner() then
+			frameAnchor:Hide()
+			return
+		end
 		frameAnchor:SetAlpha(1)
 		if nil ~= RaiderIO_ProfileTooltip then
 			C_Timer.After(0.1, function()
@@ -1431,7 +1446,7 @@ function addon.MythicPlus.functions.toggleFrame()
 			end
 
 			-- Set Visibility
-			if addon.db["teleportFrame"] == true then
+			if addon.db["teleportFrame"] == true and not (addon and addon.functions and addon.functions.IsTimerunner and addon.functions.IsTimerunner()) then
 				if not frameAnchor:IsShown() then frameAnchor:Show() end
 			else
 				frameAnchor:Hide()
@@ -1456,6 +1471,11 @@ frameAnchor:RegisterEvent("PLAYER_REGEN_ENABLED")
 frameAnchor:RegisterEvent("GROUP_ROSTER_UPDATE")
 frameAnchor:RegisterEvent("GROUP_JOINED")
 local function eventHandler(self, event, arg1, arg2, arg3, arg4)
+	-- Never show teleport frame for Timerunners
+	if addon and addon.functions and addon.functions.IsTimerunner and addon.functions.IsTimerunner() then
+		if frameAnchor then frameAnchor:Hide() end
+		return
+	end
 	if addon.db["teleportFrame"] then
 		if InCombatLockdown() then
 			doAfterCombat = true
@@ -1464,7 +1484,11 @@ local function eventHandler(self, event, arg1, arg2, arg3, arg4)
 				CreatePortalButtonsWithCooldown(frameAnchor, portalSpells)
 				CreateRioScore()
 				frameAnchor:SetPoint("TOPLEFT", parentFrame, "TOPRIGHT", 230, 0)
-				frameAnchor:Show()
+				if not (addon and addon.functions and addon.functions.IsTimerunner and addon.functions.IsTimerunner()) then
+					frameAnchor:Show()
+				else
+					frameAnchor:Hide()
+				end
 			elseif event == "GROUP_JOINED" then
 				if PVEFrame:IsShown() then
 					addon.MythicPlus.triggerRequest() -- because I won't get the information from the people already in party otherwise

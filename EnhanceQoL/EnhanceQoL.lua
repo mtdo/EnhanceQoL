@@ -1105,6 +1105,11 @@ function addon.functions.IsIndestructible(link)
 end
 
 local function calculateDurability()
+	-- Timerunner gear is indestructible; hide and skip
+	if addon.functions and addon.functions.IsTimerunner and addon.functions.IsTimerunner() then
+		if addon.general and addon.general.durabilityIconFrame then addon.general.durabilityIconFrame:Hide() end
+		return
+	end
 	local maxDur = 0 -- combined value of durability
 	local currentDura = 0
 	local critDura = 0 -- counter of items under 50%
@@ -1163,11 +1168,11 @@ hooksecurefunc("PaperDollFrame_SetItemLevel", function(statFrame, unit) UpdateIt
 local function setCharFrame()
 	UpdateItemLevel()
 	if not addon.general.iconFrame then addon.functions.catalystChecks() end
-	if addon.db["showCatalystChargesOnCharframe"] and addon.variables.catalystID and addon.general.iconFrame then
+	if addon.db["showCatalystChargesOnCharframe"] and addon.variables.catalystID and addon.general.iconFrame and not addon.functions.IsTimerunner() then
 		local cataclystInfo = C_CurrencyInfo.GetCurrencyInfo(addon.variables.catalystID)
 		addon.general.iconFrame.count:SetText(cataclystInfo.quantity)
 	end
-	if addon.db["showDurabilityOnCharframe"] then calculateDurability() end
+	if addon.db["showDurabilityOnCharframe"] and not addon.functions.IsTimerunner() then calculateDurability() end
 	for key, value in pairs(addon.variables.itemSlots) do
 		setIlvlText(value, key)
 	end
@@ -2987,9 +2992,9 @@ local function addCharacterFrame(container)
 		local b = val and true or false
 		if key == "durability" then
 			addon.db["showDurabilityOnCharframe"] = b
-			calculateDurability()
 			if addon.general and addon.general.durabilityIconFrame then
-				if b then
+				if b and not addon.functions.IsTimerunner() then
+					calculateDurability()
 					addon.general.durabilityIconFrame:Show()
 				else
 					addon.general.durabilityIconFrame:Hide()
@@ -2999,7 +3004,7 @@ local function addCharacterFrame(container)
 		elseif key == "catalyst" then
 			addon.db["showCatalystChargesOnCharframe"] = b
 			if addon.general and addon.general.iconFrame then
-				if b and addon.variables and addon.variables.catalystID then
+				if b and addon.variables and addon.variables.catalystID and not addon.functions.IsTimerunner() then
 					local c = C_CurrencyInfo.GetCurrencyInfo(addon.variables.catalystID)
 					if c then addon.general.iconFrame.count:SetText(c.quantity) end
 					addon.general.iconFrame:Show()
@@ -6107,7 +6112,7 @@ local function initCharacter()
 	addon.general.durabilityIconFrame.count:SetPoint("BOTTOMRIGHT", addon.general.durabilityIconFrame, "BOTTOMRIGHT", 1, 2)
 	addon.general.durabilityIconFrame.count:SetFont(addon.variables.defaultFont, 12, "OUTLINE")
 
-	if addon.db["showDurabilityOnCharframe"] == false then addon.general.durabilityIconFrame:Hide() end
+	if addon.db["showDurabilityOnCharframe"] == false or (addon.functions and addon.functions.IsTimerunner and addon.functions.IsTimerunner()) then addon.general.durabilityIconFrame:Hide() end
 
 	addon.general.cloakUpgradeFrame = CreateFrame("Button", nil, PaperDollFrame, "BackdropTemplate")
 	addon.general.cloakUpgradeFrame:SetSize(32, 32)
@@ -7180,6 +7185,18 @@ local eventHandlers = {
 		}
 		addon.db["warbandGold"] = C_Bank.FetchDepositedMoney(Enum.BankType.Account)
 		if addon.ChatIM then addon.ChatIM:BuildSoundTable() end
+
+		-- Timerunner cleanup: remove Durability stream from all DataPanels
+		if addon.functions and addon.functions.IsTimerunner and addon.functions.IsTimerunner() then
+			if addon.DataPanel and addon.DataPanel.List and addon.DataPanel.RemoveStream then
+				local panels = addon.DataPanel.List()
+				for id, streams in pairs(panels or {}) do
+					for _, s in ipairs(streams or {}) do
+						if s == "durability" then pcall(function() addon.DataPanel.RemoveStream(id, "durability") end) end
+					end
+				end
+			end
+		end
 	end,
 	["PLAYER_MONEY"] = function()
 		if addon.db["showDurabilityOnCharframe"] then calculateDurability() end

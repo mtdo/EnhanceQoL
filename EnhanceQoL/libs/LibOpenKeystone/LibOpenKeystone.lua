@@ -1,5 +1,5 @@
 -- LibOpenKeystone-1.0 (minimal, LOR-compatible J/K comms only)
-local MAJOR, MINOR = "LibOpenKeystone-1.0", 4
+local MAJOR, MINOR = "LibOpenKeystone-1.0", 5
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then return end
 
@@ -10,6 +10,12 @@ lib._callbacks = lib._callbacks or { KeystoneUpdate = {}, KeystoneWipe = {} }
 lib._pendingAnnounce = lib._pendingAnnounce or false
 lib._lastRequestAt = lib._lastRequestAt or 0
 lib._bagPending = lib._bagPending or false
+-- OOC gating flags
+lib._pendingSendMyData = lib._pendingSendMyData or false
+lib._pendingRequestParty = lib._pendingRequestParty or false
+-- M+ gating
+lib._mplusActive = lib._mplusActive or false
+lib._eligible = lib._eligible or true -- assume true until we can evaluate
 
 -- Outgoing messages use a custom prefix; incoming accepts both LibOpenRaid
 -- and LibOpenKeystone prefixes
@@ -44,6 +50,48 @@ local function NormalizeKey(name, sender)
 end
 
 local function Now() return GetServerTime() end
+local function InCombat() return InCombatLockdown and InCombatLockdown() end
+
+local function IsMPlusActive()
+	if C_ChallengeMode and C_ChallengeMode.IsChallengeModeActive then
+		local ok = C_ChallengeMode.IsChallengeModeActive()
+		if ok ~= nil then return ok end
+	end
+	local _, _, diff = GetInstanceInfo()
+	return diff == 8
+end
+
+local function GetCurrentExpansionMaxLevel()
+	if GetMaxLevelForExpansionLevel and LE_EXPANSION_LEVEL_CURRENT then return GetMaxLevelForExpansionLevel(LE_EXPANSION_LEVEL_CURRENT) end
+	if GetMaxLevelForPlayerExpansion then return GetMaxLevelForPlayerExpansion() end
+	return nil
+end
+
+local function IsEligibleForKeystone()
+	local lvl = UnitLevel and UnitLevel("player") or 0
+	local maxLvl = GetCurrentExpansionMaxLevel()
+	if type(maxLvl) == "number" and maxLvl > 0 then return lvl >= maxLvl end
+	-- If we cannot determine, default to true to avoid disabling legit comms
+	return true
+end
+
+local function QueueSendMyData() lib._pendingSendMyData = true end
+
+local function QueueRequestParty() lib._pendingRequestParty = true end
+
+local function FlushPending()
+	if lib._pendingRequestParty and lib._eligible and not InCombat() and not lib._mplusActive then
+		lib._pendingRequestParty = false
+		-- Anfrage nach OOC
+		SendLogged(KREQ_PREFIX)
+	end
+	if lib._pendingSendMyData and lib._eligible and not InCombat() and not lib._mplusActive then
+		lib._pendingSendMyData = false
+		-- Eigen-Daten nach OOC
+		local mapID, level = ReadOwnKeystone()
+		SendLogged(BuildKPayload(mapID, level))
+	end
+end
 
 -- Public callbacks API (same shape as LOR)
 function lib.RegisterCallback(addonObject, event, method)
@@ -110,12 +158,12 @@ local function SendLogged(text, channel)
 	-- Preferred: compressed AceComm on our own prefix
 	local AceComm = LibStub:GetLibrary("AceComm-3.0", true)
 	local LibDeflate = LibStub:GetLibrary("LibDeflate", true)
-    if AceComm and LibDeflate then
-        local compressed = LibDeflate:CompressDeflate(text, { level = 9 })
-        local encoded = LibDeflate:EncodeForWoWAddonChannel(compressed)
-        AceComm:SendCommMessage(SEND_PREFIX, encoded, ch, nil, "NORMAL")
-        return
-    end
+	if AceComm and LibDeflate then
+		local compressed = LibDeflate:CompressDeflate(text, { level = 9 })
+		local encoded = LibDeflate:EncodeForWoWAddonChannel(compressed)
+		AceComm:SendCommMessage(SEND_PREFIX, encoded, ch, nil, "NORMAL")
+		return
+	end
 
 	-- Fallback: LOGGED-safe
 	if ChatThrottleLib and ChatThrottleLib.SendAddonMessageLogged then
@@ -150,12 +198,18 @@ end
 
 -- Common processor for decoded data (either from LOGGED-safe or AceComm-compressed)
 local function ProcessData(sender, channel, data)
+	if lib._mplusActive then return end -- no processing during active M+
 	local dtype = data:sub(1, 1)
 	if dtype == KREQ_PREFIX then
-		-- someone asked → respond with our key
+		-- someone asked → respond with our key (OOC and not during M+ only)
 		local me = FullName("player")
 		local mapID, level = ReadOwnKeystone()
-		SendLogged(BuildKPayload(mapID, level), channel)
+		-- only send OOC + not in M+
+		if InCombat() or lib._mplusActive then
+			QueueSendMyData()
+		else
+			SendLogged(BuildKPayload(mapID, level), channel)
+		end
 		return
 	elseif dtype == KDATA_PREFIX then
 		local tokens = { strsplit(",", data) }
@@ -198,6 +252,7 @@ local function HandleCompleteLogged(sender, channel, msg)
 end
 
 local function OnLogged(self, event, prefix, text, channel, sender)
+	if lib._mplusActive then return end -- ignore inbound during M+
 	if not RECV_PREFIXES_LOGGED[prefix] then return end
 	sender = Ambiguate(sender, "none")
 	-- ignore self (short oder full)
@@ -239,6 +294,7 @@ do
 	if AceComm and LibDeflate then
 		lib._ace = lib._ace or {}
 		function lib._ace:OnReceiveComm(prefix, text, channel, sender)
+			if lib._mplusActive then return end -- ignore inbound during M+
 			if not RECV_PREFIXES[prefix] then return end
 			sender = Ambiguate(sender, "none")
 			-- ignore self (short or full)
@@ -272,57 +328,114 @@ f:RegisterEvent("CHAT_MSG_ADDON_LOGGED")
 f:RegisterEvent("GROUP_ROSTER_UPDATE")
 f:RegisterEvent("PLAYER_ENTERING_WORLD")
 f:RegisterEvent("BAG_UPDATE_DELAYED")
+f:RegisterEvent("PLAYER_REGEN_ENABLED")
+f:RegisterEvent("CHALLENGE_MODE_START")
+f:RegisterEvent("CHALLENGE_MODE_COMPLETED")
+f:RegisterEvent("CHALLENGE_MODE_RESET")
+f:RegisterEvent("PLAYER_LEVEL_UP")
 f:SetScript("OnEvent", function(_, ev, ...)
-    if ev == "CHAT_MSG_ADDON_LOGGED" then return OnLogged(_, ev, ...) end
-    if ev == "PLAYER_ENTERING_WORLD" or ev == "GROUP_ROSTER_UPDATE" then
-        -- Debounce bursts: schedule a single announce for rapid event sequences
-        if not lib._pendingAnnounce then
-            lib._pendingAnnounce = true
-            C_Timer.After(0.25 + math.random() * 0.2, function()
-                lib._pendingAnnounce = false
-                if IsInGroup() then
-                    lib.RequestKeystoneDataFromParty()
-                else
-                    -- solo: just refresh local
-                    local me = UnitName("player")
-                    local mapID, level = ReadOwnKeystone()
-                    lib.UnitData[me] = { challengeMapID = mapID, level = level, lastSeen = Now() }
-                    Fire("KeystoneUpdate", me, lib.UnitData[me])
-                end
-            end)
-        end
-    elseif ev == "BAG_UPDATE_DELAYED" then
-        -- Lightly buffer multiple bag events close together
-        if not lib._bagPending then
-            lib._bagPending = true
-            C_Timer.After(0.15, function()
-                lib._bagPending = false
-                -- if our key changed, notify group (cheap)
-                local me = UnitName("player")
-                local mapID, level = ReadOwnKeystone()
-                local e = lib.UnitData[me]
-                if not e or e.challengeMapID ~= mapID or e.level ~= level then
-                    lib.UnitData[me] = { challengeMapID = mapID, level = level, lastSeen = Now() }
-                    Fire("KeystoneUpdate", me, lib.UnitData[me])
-                    if IsInGroup() then SendLogged(BuildKPayload(mapID, level)) end
-                end
-            end)
-        end
-    end
+	if ev == "CHAT_MSG_ADDON_LOGGED" then return OnLogged(_, ev, ...) end
+	if ev == "PLAYER_ENTERING_WORLD" or ev == "GROUP_ROSTER_UPDATE" then
+		-- Update initial M+ state on zone/load
+		lib._mplusActive = IsMPlusActive()
+		-- Evaluate eligibility (max level)
+		lib._eligible = IsEligibleForKeystone()
+		-- Debounce bursts: schedule a single announce for rapid event sequences
+		if not lib._pendingAnnounce then
+			lib._pendingAnnounce = true
+			C_Timer.After(0.25 + math.random() * 0.2, function()
+				lib._pendingAnnounce = false
+				if IsInGroup() then
+					lib.RequestKeystoneDataFromParty()
+				else
+					-- solo: just refresh local
+					if not lib._mplusActive and lib._eligible then
+						local me = UnitName("player")
+						local mapID, level = ReadOwnKeystone()
+						lib.UnitData[me] = { challengeMapID = mapID, level = level, lastSeen = Now() }
+						Fire("KeystoneUpdate", me, lib.UnitData[me])
+					end
+				end
+			end)
+		end
+	elseif ev == "BAG_UPDATE_DELAYED" then
+		if not lib._eligible then return end
+		-- Lightly buffer multiple bag events close together
+		if not lib._bagPending then
+			lib._bagPending = true
+			C_Timer.After(0.15, function()
+				lib._bagPending = false
+				-- if our key changed, notify group (cheap)
+				local me = UnitName("player")
+				local mapID, level = ReadOwnKeystone()
+				local e = lib.UnitData[me]
+				if not e or e.challengeMapID ~= mapID or e.level ~= level then
+					if not lib._mplusActive then
+						lib.UnitData[me] = { challengeMapID = mapID, level = level, lastSeen = Now() }
+						Fire("KeystoneUpdate", me, lib.UnitData[me])
+					end
+					if IsInGroup() then
+						if lib._mplusActive then
+							-- no-op during active M+
+						elseif InCombat() then
+							QueueSendMyData()
+						else
+							SendLogged(BuildKPayload(mapID, level))
+						end
+					end
+				end
+			end)
+		end
+	elseif ev == "PLAYER_REGEN_ENABLED" then
+		-- Flush any queued comms after combat ends
+		FlushPending()
+	elseif ev == "CHALLENGE_MODE_START" then
+		-- During active M+ do not send any comms
+		lib._mplusActive = true
+	elseif ev == "CHALLENGE_MODE_RESET" then
+		-- Run aborted: allow comms again and do a delayed flush
+		lib._mplusActive = false
+		lib._pendingRequestParty = true -- ensure a fresh check after abort
+		C_Timer.After(2.0, FlushPending)
+	elseif ev == "CHALLENGE_MODE_COMPLETED" then
+		-- After finish: small grace period, then flush any pending
+		lib._mplusActive = false
+		lib._pendingRequestParty = true -- ensure a fresh check after finish
+		C_Timer.After(2.0, FlushPending)
+	elseif ev == "PLAYER_LEVEL_UP" then
+		local was = lib._eligible
+		lib._eligible = IsEligibleForKeystone()
+		if lib._eligible and not was then
+			-- became eligible: optionally request party after short delay
+			C_Timer.After(1.0, function()
+				if not InCombat() and not lib._mplusActive and IsInGroup() then lib.RequestKeystoneDataFromParty() end
+			end)
+		end
+	end
 end)
 
 -- Public: request from party/raid + send own key proactively
 function lib.RequestKeystoneDataFromParty()
-    if not (IsInGroup() or IsInRaid()) then return end
-    -- simple cooldown to avoid burst storms
-    local t = GetTime()
-    if (t - (lib._lastRequestAt or 0)) < 5 then return end
-    lib._lastRequestAt = t
+	if not (IsInGroup() or IsInRaid()) then return end
+	-- simple cooldown to avoid burst storms
+	local t = GetTime()
+	if (t - (lib._lastRequestAt or 0)) < 5 then return end
+	lib._lastRequestAt = t
 
-    -- Anfrage
-    SendLogged(KREQ_PREFIX)
+	-- Anfrage
+	if lib._mplusActive then return end
+	if InCombat() then
+		QueueRequestParty()
+	else
+		SendLogged(KREQ_PREFIX)
+	end
 
-    -- sofortige Eigen-Antwort
-    local mapID, level = ReadOwnKeystone()
-    SendLogged(BuildKPayload(mapID, level))
+	-- sofortige Eigen-Antwort
+	local mapID, level = ReadOwnKeystone()
+	if lib._mplusActive then return end
+	if InCombat() then
+		QueueSendMyData()
+	else
+		SendLogged(BuildKPayload(mapID, level))
+	end
 end

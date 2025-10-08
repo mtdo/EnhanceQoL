@@ -5,6 +5,11 @@
 ### 🔄 Changed
 
 - BR Tracker is also visible in Raid encounter now
+- LibOpenKeystone is silent during M+ runs and in combat now
+- Some options and elements are disabled in remix/timerunner content
+
+### 🐛 Fixed
+- Worldmap teleports had some bugs during combat
 
 ---
 

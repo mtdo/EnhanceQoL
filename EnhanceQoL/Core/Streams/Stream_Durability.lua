@@ -95,6 +95,13 @@ local slotOrder = { 1, 2, 3, 15, 5, 9, 10, 6, 7, 8, 11, 12, 13, 14, 16, 17 } -- 
 local lines = {}
 local function calculateDurability(stream)
 	ensureDB()
+	-- Hide stream entirely for Timerunners (gear is indestructible)
+	if addon.functions and addon.functions.IsTimerunner and addon.functions.IsTimerunner() then
+		wipe(lines)
+		stream.snapshot.fontSize = db and db.fontSize or 13
+		stream.snapshot.text = ""
+		return
+	end
 	local maxDur, currentDura, critDura = 0, 0, 0
 	wipe(lines)
 

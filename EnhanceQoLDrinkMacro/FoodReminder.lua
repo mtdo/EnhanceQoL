@@ -203,6 +203,14 @@ end
 local joinSoundPlayed = false
 local leaveSoundPlayed = false
 local function checkShow()
+	-- Timerunner mode: no follower dungeons; disable reminder entirely
+	if addon.functions and addon.functions.IsTimerunner and addon.functions.IsTimerunner() then
+		removeBRFrame()
+		joinSoundPlayed = false
+		leaveSoundPlayed = false
+		return
+	end
+
 	if not addon.db["mageFoodReminder"] then
 		removeBRFrame()
 		joinSoundPlayed = false
