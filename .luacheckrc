@@ -30,6 +30,8 @@ exclude_files = {
 	"EnhanceQoL/libs/LibOpenRaid/ThingsToMantain_Dragonflight.lua",
 	"EnhanceQoL/libs/LibOpenRaid/ThingsToMantain_Era.lua",
 	"EnhanceQoL/libs/LibOpenRaid/ThingsToMantain_Cata.lua",
+	"EnhanceQoL/libs/AceGUI-3.0/widgets/AceGUIWidget-MultiLineEditBox.lua",
+	"EnhanceQoL/libs/AceGUI-3.0/widgets/AceGUIWidget-EditBox.lua",
 	".git/**",
 }
 ignore = {
