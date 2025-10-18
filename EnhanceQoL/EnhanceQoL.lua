@@ -20,6 +20,7 @@ local defaults = {
 		cvarOverrides = {},
 		cvarPersistenceEnabled = false,
 		optionsFrameScale = 1,
+		legionRemix = {},
 	},
 }
 
@@ -7267,6 +7268,15 @@ local function CreateUI()
 		addon.treeGroup:SetTree(addon.treeGroupData)
 	end
 
+	-- Top: Events
+	addon.functions.addToTree(nil, {
+		value = "events",
+		text = EVENTS_LABEL or L["Events"] or "Events",
+		children = {
+			{ value = "legionremix", text = "Legion Remix" },
+		},
+	})
+
 	-- Top: Profiles
 	table.insert(addon.treeGroupData, {
 		value = "profiles",
@@ -7349,6 +7359,11 @@ local function CreateUI()
 		-- System
 		elseif group == "ui\001system" then
 			addCVarFrame(container, true)
+		-- Events
+		elseif group == "events" or group == "events\001legionremix" then
+			if addon.Events and addon.Events.LegionRemix and addon.Events.LegionRemix.functions and addon.Events.LegionRemix.functions.treeCallback then
+				addon.Events.LegionRemix.functions.treeCallback(container, group)
+			end
 		elseif group == "profiles" then
 			local scroll = addon.functions.createContainer("ScrollFrame", "List")
 			scroll:SetFullWidth(true)
@@ -7868,6 +7883,8 @@ local eventHandlers = {
 				addon.ContainerActions:Init()
 				if addon.ContainerActions.OnSettingChanged then addon.ContainerActions:OnSettingChanged(addon.db["automaticallyOpenContainer"]) end
 			end
+
+			if addon.Events and addon.Events.LegionRemix and addon.Events.LegionRemix.Init then addon.Events.LegionRemix:Init() end
 
 			checkBagIgnoreJunk()
 		end
