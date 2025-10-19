@@ -1522,14 +1522,17 @@ function LegionRemix:UpdateOverlay()
 
 	local categories = self.latestCategories or {}
 	local visibleIndex = 0
+	local dynHeight = 0
 	for _, data in ipairs(categories) do
 		local display = self:BuildCategoryDisplay(data)
 		if (display.totalCost or 0) > 0 then
 			visibleIndex = visibleIndex + 1
 			local row = self:GetRow(visibleIndex, frame.content)
+			dynHeight = dynHeight + row:GetHeight()
 			self:UpdateRow(row, display)
 		end
 	end
+	self.overlay:SetHeight(140 + dynHeight + ((visibleIndex-1) * 6))
 	self:HideUnusedRows(visibleIndex + 1)
 end
 
