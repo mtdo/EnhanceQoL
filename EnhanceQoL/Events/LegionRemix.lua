@@ -1878,13 +1878,14 @@ function LegionRemix:CreateOverlay()
 	-- scrollFrame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -28, 16)
 	-- scrollFrame:SetClipsChildren(true)
 	-- scrollFrame:HookScript("OnSizeChanged", function() LegionRemix:UpdateContentWidth() end)
+	-- scrollFrame.ScrollBar:Hide()
 
 	-- local content = CreateFrame("Frame", nil, scrollFrame)
 	-- content:SetPoint("TOPLEFT")
 	-- content:SetSize(1, 1)
 	-- scrollFrame:SetScrollChild(content)
 
-	frame.collapsedHeight = header:GetHeight() + 40
+	frame.collapsedHeight = header:GetHeight() + 20
 	frame.header = header
 	frame.title = title
 	frame.bronzeText = bronzeText
@@ -1893,7 +1894,7 @@ function LegionRemix:CreateOverlay()
 	frame.closeButton = closeButton
 	frame.lockButton = lockButton
 	frame.filterBar = filterBar
-	frame.scrollFrame = scrollFrame
+	-- frame.scrollFrame = scrollFrame
 	frame.content = content
 
 	self.overlay = frame
@@ -1943,8 +1944,11 @@ function LegionRemix:UpdateOverlay()
 	if db and db.collapsed then
 		if frame.filterBar and frame.filterBar.hasButtons then frame.filterBar:Hide() end
 		if frame.scrollFrame then frame.scrollFrame:Hide() end
+		if frame.content then frame.content:Hide() end
 		frame:SetHeight(frame.collapsedHeight or 80)
 		return
+	else
+		if frame.content then frame.content:Show() end
 	end
 
 	frame:SetHeight(frame.expandedHeight or 520)
@@ -1973,7 +1977,7 @@ function LegionRemix:UpdateOverlay()
 			self:UpdateRow(row, display)
 		end
 	end
-	self.overlay:SetHeight(140 + dynHeight + ((visibleIndex - 1) * 6))
+	self.overlay:SetHeight(110 + dynHeight + ((visibleIndex - 1) * 6))
 	self:HideUnusedRows(visibleIndex + 1)
 end
 
@@ -2265,9 +2269,7 @@ function LegionRemix:BuildOptionsUI(container)
 			categoryDropdown:SetItemValue(category.key, LegionRemix:IsCategoryVisible(category.key))
 		end
 	end
-	categoryDropdown:SetCallback("OnValueChanged", function(_, _, key, state)
-		LegionRemix:SetCategoryVisibility(key, state)
-	end)
+	categoryDropdown:SetCallback("OnValueChanged", function(_, _, key, state) LegionRemix:SetCategoryVisibility(key, state) end)
 	scroll:AddChild(categoryDropdown)
 	refreshCategoryDropdown()
 
