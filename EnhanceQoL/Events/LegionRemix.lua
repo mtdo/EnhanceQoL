@@ -14,7 +14,7 @@ local LegionRemix = addon.Events.LegionRemix
 local AceGUI = LibStub("AceGUI-3.0")
 local L = LibStub("AceLocale-3.0"):GetLocale(PARENT_ADDON)
 
-local DEFAULT_PHASE_KEYS = { "mount", "item", "toy", "pet", "achievement", "rare_appearance", "cloaks" }
+local DEFAULT_PHASE_KEYS = { "mount", "item", "toy", "pet", "achievement", "title", "rare_appearance", "cloaks" }
 local PHASE_LOOKUP = _G.EnhanceQoLLegionRemixPhaseData or {}
 for _, key in ipairs(DEFAULT_PHASE_KEYS) do
 	if type(PHASE_LOOKUP[key]) ~= "table" then PHASE_LOOKUP[key] = {} end
@@ -345,6 +345,40 @@ local CATEGORY_DATA = {
 		},
 	},
 	{
+		key = "titles",
+		label = T(UNIT_NAME_PLAYER_TITLE, UNIT_NAME_PLAYER_TITLE),
+		groups = {
+			{
+				type = "title",
+				cost = 0,
+				items = {
+					{ id = 825, achievementId = 42301, name = "Timerunner" },
+					{ id = 971, achievementId = 61079, name = "of the Infinite Chaos" },
+				},
+			},
+		},
+	},
+	{
+		key = "achievements",
+		label = T(TRANSMOG_SOURCE_5, TRANSMOG_SOURCE_5),
+		groups = {
+			{
+				type = "set_achievement",
+				cost = 0,
+				items = { 177, 185, 181, 173, 5278, 5280 },
+				requirements = {
+					[177] = 61026,
+					[185] = 61024,
+					[181] = 61025,
+					[173] = 61027,
+					[5278] = 61337,
+					[5279] = 61078,
+					[5280] = 42690,
+				},
+			},
+		},
+	},
+	{
 		key = "rare_appearance",
 		label = T("Rare Appearance", RARE_APPEARANCES or "Rare Appearances"),
 		groups = {
@@ -378,23 +412,6 @@ local CATEGORY_DATA = {
 					SHAMAN = { 935, 1304, 1510 },
 					WARLOCK = { 321, 1299, 1514 },
 					WARRIOR = { 939, 1295, 1518 },
-				},
-			},
-		},
-	},
-	{
-		key = "chosen_dead",
-		label = T(TRANSMOG_SOURCE_5, TRANSMOG_SOURCE_5),
-		groups = {
-			{
-				type = "set_achievement",
-				cost = 0,
-				items = { 177, 185, 181, 173 },
-				requirements = {
-					[177] = 61026,
-					[185] = 61024,
-					[181] = 61025,
-					[173] = 61027,
 				},
 			},
 		},
@@ -505,6 +522,7 @@ end
 local function normalizePhaseKind(kind)
 	if kind == "mount" then return "mount" end
 	if kind == "achievement" then return "achievement" end
+	if kind == "title" then return "title" end
 	if kind == "toy" then return "toy" end
 	if kind == "pet" then return "pet" end
 	if kind == "transmog" or kind == "item" then return "item" end
@@ -578,6 +596,7 @@ LegionRemix.cache = LegionRemix.cache or {}
 LegionRemix.cache.names = LegionRemix.cache.names or {}
 LegionRemix.cache.achievements = LegionRemix.cache.achievements or {}
 LegionRemix.cache.achievementInfo = LegionRemix.cache.achievementInfo or {}
+LegionRemix.cache.titles = LegionRemix.cache.titles or {}
 LegionRemix.rows = LegionRemix.rows or {}
 
 local function clearTable(tbl)
@@ -592,6 +611,7 @@ function LegionRemix:InvalidateAllCaches()
 	self.cache.mounts = {}
 	self.cache.toys = {}
 	self.cache.pets = {}
+	self.cache.titles = {}
 	self.cache.transmog = {}
 	self.cache.names = {}
 	self.cache.slotGrid = {}
@@ -937,6 +957,17 @@ function LegionRemix:PlayerHasPet(speciesId)
 	return cache[speciesId]
 end
 
+function LegionRemix:PlayerHasTitle(titleId)
+	if not titleId then return false end
+	local cache = ensureTable(self.cache.titles)
+	self.cache.titles = cache
+	if cache[titleId] ~= nil then return cache[titleId] end
+	local known = false
+	if IsTitleKnown then known = IsTitleKnown(titleId) end
+	cache[titleId] = known and true or false
+	return cache[titleId]
+end
+
 function LegionRemix:PlayerHasAchievement(achievementId)
 	if not achievementId then return false end
 	local cache = ensureTable(self.cache.achievements)
@@ -1070,7 +1101,9 @@ end
 local function addItemResult(result, owned, cost, entry)
 	result.totalCost = result.totalCost + cost
 	result.totalCount = result.totalCount + 1
-	local phase = LegionRemix:GetPhaseFor(entry.kind, entry.id)
+	local phaseKind = entry.phaseKind or entry.kind
+	local phaseId = entry.phaseId or entry.id
+	local phase = LegionRemix:GetPhaseFor(phaseKind, phaseId)
 	if phase then
 		result.phaseTotals = result.phaseTotals or {}
 		accumulatePhase(result.phaseTotals, phase, cost, owned)
@@ -1116,6 +1149,74 @@ function LegionRemix:ProcessGroup(categoryResult, group)
 			self:ProcessSetList(categoryResult, filtered, cost, requirements)
 		else
 			self:ProcessSetList(categoryResult, group.items or {}, cost, requirements)
+		end
+		return
+	end
+
+	if group.type == "achievement" then
+		local cost = group.cost or 0
+		local items = group.items or {}
+		if type(items) ~= "table" then return end
+		for _, achievementData in ipairs(items) do
+			local achievementId = achievementData
+			local entryOptions = nil
+			if type(achievementData) == "table" then
+				entryOptions = achievementData
+				achievementId = achievementData.id or achievementData.achievementId or achievementData.achievementID or achievementData.achievement
+			end
+			if achievementId then
+				achievementId = tonumber(achievementId) or achievementId
+				local owned = self:PlayerHasAchievement(achievementId)
+				local entry = { kind = "achievement", id = achievementId }
+				if entryOptions then
+					if entryOptions.phaseKind then entry.phaseKind = entryOptions.phaseKind end
+					if entryOptions.phaseId ~= nil then
+						local phaseId = tonumber(entryOptions.phaseId) or entryOptions.phaseId
+						entry.phaseId = phaseId
+					end
+				end
+				addItemResult(categoryResult, owned, cost, entry)
+			end
+		end
+		return
+	end
+
+	if group.type == "title" then
+		local cost = group.cost or 0
+		local items = group.items or {}
+		if type(items) ~= "table" then return end
+		for _, titleData in ipairs(items) do
+			local titleId = titleData
+			local name
+			local achievementId, phaseKindOverride, phaseIdOverride
+			if type(titleData) == "table" then
+				titleId = titleData.id or titleData.titleId or titleData.titleID
+				achievementId = titleData.achievementId or titleData.achievementID or titleData.achievement
+				name = titleData.name or titleId
+				if titleData.phaseKind then phaseKindOverride = titleData.phaseKind end
+				if titleData.phaseId then phaseIdOverride = titleData.phaseId end
+			end
+			if titleId then
+				titleId = tonumber(titleId) or titleId
+				local owned = self:PlayerHasTitle(titleId)
+				local entry = { kind = "title", id = titleId, name = name }
+				if achievementId then
+					achievementId = tonumber(achievementId)
+					if achievementId then
+						entry.requiredAchievement = achievementId
+						entry.requirementComplete = self:PlayerHasAchievement(achievementId)
+						if entry.requirementComplete then owned = true end
+						entry.phaseKind = entry.phaseKind or "achievement"
+						entry.phaseId = entry.phaseId or achievementId
+					end
+				end
+				if phaseKindOverride then entry.phaseKind = phaseKindOverride end
+				if phaseIdOverride ~= nil then
+					local phaseIdValue = tonumber(phaseIdOverride) or phaseIdOverride
+					entry.phaseId = phaseIdValue
+				end
+				addItemResult(categoryResult, owned, cost, entry)
+			end
 		end
 		return
 	end
@@ -1469,6 +1570,40 @@ function LegionRemix:GetItemName(entry)
 			return name
 		end
 		return ("Pet #" .. tostring(id or "?"))
+	elseif kind == "achievement" then
+		local achievementId = tonumber(id) or id
+		if achievementId then
+			local name = select(1, self:GetAchievementDetails(achievementId))
+			if name and name ~= "" then
+				self:SetCachedItemName(kind, id, name)
+				return name
+			end
+			local _, fallback = GetAchievementInfo(achievementId)
+			if fallback and fallback ~= "" then
+				self:SetCachedItemName(kind, id, fallback)
+				return fallback
+			end
+		end
+		return ("Achievement #" .. tostring(id or "?"))
+	elseif kind == "title" then
+		local titleId = tonumber(id) or id
+		local name
+		if entry.name then
+			name = entry.name
+		else
+			if titleId then
+				if C_TitleManager and C_TitleManager.GetTitleName then
+					name = C_TitleManager.GetTitleName(titleId)
+				elseif GetTitleName then
+					name = GetTitleName(titleId)
+				end
+			end
+		end
+		if name and name ~= "" then
+			self:SetCachedItemName(kind, id, name)
+			return name
+		end
+		return ("Title #" .. tostring(id or "?"))
 	elseif kind == "set" then
 		local info = C_TransmogSets.GetSetInfo(id or 0)
 		if info and info.name and info.name ~= "" then

@@ -352,6 +352,10 @@ EnhanceQoLLegionRemixPhaseData = {
 		[255006] = 4, -- Taeshalach (Set)
 		[253273] = 4, -- Scythe of the Unmaker (Set)
 	},
+	title = {
+		[825] = 1, -- Phase 1
+		[971] = 4, -- Phase 1
+	},
 	set = {
 		-- Raid ensembles: Nighthold=1, Tomb of Sargeras=3, Antorus=4
 		[174] = 1,
@@ -362,6 +366,10 @@ EnhanceQoLLegionRemixPhaseData = {
 		[177] = 1,
 		[181] = 1,
 		[185] = 1,
+		[5278] = 1,
+		[5279] = 4,
+		[5280] = 1,
+		[5281] = 1,
 		[1004] = 1,
 		[1338] = 3,
 		[1474] = 4, -- DK
