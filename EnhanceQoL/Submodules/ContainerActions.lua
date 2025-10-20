@@ -125,16 +125,12 @@ function ContainerActions:EnsureAnchor()
 	anchor:SetBackdropBorderColor(1, 0.82, 0, 0.9)
 	anchor:Hide()
 
-	anchor:SetScript("OnDragStart", function(f)
-		if InCombat() then return end
-		f:StartMoving()
-	end)
-	anchor:SetScript("OnDragStop", function(f)
+	anchor:SetScript("OnDragStart", function() ContainerActions:OnAnchorDragStart() end)
+	anchor:SetScript("OnDragStop", function() ContainerActions:OnAnchorDragStop() end)
+	anchor:SetScript("OnHide", function(f)
 		f:StopMovingOrSizing()
-		ContainerActions:SaveAnchorPosition()
-		ContainerActions:ApplyAnchorPosition()
+		ContainerActions.anchorDragging = nil
 	end)
-	anchor:SetScript("OnHide", function(f) f:StopMovingOrSizing() end)
 
 	local label = anchor:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	label:SetPoint("CENTER", 0, 0)
@@ -144,6 +140,23 @@ function ContainerActions:EnsureAnchor()
 	self.anchorLabel = label
 	self:ApplyAnchorPosition()
 	return anchor
+end
+
+function ContainerActions:OnAnchorDragStart()
+	if InCombat() then return end
+	local anchor = self:EnsureAnchor()
+	if not (anchor and anchor:IsShown()) then return end
+	anchor:StartMoving()
+	self.anchorDragging = true
+end
+
+function ContainerActions:OnAnchorDragStop()
+	if not self.anchorDragging then return end
+	self.anchorDragging = nil
+	local anchor = self:EnsureAnchor()
+	if anchor then anchor:StopMovingOrSizing() end
+	self:SaveAnchorPosition()
+	self:ApplyAnchorPosition()
 end
 
 function ContainerActions:SaveAnchorPosition()
@@ -209,7 +222,11 @@ function ContainerActions:EnsureButton()
 	end)
 	button:SetScript("OnLeave", GameTooltip_Hide)
 	button:SetScript("PostClick", function() ContainerActions:OnPostClick() end)
+	button:SetScript("OnMouseDown", function(_, mouseButton)
+		if mouseButton == "LeftButton" and ContainerActions.previewActive then ContainerActions:OnAnchorDragStart() end
+	end)
 	button:SetScript("OnMouseUp", function(_, mouseButton)
+		if mouseButton == "LeftButton" then ContainerActions:OnAnchorDragStop() end
 		if mouseButton == "RightButton" and IsShiftKeyDown() then ContainerActions:TryBlacklistCurrentEntry() end
 	end)
 
@@ -237,6 +254,7 @@ function ContainerActions:Init()
 	self.previewActive = false
 	self.previewRestoreAfterCombat = nil
 	self.desiredVisibility = nil
+	self.pendingPreviewEntry = nil
 	self:EnsureAnchor()
 	self:EnsureButton()
 
@@ -317,6 +335,7 @@ function ContainerActions:ShowAnchorPreview()
 	end
 	local anchor = self:EnsureAnchor()
 	self.previewActive = true
+	self.pendingPreviewEntry = nil
 	anchor:Show()
 	self:ApplyAnchorPosition()
 
@@ -338,6 +357,7 @@ end
 
 function ContainerActions:HideAnchorPreview(skipVisibility)
 	self.previewActive = false
+	self.pendingPreviewEntry = nil
 	if self.anchor then self.anchor:Hide() end
 	local button = self.button
 	if button then button:SetAlpha(1) end
@@ -421,9 +441,7 @@ function ContainerActions:RememberItemInfo(itemID, config, info, overrides)
 	return entry
 end
 
-function ContainerActions:IsItemEnabled(itemID)
-	return not self:IsItemBlacklisted(itemID)
-end
+function ContainerActions:IsItemEnabled(itemID) return not self:IsItemBlacklisted(itemID) end
 
 function ContainerActions:IsItemBlacklisted(itemID)
 	local disabled = addon.db and addon.db.containerAutoOpenDisabled
@@ -616,6 +634,10 @@ end
 
 function ContainerActions:ApplyButtonEntry(entry)
 	self.currentEntry = entry
+	if self.previewActive then
+		self.pendingPreviewEntry = entry or false
+		return
+	end
 	local button = self:EnsureButton()
 	if InCombat() then
 		self.pendingItem = entry or false
@@ -646,9 +668,7 @@ function ContainerActions:ApplyButtonEntry(entry)
 	self:UpdateCount()
 end
 
-function ContainerActions:HasVisibilityBlock()
-	return self.visibilityBlocks and next(self.visibilityBlocks) ~= nil
-end
+function ContainerActions:HasVisibilityBlock() return self.visibilityBlocks and next(self.visibilityBlocks) ~= nil end
 
 function ContainerActions:SetVisibilityBlock(reason, blocked)
 	if not reason then return end
@@ -732,9 +752,7 @@ function ContainerActions:UpdateAreaBlocks()
 	end
 end
 
-function ContainerActions:OnAreaBlockSettingChanged()
-	self:UpdateAreaBlocks()
-end
+function ContainerActions:OnAreaBlockSettingChanged() self:UpdateAreaBlocks() end
 
 function ContainerActions:OnUnitEnteredVehicle(unit)
 	if unit ~= "player" then return end
@@ -774,9 +792,7 @@ function ContainerActions:IsChallengeModeActive()
 	return active == true
 end
 
-function ContainerActions:UpdateChallengeModeState()
-	self:SetVisibilityBlock("challengeMode", self:IsChallengeModeActive())
-end
+function ContainerActions:UpdateChallengeModeState() self:SetVisibilityBlock("challengeMode", self:IsChallengeModeActive()) end
 
 function ContainerActions:ShouldInspectTooltip(itemID)
 	if not itemID then return false end

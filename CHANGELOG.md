@@ -5,6 +5,7 @@
 ### 🐛 Fixed
 
 - Fixed missing and incorrect localizations across several languages.
+- Container open quick button had some issues while moving the button
 
 ---
 
