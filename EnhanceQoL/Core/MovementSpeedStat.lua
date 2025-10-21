@@ -1,6 +1,7 @@
 local addonName, addon = ...
 
 local GetTime = GetTime
+local C_Timer = C_Timer
 
 addon.MovementSpeedStat = addon.MovementSpeedStat or {}
 local mod = addon.MovementSpeedStat
@@ -12,48 +13,30 @@ local MOVEMENT_STAT_ENTRY = {
 	stat = MOVEMENT_STAT_KEY,
 	hideAt = 0,
 }
-local SPEED_EVENTS = {
-	"PLAYER_MOUNT_DISPLAY_CHANGED",
-	"UPDATE_SHAPESHIFT_FORM",
-	"PLAYER_STARTED_MOVING",
-	"PLAYER_STOPPED_MOVING",
-}
-local SPEED_UNIT_EVENTS = {
-	"UNIT_AURA",
-	"UNIT_ENTERED_VEHICLE",
-	"UNIT_EXITED_VEHICLE",
-}
-
 local MOVING_TICK = 0.5
 local IDLE_TICK = 1.5
-local FLYING_TICK = 1.0
+local FLYING_TICK = 1.5
 local MOVEMENT_THRESHOLD_YPS = 1
-local FLYING_SPEED_GATE = BASE_MS * 2
+local FLYING_SPEED_GATE = BASE_MS * 2.5
 local CACHE_EPSILON_PCT = 1
 local CACHE_EPSILON_YPS = 0.2
-local FLYING_EPSILON_PCT_MULT = 3.0
-local FLYING_EPSILON_YPS_MULT = 3.0
+local FLYING_EPSILON_PCT_MULT = 5.0
+local FLYING_EPSILON_YPS_MULT = 5.0
 
-local cache = { yps = BASE_MS, pct = 100, pctText = nil, tooltipYPS = nil }
+local cache = { yps = BASE_MS, pct = 100, pctText = nil, tooltipYPS = nil, tooltipStamp = 0 }
 local tickInterval = MOVING_TICK
-local accum = MOVING_TICK
 local active = false
 local installed = false
-local eventsRegistered = false
 local statFrameRef
-local EVENT_MIN_INTERVAL = 0.5
-local lastEventTick = 0
-
-local ticker = CreateFrame("Frame")
-ticker:Hide()
+local TOOLTIP_MIN_INTERVAL = 2
+local tickerActive = false
+local tickerSequence = 0
 
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("ADDON_LOADED")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 
-local function CharacterUIReady()
-	return type(PAPERDOLL_STATINFO) == "table" and type(PAPERDOLL_STATCATEGORIES) == "table"
-end
+local function CharacterUIReady() return type(PAPERDOLL_STATINFO) == "table" and type(PAPERDOLL_STATCATEGORIES) == "table" end
 
 local function GetStatCategory()
 	if not CharacterUIReady() then return nil end
@@ -72,9 +55,7 @@ local function EnsureCategoryReady()
 	local category = GetStatCategory()
 	if category and category.stats then return category end
 
-	if PaperDoll_InitStatCategories then
-		PaperDoll_InitStatCategories(PAPERDOLL_STATCATEGORY_DEFAULTORDER, "statCategoryOrder", "statCategoriesCollapsed", "player")
-	end
+	if PaperDoll_InitStatCategories then PaperDoll_InitStatCategories(PAPERDOLL_STATCATEGORY_DEFAULTORDER, "statCategoryOrder", "statCategoriesCollapsed", "player") end
 
 	return GetStatCategory()
 end
@@ -110,9 +91,7 @@ end
 local function RebuildPaperDoll()
 	if not CharacterUIReady() then return end
 
-	if PaperDoll_InitStatCategories then
-		PaperDoll_InitStatCategories(PAPERDOLL_STATCATEGORY_DEFAULTORDER, "statCategoryOrder", "statCategoriesCollapsed", "player")
-	end
+	if PaperDoll_InitStatCategories then PaperDoll_InitStatCategories(PAPERDOLL_STATCATEGORY_DEFAULTORDER, "statCategoryOrder", "statCategoriesCollapsed", "player") end
 
 	if PaperDollFrame_UpdateStats then PaperDollFrame_UpdateStats() end
 end
@@ -147,12 +126,10 @@ local function Compute(unit)
 	end
 
 	local pct = (speed / BASE_MS) * 100
-	return speed, pct, rawSpeed
+	return speed, pct, rawSpeed, isVehicle
 end
 
-local function PercentText(p)
-	return string.format("%.0f", p)
-end
+local function PercentText(p) return string.format("%.0f", p) end
 
 local function ApplyDisplay(yps, pct, tooltipEps)
 	cache.yps = yps
@@ -164,10 +141,12 @@ local function ApplyDisplay(yps, pct, tooltipEps)
 	local pctText = PercentText(pct)
 	local needsLabel = cache.pctText ~= pctText
 	local needsTooltip = not cache.tooltipYPS or math.abs(yps - cache.tooltipYPS) > tooltipEps
+	if statFrameRef.numericValue ~= pct then statFrameRef.numericValue = pct end
 
-	statFrameRef.numericValue = pct
-
-	if not needsLabel and not needsTooltip then return end
+	if not needsLabel and not needsTooltip then
+		if not statFrameRef:IsShown() then statFrameRef:Show() end
+		return
+	end
 
 	if needsLabel then
 		PaperDollFrame_SetLabelAndText(statFrameRef, STAT_MOVEMENT_SPEED, pctText, true, pct)
@@ -175,12 +154,18 @@ local function ApplyDisplay(yps, pct, tooltipEps)
 	end
 
 	if needsTooltip then
-		statFrameRef.tooltip = HIGHLIGHT_FONT_COLOR_CODE .. STAT_MOVEMENT_SPEED .. FONT_COLOR_CODE_CLOSE
-		statFrameRef.tooltip2 = string.format("~%.2f yards/sec", yps)
-		cache.tooltipYPS = yps
+		local now = GetTime()
+		local tooltipOwner = GameTooltip and statFrameRef and GameTooltip:IsOwned(statFrameRef)
+		local canUpdateTooltip = (now - cache.tooltipStamp >= TOOLTIP_MIN_INTERVAL) or tooltipOwner or cache.tooltipYPS == nil
+		if canUpdateTooltip then
+			statFrameRef.tooltip = HIGHLIGHT_FONT_COLOR_CODE .. STAT_MOVEMENT_SPEED .. FONT_COLOR_CODE_CLOSE
+			statFrameRef.tooltip2 = string.format("~%.2f yards/sec", yps)
+			cache.tooltipYPS = yps
+			cache.tooltipStamp = now
+		end
 	end
 
-	statFrameRef:Show()
+	if not statFrameRef:IsShown() then statFrameRef:Show() end
 end
 
 local function StatUpdate(statFrame, unit)
@@ -207,84 +192,44 @@ local function EnsureStatInfo()
 	}
 end
 
-local function ShouldUpdate()
-	return active and ticker:IsShown()
-end
+local function ScheduleTick(delay, seq)
+	C_Timer.After(delay, function()
+		if not tickerActive or seq ~= tickerSequence then return end
 
-local function ForceTick()
-	accum = tickInterval
-end
-
-local function OnUpdate(_, elapsed)
-	if not ShouldUpdate() then
-		accum = tickInterval
-		return
-	end
-
-	accum = accum + elapsed
-	if accum < tickInterval then return end
-	accum = 0
-
-	local yps, pct, raw = Compute("player")
-	local inVehicle = UnitInVehicle("player")
-	local flyingLike = inVehicle or raw > FLYING_SPEED_GATE
-	local moving = raw > MOVEMENT_THRESHOLD_YPS
-	local desiredInterval = flyingLike and FLYING_TICK or (moving and MOVING_TICK or IDLE_TICK)
-	if desiredInterval ~= tickInterval then
+		local yps, pct, raw, inVehicle = Compute("player")
+		local flyingLike = inVehicle or raw > FLYING_SPEED_GATE
+		local moving = raw > MOVEMENT_THRESHOLD_YPS
+		local desiredInterval = flyingLike and FLYING_TICK or (moving and MOVING_TICK or IDLE_TICK)
 		tickInterval = desiredInterval
-		accum = 0
-	end
-	local epsPct = flyingLike and (CACHE_EPSILON_PCT * FLYING_EPSILON_PCT_MULT) or CACHE_EPSILON_PCT
-	local epsYps = flyingLike and (CACHE_EPSILON_YPS * FLYING_EPSILON_YPS_MULT) or CACHE_EPSILON_YPS
 
-	if math.abs(pct - cache.pct) > epsPct or math.abs(yps - cache.yps) > epsYps then
-		ApplyDisplay(yps, pct, epsYps)
-	else
-		cache.yps = yps
-		cache.pct = pct
-	end
-end
+		local epsPct = flyingLike and (CACHE_EPSILON_PCT * FLYING_EPSILON_PCT_MULT) or CACHE_EPSILON_PCT
+		local epsYps = flyingLike and (CACHE_EPSILON_YPS * FLYING_EPSILON_YPS_MULT) or CACHE_EPSILON_YPS
 
-ticker:SetScript("OnUpdate", OnUpdate)
+		if math.abs(pct - cache.pct) > epsPct or math.abs(yps - cache.yps) > epsYps then
+			ApplyDisplay(yps, pct, epsYps)
+		else
+			cache.yps = yps
+			cache.pct = pct
+		end
 
-local function RegisterSpeedEvents()
-	if eventsRegistered then return end
-	for _, eventName in ipairs(SPEED_EVENTS) do
-		eventFrame:RegisterEvent(eventName)
-	end
-	for _, eventName in ipairs(SPEED_UNIT_EVENTS) do
-		eventFrame:RegisterUnitEvent(eventName, "player")
-	end
-	eventsRegistered = true
-end
-
-local function UnregisterSpeedEvents()
-	if not eventsRegistered then return end
-	for _, eventName in ipairs(SPEED_EVENTS) do
-		eventFrame:UnregisterEvent(eventName)
-	end
-	for _, eventName in ipairs(SPEED_UNIT_EVENTS) do
-		eventFrame:UnregisterEvent(eventName)
-	end
-	eventsRegistered = false
+		ScheduleTick(math.max(tickInterval, 0.25), seq)
+	end)
 end
 
 local function StartTicker()
-	if ticker:IsShown() or not active then return end
-	RegisterSpeedEvents()
+	if tickerActive or not active then return end
+	tickerActive = true
 	tickInterval = MOVING_TICK
-	accum = tickInterval
-	ForceTick()
-	lastEventTick = GetTime()
-	ticker:Show()
+	tickerSequence = tickerSequence + 1
+	local seq = tickerSequence
+	ScheduleTick(tickInterval, seq)
 end
 
 local function StopTicker()
-	if not ticker:IsShown() then return end
-	ticker:Hide()
-	accum = tickInterval
-	UnregisterSpeedEvents()
-	lastEventTick = 0
+	if not tickerActive then return end
+	tickerActive = false
+	tickerSequence = tickerSequence + 1
+	tickInterval = MOVING_TICK
 end
 
 local function HookCharacterFrame()
@@ -333,25 +278,15 @@ eventFrame:SetScript("OnEvent", function(_, event, ...)
 	if event == "ADDON_LOADED" then
 		local name = ...
 		if name == "Blizzard_CharacterUI" or name == "Blizzard_UIPanels_Game" then TryInstall() end
-		return
-	end
-	if event == "PLAYER_LOGIN" then
+	elseif event == "PLAYER_LOGIN" then
 		TryInstall()
-		return
 	end
-
-	if not active or not ticker:IsShown() then return end
-	local now = GetTime()
-	if now - lastEventTick < EVENT_MIN_INTERVAL then return end
-	lastEventTick = now
-	ForceTick()
 end)
 
 function mod.Enable()
 	if active then return end
 	active = true
 	tickInterval = MOVING_TICK
-	accum = tickInterval
 	cache.yps, cache.pct = Compute("player")
 	TryInstall()
 end
@@ -369,6 +304,7 @@ function mod.Disable()
 	statFrameRef = nil
 	cache.pctText = nil
 	cache.tooltipYPS = nil
+	cache.tooltipStamp = 0
 end
 
 function mod.Refresh()
