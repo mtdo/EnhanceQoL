@@ -17,29 +17,6 @@ local LSM
 local BLIZZARD_TEX
 
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Aura")
-
-local function setGlow(bar, cfg, shouldShow, r, g, b)
-	if not bar then return end
-	cfg = cfg or {}
-	if not shouldShow then
-		if bar._glowTex then bar._glowTex:Hide() end
-		return
-	end
-
-	local tex = bar._glowTex
-	if not tex then
-		tex = bar:CreateTexture(nil, "OVERLAY")
-		tex:SetTexture("Interface\\Buttons\\WHITE8x8")
-		tex:SetBlendMode(ADD or "ADD")
-		tex:SetAllPoints()
-		bar._glowTex = tex
-	end
-
-	local color = (cfg.useBarColor and cfg.barColor) or { r or 1, g or 1, b or 1, 0.35 }
-	tex:SetVertexColor(color[1] or (r or 1), color[2] or (g or 1), color[3] or (b or 1), color[4] or 0.35)
-	tex:Show()
-end
-
 local function getPowerBarColor(type)
 	local colorTable = PowerBarColor
 	if colorTable then
@@ -105,7 +82,7 @@ local getAnchor
 local layoutRunes
 local updatePowerBar
 local lastBarSelectionPerSpec = {}
-local DEFAULT_STACK_SPACING = 0
+local DEFAULT_STACK_SPACING = -1
 local SEPARATOR_THICKNESS = 1
 local SEP_DEFAULT = { 1, 1, 1, 0.5 }
 local DEFAULT_RB_TEX = "Interface\\Buttons\\WHITE8x8" -- historical default (Solid)
@@ -693,7 +670,6 @@ function addon.Aura.functions.addResourceFrame(container)
 							reverseFill = false,
 							verticalFill = false,
 							smoothFill = false,
-							glowAtCap = false,
 						}
 					dbSpec[pType].anchor = dbSpec[pType].anchor or {}
 				end
@@ -731,7 +707,6 @@ function addon.Aura.functions.addResourceFrame(container)
 					reverseFill = false,
 					verticalFill = false,
 					smoothFill = false,
-					glowAtCap = false,
 					anchor = {},
 				}
 			local function fontDropdownData()
@@ -960,12 +935,7 @@ function addon.Aura.functions.addResourceFrame(container)
 				local maxColorPicker
 				local maxColorCheckbox
 				local function refreshMaxColorControls()
-					local glowEnabled = cfg.glowAtCap == true
-					if maxColorCheckbox then maxColorCheckbox:SetDisabled(not glowEnabled) end
-					if maxColorPicker then
-						local disable = not (glowEnabled and cfg.useMaxColor == true)
-						maxColorPicker:SetDisabled(disable)
-					end
+					if maxColorPicker then maxColorPicker:SetDisabled(not (cfg.useMaxColor == true)) end
 				end
 
 				local cb = addon.functions.createCheckboxAce(L["Use custom color"] or "Use custom color", cfg.useBarColor == true, function(_, _, val)
@@ -1012,13 +982,9 @@ function addon.Aura.functions.addResourceFrame(container)
 				group:AddChild(maxColorPicker)
 
 				refreshMaxColorControls()
-
-				return {
-					refreshMaxColorControls = refreshMaxColorControls,
-				}
 			end
 
-			local function addBehaviorControls(parent, cfg, pType, colorHooks)
+			local function addBehaviorControls(parent, cfg, pType)
 				local group = addon.functions.createContainer("InlineGroup", "Flow")
 				group:SetTitle(L["Behavior"] or "Behavior")
 				group:SetFullWidth(true)
@@ -1049,15 +1015,6 @@ function addon.Aura.functions.addResourceFrame(container)
 					cbSmooth:SetFullWidth(false)
 					cbSmooth:SetRelativeWidth(0.5)
 					group:AddChild(cbSmooth)
-
-					local cbGlow = addon.functions.createCheckboxAce(L["Glow at maximum"] or "Glow at maximum", cfg.glowAtCap == true, function(_, _, val)
-						cfg.glowAtCap = val and true or false
-						if colorHooks and colorHooks.refreshMaxColorControls then colorHooks.refreshMaxColorControls() end
-						if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
-					end)
-					cbGlow:SetFullWidth(false)
-					cbGlow:SetRelativeWidth(0.5)
-					group:AddChild(cbGlow)
 				else
 					-- Preserve flow layout when vertical option is hidden for RUNES
 					local spacer = addon.functions.createLabelAce("")
@@ -1209,7 +1166,7 @@ function addon.Aura.functions.addResourceFrame(container)
 				textOffsetSliders = { addTextOffsetControlsUI(groupConfig, hCfg, specIndex) }
 				updateHealthOffsetDisabled()
 				addFontControls(groupConfig, hCfg)
-				local colorControls = addColorControls(groupConfig, hCfg, specIndex)
+				addColorControls(groupConfig, hCfg, specIndex)
 
 				-- Bar Texture (Health)
 				local function buildTextureOptions()
@@ -1249,7 +1206,7 @@ function addon.Aura.functions.addResourceFrame(container)
 				ResourceBars.ui.textureDropdown = dropTex
 				dropTex._rb_cfgRef = hCfg
 				addBackdropControls(groupConfig, hCfg)
-				addBehaviorControls(groupConfig, hCfg, "HEALTH", colorControls)
+				addBehaviorControls(groupConfig, hCfg, "HEALTH")
 
 				addAnchorOptions("HEALTH", groupConfig, hCfg.anchor, frames, specIndex)
 			else
@@ -1324,7 +1281,7 @@ function addon.Aura.functions.addResourceFrame(container)
 					textOffsetSliders = { addTextOffsetControlsUI(groupConfig, cfg, specIndex) }
 					updateOffsetDisabled()
 					addFontControls(groupConfig, cfg)
-					local colorControls = addColorControls(groupConfig, cfg, specIndex)
+					addColorControls(groupConfig, cfg, specIndex)
 
 					-- Bar Texture (Power types incl. RUNES)
 					local function buildTextureOptions2()
@@ -1364,7 +1321,7 @@ function addon.Aura.functions.addResourceFrame(container)
 					ResourceBars.ui.textureDropdown = dropTex2
 					dropTex2._rb_cfgRef = cfg
 					addBackdropControls(groupConfig, cfg)
-					addBehaviorControls(groupConfig, cfg, sel, colorControls)
+					addBehaviorControls(groupConfig, cfg, sel)
 				else
 					-- RUNES specific options
 					local cbRT = addon.functions.createCheckboxAce(L["Show cooldown text"], cfg.showCooldownText == true, function(self, _, val)
@@ -1556,7 +1513,7 @@ local function updateHealthBar(evt)
 		healthBar._baseColor[1], healthBar._baseColor[2], healthBar._baseColor[3], healthBar._baseColor[4] = baseR, baseG, baseB, baseA
 
 		local reachedCap = maxHealth > 0 and curHealth >= maxHealth
-		local useMaxColor = settings.glowAtCap == true and settings.useMaxColor == true
+		local useMaxColor = settings.useMaxColor == true
 		local finalR, finalG, finalB, finalA = baseR, baseG, baseB, baseA
 		if useMaxColor and reachedCap then
 			local maxCol = settings.maxColor or { 1, 1, 1, 1 }
@@ -1569,7 +1526,6 @@ local function updateHealthBar(evt)
 			healthBar._lastColor = { finalR, finalG, finalB, finalA or 1 }
 		end
 
-		setGlow(healthBar, settings, settings.glowAtCap == true and reachedCap, finalR, finalG, finalB)
 
 		local absorbBar = healthBar.absorbBar
 		if absorbBar then
@@ -2085,7 +2041,7 @@ function updatePowerBar(type, runeSlot)
 		end
 
 		local reachedCap = curPower >= max(maxPower, 1)
-		local useMaxColor = cfg.glowAtCap == true and cfg.useMaxColor == true
+		local useMaxColor = cfg.useMaxColor == true
 		if useMaxColor and reachedCap then
 			local maxCol = cfg.maxColor or { 1, 1, 1, 1 }
 			local mr, mg, mb, ma = maxCol[1] or 1, maxCol[2] or 1, maxCol[3] or 1, maxCol[4] or (bar._baseColor[4] or 1)
@@ -2108,7 +2064,6 @@ function updatePowerBar(type, runeSlot)
 		end
 
 		local cr, cg, cb = bar:GetStatusBarColor()
-		setGlow(bar, cfg, cfg.glowAtCap == true and reachedCap, cr, cg, cb)
 	end
 end
 
