@@ -89,6 +89,9 @@ local SEP_DEFAULT = { 1, 1, 1, 0.5 }
 local DEFAULT_RB_TEX = "Interface\\Buttons\\WHITE8x8" -- historical default (Solid)
 BLIZZARD_TEX = "Interface\\TargetingFrame\\UI-StatusBar"
 
+-- Detect Atlas: /run local t=PlayerFrame_GetManaBar():GetStatusBarTexture(); print("tex:", t:GetTexture(), "atlas:", t:GetAtlas()); local a,b,c,d,e,f,g,h=t:GetTexCoord(); print("tc:",a,b,c,d,e,f,g,h)
+-- Healthbar: /run local t=PlayerFrame_GetHealthBar():GetStatusBarTexture(); print("tex:", t:GetTexture(), "atlas:", t:GetAtlas()); local a,b,c,d,e,f,g,h=t:GetTexCoord(); print("tc:",a,b,c,d,e,f,g,h)
+
 local atlasByPower = {
 	LUNAR_POWER = "Unit_Druid_AstralPower_Fill",
 	MAELSTROM = "Unit_Shaman_Maelstrom_Fill",
