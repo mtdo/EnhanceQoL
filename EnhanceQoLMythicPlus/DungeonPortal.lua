@@ -674,6 +674,7 @@ function addon.MythicPlus.functions.BuildTeleportCompendiumSections()
 						and (not data.isRaceTP or (addon.variables and addon.variables.unitRace == data.isRaceTP))
 						and (not data.isMagePortal or (addon.variables and addon.variables.unitClass == "MAGE"))
 						and (not addon.db["portalHideMissing"] or (addon.db["portalHideMissing"] and known))
+						and (not data.timerunnerID or (data.timerunnerID == timerunnerID))
 
 					-- Favourites always bypass non-availability filters (except Hide Missing)
 					if not showSpell and favorites[spellID] then showSpell = (not addon.db["portalHideMissing"] or (addon.db["portalHideMissing"] and known)) end

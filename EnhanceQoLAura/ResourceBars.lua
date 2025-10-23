@@ -16,6 +16,39 @@ ResourceBars.ui = ResourceBars.ui or {}
 local LSM
 local BLIZZARD_TEX
 
+local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Aura")
+
+local function setGlow(bar, cfg, shouldShow, r, g, b)
+	if not bar then return end
+	cfg = cfg or {}
+	if not shouldShow then
+		if bar._glowTex then bar._glowTex:Hide() end
+		return
+	end
+
+	local tex = bar._glowTex
+	if not tex then
+		tex = bar:CreateTexture(nil, "OVERLAY")
+		tex:SetTexture("Interface\\Buttons\\WHITE8x8")
+		tex:SetBlendMode("ADD")
+		tex:SetAllPoints()
+		bar._glowTex = tex
+	end
+
+	local color = (cfg.useBarColor and cfg.barColor) or { r or 1, g or 1, b or 1, 0.35 }
+	tex:SetVertexColor(color[1] or (r or 1), color[2] or (g or 1), color[3] or (b or 1), color[4] or 0.35)
+	tex:Show()
+end
+
+local function getPowerBarColor(type)
+	local colorTable = PowerBarColor
+	if colorTable then
+		local entry = colorTable[string.upper(type)]
+		if entry and entry.r then return entry.r, entry.g, entry.b end
+	end
+	return 1, 1, 1
+end
+
 function ResourceBars.RefreshTextureDropdown()
 	local dd = ResourceBars.ui and ResourceBars.ui.textureDropdown
 	if not dd then return end
@@ -43,7 +76,6 @@ function ResourceBars.RefreshTextureDropdown()
 	dd:SetValue(cur)
 end
 
-local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Aura")
 LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
 local AceGUI = addon.AceGUI
 local UnitPower, UnitPowerMax, UnitHealth, UnitHealthMax, UnitGetTotalAbsorbs, GetTime = UnitPower, UnitPowerMax, UnitHealth, UnitHealthMax, UnitGetTotalAbsorbs, GetTime
@@ -144,63 +176,117 @@ local function applyFontToString(fs, cfg)
 	fs:SetTextColor(r, g, b, a)
 end
 
+local function ensureBackdropFrames(frame)
+	if not frame then return nil end
+	local bg = frame._rbBackground
+	if not bg then
+		bg = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+		local base = frame:GetFrameLevel() or 1
+		bg:SetFrameLevel(max(base - 2, 0))
+		bg:EnableMouse(false)
+		frame._rbBackground = bg
+	end
+	local border = frame._rbBorder
+	if not border then
+		border = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+		local base = frame:GetFrameLevel() or 1
+		border:SetFrameLevel(min(base + 2, 65535))
+		border:EnableMouse(false)
+		frame._rbBorder = border
+	end
+	return bg, border
+end
+
 local function applyBackdrop(frame, cfg)
-	if not frame or not frame.SetBackdrop then return end
+	if not frame then return end
 	cfg = cfg or {}
-	local bd = cfg.backdrop
-	if bd == nil then
-		frame:SetBackdrop({
-			bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-			edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+	cfg.backdrop = cfg.backdrop
+		or {
+			enabled = true,
+			backgroundTexture = "Interface\\DialogFrame\\UI-DialogBox-Background",
+			backgroundColor = { 0, 0, 0, 0.8 },
+			borderTexture = "Interface\\Tooltips\\UI-Tooltip-Border",
+			borderColor = { 0, 0, 0, 0 },
 			edgeSize = 3,
+			outset = 0,
+		}
+	local bd = cfg.backdrop
+	local bgFrame, borderFrame = ensureBackdropFrames(frame)
+	if not bgFrame or not borderFrame then return end
+
+	if bd.enabled == false then
+		bgFrame:Hide()
+		borderFrame:Hide()
+		return
+	end
+
+	local outset = bd.outset or 0
+
+	bgFrame:ClearAllPoints()
+	bgFrame:SetPoint("TOPLEFT", frame, "TOPLEFT", -outset, outset)
+	bgFrame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", outset, -outset)
+
+	borderFrame:ClearAllPoints()
+	borderFrame:SetPoint("TOPLEFT", frame, "TOPLEFT", -outset, outset)
+	borderFrame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", outset, -outset)
+
+	if bgFrame.SetBackdrop then
+		bgFrame:SetBackdrop({
+			bgFile = bd.backgroundTexture or "Interface\\DialogFrame\\UI-DialogBox-Background",
+			edgeFile = nil,
+			tile = false,
+			edgeSize = 0,
 			insets = { left = 0, right = 0, top = 0, bottom = 0 },
 		})
-		frame:SetBackdropColor(0, 0, 0, 0.8)
-		frame:SetBackdropBorderColor(0, 0, 0, 0)
-		return
+		local bc = bd.backgroundColor or { 0, 0, 0, 0.8 }
+		if bgFrame.SetBackdropColor then bgFrame:SetBackdropColor(bc[1] or 0, bc[2] or 0, bc[3] or 0, bc[4] or 1) end
+		if bgFrame.SetBackdropBorderColor then bgFrame:SetBackdropBorderColor(0, 0, 0, 0) end
 	end
-	if bd.enabled == false then
-		frame:SetBackdrop(nil)
-		return
-	end
-	local edgeSize = bd.edgeSize or 3
-	local inset = bd.inset or 0
-	local edgeFile = bd.borderTexture
-	if edgeFile == "" then edgeFile = nil end
-	if (edgeSize or 0) <= 0 then edgeFile = nil end
+	bgFrame:Show()
 
-	frame:SetBackdrop({
-		bgFile = bd.backgroundTexture or "Interface\\DialogFrame\\UI-DialogBox-Background",
-		edgeFile = edgeFile,
-		edgeSize = edgeFile and edgeSize or 0,
-		insets = { left = inset, right = inset, top = inset, bottom = inset },
-	})
-
-	local bg = bd.backgroundColor or { 0, 0, 0, 0.8 }
-	frame:SetBackdropColor(bg[1] or 0, bg[2] or 0, bg[3] or 0, bg[4] or 0.8)
-	if edgeFile then
-		local border = bd.borderColor or { 0, 0, 0, 0 }
-		frame:SetBackdropBorderColor(border[1] or 0, border[2] or 0, border[3] or 0, border[4] or 0)
-	else
-		frame:SetBackdropBorderColor(0, 0, 0, 0)
+	if borderFrame.SetBackdrop then
+		if bd.borderTexture and bd.borderTexture ~= "" and (bd.edgeSize or 0) > 0 then
+			borderFrame:SetBackdrop({
+				bgFile = nil,
+				edgeFile = bd.borderTexture or "Interface\\Tooltips\\UI-Tooltip-Border",
+				tile = false,
+				edgeSize = bd.edgeSize or 3,
+				insets = { left = 0, right = 0, top = 0, bottom = 0 },
+			})
+			local boc = bd.borderColor or { 0, 0, 0, 0 }
+			if borderFrame.SetBackdropBorderColor then borderFrame:SetBackdropBorderColor(boc[1] or 0, boc[2] or 0, boc[3] or 0, boc[4] or 1) end
+			borderFrame:Show()
+		else
+			borderFrame:SetBackdrop(nil)
+			borderFrame:Hide()
+		end
 	end
 end
 
-local function setGlow(bar, shouldShow, r, g, b)
+local function ensureTextOffsetTable(cfg)
+	cfg = cfg or {}
+	cfg.textOffset = cfg.textOffset or { x = 0, y = 0 }
+	return cfg.textOffset
+end
+
+local function applyTextPosition(bar, cfg, baseX, baseY)
+	if not bar or not bar.text then return end
+	local offset = ensureTextOffsetTable(cfg)
+	local ox = (baseX or 0) + (offset.x or 0)
+	local oy = (baseY or 0) + (offset.y or 0)
+	bar.text:ClearAllPoints()
+	bar.text:SetPoint("CENTER", bar, "CENTER", ox, oy)
+end
+
+local function applyBarFillColor(bar, cfg, pType)
 	if not bar then return end
-	if shouldShow then
-		local tex = bar._glowTex
-		if not tex then
-			tex = bar:CreateTexture(nil, "OVERLAY")
-			tex:SetTexture("Interface\\Buttons\\WHITE8x8")
-			tex:SetBlendMode("ADD")
-			tex:SetAllPoints()
-			bar._glowTex = tex
-		end
-		tex:SetVertexColor(r or 1, g or 1, b or 1, 0.25)
-		tex:Show()
-	elseif bar._glowTex then
-		bar._glowTex:Hide()
+	cfg = cfg or {}
+	if cfg.useBarColor then
+		local color = cfg.barColor or { 1, 1, 1, 1 }
+		bar:SetStatusBarColor(color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1)
+	else
+		local r, g, b = getPowerBarColor(pType or "MANA")
+		bar:SetStatusBarColor(r, g, b)
 	end
 end
 
@@ -209,8 +295,18 @@ local function configureBarBehavior(bar, cfg, pType)
 	cfg = cfg or {}
 	if bar.SetReverseFill then bar:SetReverseFill(cfg.reverseFill == true) end
 
-	if pType ~= "RUNES" and bar.SetOrientation then
-		bar:SetOrientation((cfg.verticalFill == true) and "VERTICAL" or "HORIZONTAL")
+	if pType ~= "RUNES" and bar.SetOrientation then bar:SetOrientation((cfg.verticalFill == true) and "VERTICAL" or "HORIZONTAL") end
+	if pType == "HEALTH" and bar.absorbBar then
+		local absorb = bar.absorbBar
+		if absorb.SetOrientation then absorb:SetOrientation((cfg.verticalFill == true) and "VERTICAL" or "HORIZONTAL") end
+		local tex = absorb:GetStatusBarTexture()
+		if tex then
+			if cfg and cfg.verticalFill == true then
+				tex:SetRotation(math.pi / 2)
+			else
+				tex:SetRotation(0)
+			end
+		end
 	end
 
 	if pType ~= "RUNES" then
@@ -452,61 +548,32 @@ function addon.Aura.functions.addResourceFrame(container)
 
 				anchorSub:AddChild(row)
 
-				-- X / Y row (50% / 50%)
-				local editX
-				local editY
-				local offsetsRow = addon.functions.createContainer("SimpleGroup", "Flow")
-				offsetsRow:SetFullWidth(true)
-				editX = addon.functions.createEditboxAce("X", tostring(info.x or 0), function(self)
+				-- Offset sliders (X/Y)
+				local offsetRow = addon.functions.createContainer("SimpleGroup", "Flow")
+				offsetRow:SetFullWidth(true)
+				info.x = info.x or 0
+				info.y = info.y or 0
+
+				local sliderX = addon.functions.createSliderAce(L["X"] or "X", info.x, -1000, 1000, 1, function(_, _, val)
 					info.autoSpacing = false
-					info.x = tonumber(self:GetText()) or 0
+					info.x = val
 					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
 				end)
-				editX:SetFullWidth(false)
-				editX:SetRelativeWidth(0.5)
-				offsetsRow:AddChild(editX)
+				sliderX:SetFullWidth(false)
+				sliderX:SetRelativeWidth(0.5)
+				sliderX:SetValue(info.x)
+				offsetRow:AddChild(sliderX)
 
-				editY = addon.functions.createEditboxAce("Y", tostring(info.y or 0), function(self)
+				local sliderY = addon.functions.createSliderAce(L["Y"] or "Y", info.y, -1000, 1000, 1, function(_, _, val)
 					info.autoSpacing = false
-					info.y = tonumber(self:GetText()) or 0
+					info.y = val
 					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
 				end)
-				editY:SetFullWidth(false)
-				editY:SetRelativeWidth(0.5)
-				offsetsRow:AddChild(editY)
-				anchorSub:AddChild(offsetsRow)
-
-				-- Fine adjustments
-				local function applyNudge(axis, delta)
-					info.autoSpacing = false
-					info[axis] = (tonumber(info[axis]) or 0) + delta
-					if axis == "x" then
-						editX:SetText(tostring(info.x or 0))
-					else
-						editY:SetText(tostring(info.y or 0))
-					end
-					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
-				end
-				local nudgeRow = addon.functions.createContainer("SimpleGroup", "Flow")
-				nudgeRow:SetFullWidth(true)
-				local buttons = {
-					{ text = "-5 X", axis = "x", delta = -5 },
-					{ text = "-1 X", axis = "x", delta = -1 },
-					{ text = "+1 X", axis = "x", delta = 1 },
-					{ text = "+5 X", axis = "x", delta = 5 },
-					{ text = "-5 Y", axis = "y", delta = -5 },
-					{ text = "-1 Y", axis = "y", delta = -1 },
-					{ text = "+1 Y", axis = "y", delta = 1 },
-					{ text = "+5 Y", axis = "y", delta = 5 },
-				}
-				for _, meta in ipairs(buttons) do
-					local btn = AceGUI:Create("Button")
-					btn:SetText(meta.text)
-					btn:SetRelativeWidth(0.125)
-					btn:SetCallback("OnClick", function() applyNudge(meta.axis, meta.delta) end)
-					nudgeRow:AddChild(btn)
-				end
-				anchorSub:AddChild(nudgeRow)
+				sliderY:SetFullWidth(false)
+				sliderY:SetRelativeWidth(0.5)
+				sliderY:SetValue(info.y)
+				offsetRow:AddChild(sliderY)
+				anchorSub:AddChild(offsetRow)
 
 				if (info.relativeFrame or "UIParent") == "UIParent" then
 					local hint = addon.functions.createLabelAce(L["Movable while holding SHIFT"], nil, nil, 10)
@@ -605,8 +672,11 @@ function addon.Aura.functions.addResourceFrame(container)
 								borderTexture = "Interface\\Tooltips\\UI-Tooltip-Border",
 								borderColor = { 0, 0, 0, 0 },
 								edgeSize = 3,
-								inset = 0,
+								outset = 0,
 							},
+							textOffset = { x = 0, y = 0 },
+							useBarColor = false,
+							barColor = { 1, 1, 1, 1 },
 							showSeparator = false,
 							separatorColor = { 1, 1, 1, 0.5 },
 							separatorThickness = SEPARATOR_THICKNESS,
@@ -643,8 +713,11 @@ function addon.Aura.functions.addResourceFrame(container)
 						borderTexture = "Interface\\Tooltips\\UI-Tooltip-Border",
 						borderColor = { 0, 0, 0, 0 },
 						edgeSize = 3,
-						inset = 0,
+						outset = 0,
 					},
+					textOffset = { x = 0, y = 0 },
+					useBarColor = false,
+					barColor = { 1, 1, 1, 1 },
 					reverseFill = false,
 					verticalFill = false,
 					smoothFill = false,
@@ -743,14 +816,14 @@ function addon.Aura.functions.addResourceFrame(container)
 				cfg.backdrop.borderTexture = cfg.backdrop.borderTexture or "Interface\\Tooltips\\UI-Tooltip-Border"
 				cfg.backdrop.borderColor = cfg.backdrop.borderColor or { 0, 0, 0, 0 }
 				cfg.backdrop.edgeSize = cfg.backdrop.edgeSize or 3
-				cfg.backdrop.inset = cfg.backdrop.inset or 0
+				cfg.backdrop.outset = cfg.backdrop.outset or 0
 
 				local group = addon.functions.createContainer("InlineGroup", "Flow")
 				group:SetTitle(L["Frame & Background"] or "Frame & Background")
 				group:SetFullWidth(true)
 				parent:AddChild(group)
 
-				local dropBg, bgColor, dropBorder, borderColor, sliderEdge, sliderInset
+				local dropBg, bgColor, dropBorder, borderColor, sliderEdge
 
 				local cb = addon.functions.createCheckboxAce(L["Show backdrop"] or "Show backdrop", cfg.backdrop.enabled ~= false, function(_, _, val)
 					cfg.backdrop.enabled = val and true or false
@@ -760,7 +833,6 @@ function addon.Aura.functions.addResourceFrame(container)
 					if dropBorder then dropBorder:SetDisabled(disable) end
 					if borderColor then borderColor:SetDisabled(disable) end
 					if sliderEdge then sliderEdge:SetDisabled(disable) end
-					if sliderInset then sliderInset:SetDisabled(disable) end
 					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
 				end)
 				cb:SetFullWidth(true)
@@ -824,13 +896,13 @@ function addon.Aura.functions.addResourceFrame(container)
 				sliderEdge:SetRelativeWidth(0.5)
 				group:AddChild(sliderEdge)
 
-				sliderInset = addon.functions.createSliderAce(L["Inset"] or "Inset", cfg.backdrop.inset or 0, 0, 32, 1, function(_, _, val)
-					cfg.backdrop.inset = val
+				local sliderOutset = addon.functions.createSliderAce(L["Border offset"] or "Border offset", cfg.backdrop.outset or 0, 0, 32, 1, function(_, _, val)
+					cfg.backdrop.outset = val
 					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
 				end)
-				sliderInset:SetFullWidth(false)
-				sliderInset:SetRelativeWidth(0.5)
-				group:AddChild(sliderInset)
+				sliderOutset:SetFullWidth(false)
+				sliderOutset:SetRelativeWidth(0.5)
+				group:AddChild(sliderOutset)
 
 				local disable = cfg.backdrop.enabled == false
 				dropBg:SetDisabled(disable)
@@ -838,7 +910,62 @@ function addon.Aura.functions.addResourceFrame(container)
 				dropBorder:SetDisabled(disable)
 				borderColor:SetDisabled(disable)
 				sliderEdge:SetDisabled(disable)
-				sliderInset:SetDisabled(disable)
+				sliderOutset:SetDisabled(disable)
+			end
+
+			local function addTextOffsetControlsUI(parent, cfg, specIndex)
+				local offsets = ensureTextOffsetTable(cfg)
+				local row = addon.functions.createContainer("SimpleGroup", "Flow")
+				row:SetFullWidth(true)
+				local sliderX = addon.functions.createSliderAce(L["Text X Offset"] or "Text X Offset", offsets.x or 0, -200, 200, 1, function(_, _, val)
+					offsets.x = val
+					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+				end)
+				sliderX:SetFullWidth(false)
+				sliderX:SetRelativeWidth(0.5)
+				row:AddChild(sliderX)
+
+				local sliderY = addon.functions.createSliderAce(L["Text Y Offset"] or "Text Y Offset", offsets.y or 0, -200, 200, 1, function(_, _, val)
+					offsets.y = val
+					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+				end)
+				sliderY:SetFullWidth(false)
+				sliderY:SetRelativeWidth(0.5)
+				row:AddChild(sliderY)
+
+				parent:AddChild(row)
+				return sliderX, sliderY
+			end
+
+			local function addColorControls(parent, cfg, specIndex)
+				cfg.barColor = cfg.barColor or { 1, 1, 1, 1 }
+				local group = addon.functions.createContainer("InlineGroup", "Flow")
+				group:SetTitle(L["Colors"] or "Colors")
+				group:SetFullWidth(true)
+				parent:AddChild(group)
+
+				local colorPicker
+				local cb = addon.functions.createCheckboxAce(L["Use custom color"] or "Use custom color", cfg.useBarColor == true, function(_, _, val)
+					cfg.useBarColor = val and true or false
+					if colorPicker then colorPicker:SetDisabled(not cfg.useBarColor) end
+					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+				end)
+				cb:SetFullWidth(true)
+				group:AddChild(cb)
+
+				colorPicker = AceGUI:Create("ColorPicker")
+				colorPicker:SetLabel(L["Bar color"] or "Bar color")
+				colorPicker:SetHasAlpha(true)
+				local bc = cfg.barColor or { 1, 1, 1, 1 }
+				colorPicker:SetColor(bc[1] or 1, bc[2] or 1, bc[3] or 1, bc[4] or 1)
+				colorPicker:SetCallback("OnValueChanged", function(_, _, r, g, b, a)
+					cfg.barColor = { r, g, b, a }
+					if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+				end)
+				colorPicker:SetFullWidth(false)
+				colorPicker:SetRelativeWidth(0.5)
+				colorPicker:SetDisabled(not (cfg.useBarColor == true))
+				group:AddChild(colorPicker)
 			end
 
 			local function addBehaviorControls(parent, cfg, pType)
@@ -859,6 +986,7 @@ function addon.Aura.functions.addResourceFrame(container)
 					local cbVertical = addon.functions.createCheckboxAce(L["Vertical orientation"] or "Vertical orientation", cfg.verticalFill == true, function(_, _, val)
 						cfg.verticalFill = val and true or false
 						if addon.Aura.ResourceBars and addon.Aura.ResourceBars.MaybeRefreshActive then addon.Aura.ResourceBars.MaybeRefreshActive(specIndex) end
+						buildSpec(container, specIndex)
 					end)
 					cbVertical:SetFullWidth(false)
 					cbVertical:SetRelativeWidth(0.5)
@@ -981,14 +1109,17 @@ function addon.Aura.functions.addResourceFrame(container)
 				-- Size row (50%/50%)
 				local sizeRow = addon.functions.createContainer("SimpleGroup", "Flow")
 				sizeRow:SetFullWidth(true)
-				local sw = addon.functions.createSliderAce(HUD_EDIT_MODE_SETTING_CHAT_FRAME_WIDTH, hCfg.width or DEFAULT_HEALTH_WIDTH, 1, 2000, 1, function(self, _, val)
+				local verticalHealth = hCfg.verticalFill == true
+				local labelWidth = verticalHealth and (L["Bar thickness"] or "Bar thickness") or (L["Bar length"] or "Bar length")
+				local labelHeight = verticalHealth and (L["Bar length"] or "Bar length") or (L["Bar thickness"] or "Bar thickness")
+				local sw = addon.functions.createSliderAce(labelWidth, hCfg.width or DEFAULT_HEALTH_WIDTH, 1, 2000, 1, function(self, _, val)
 					hCfg.width = val
 					if specIndex == addon.variables.unitSpec then addon.Aura.ResourceBars.SetHealthBarSize(hCfg.width, hCfg.height or DEFAULT_HEALTH_HEIGHT) end
 				end)
 				sw:SetFullWidth(false)
 				sw:SetRelativeWidth(0.5)
 				sizeRow:AddChild(sw)
-				local sh = addon.functions.createSliderAce(HUD_EDIT_MODE_SETTING_CHAT_FRAME_HEIGHT, hCfg.height or DEFAULT_HEALTH_HEIGHT, 1, 2000, 1, function(self, _, val)
+				local sh = addon.functions.createSliderAce(labelHeight, hCfg.height or DEFAULT_HEALTH_HEIGHT, 1, 2000, 1, function(self, _, val)
 					hCfg.height = val
 					if specIndex == addon.variables.unitSpec then addon.Aura.ResourceBars.SetHealthBarSize(hCfg.width or DEFAULT_HEALTH_WIDTH, hCfg.height) end
 				end)
@@ -1001,6 +1132,14 @@ function addon.Aura.functions.addResourceFrame(container)
 				local healthTextRow = addon.functions.createContainer("SimpleGroup", "Flow")
 				healthTextRow:SetFullWidth(true)
 				groupConfig:AddChild(healthTextRow)
+				local textOffsetSliders
+				local function updateHealthOffsetDisabled()
+					if not textOffsetSliders then return end
+					local disabled = (hCfg.textStyle or "PERCENT") == "NONE"
+					for _, ctrl in ipairs(textOffsetSliders) do
+						if ctrl then ctrl:SetDisabled(disabled) end
+					end
+				end
 				local function buildHealthTextRow()
 					healthTextRow:ReleaseChildren()
 					local tList = { PERCENT = STATUS_TEXT_PERCENT, CURMAX = L["Current/Max"], CURRENT = L["Current"], NONE = NONE }
@@ -1023,9 +1162,13 @@ function addon.Aura.functions.addResourceFrame(container)
 						sFont:SetRelativeWidth(0.5)
 						healthTextRow:AddChild(sFont)
 					end
+					updateHealthOffsetDisabled()
 				end
 				buildHealthTextRow()
+				textOffsetSliders = { addTextOffsetControlsUI(groupConfig, hCfg, specIndex) }
+				updateHealthOffsetDisabled()
 				addFontControls(groupConfig, hCfg)
+				addColorControls(groupConfig, hCfg, specIndex)
 
 				-- Bar Texture (Health)
 				local function buildTextureOptions()
@@ -1034,6 +1177,11 @@ function addon.Aura.functions.addResourceFrame(container)
 						[BLIZZARD_TEX] = "Blizzard: UI-StatusBar",
 						["Interface\\Buttons\\WHITE8x8"] = "Flat (white, tintable)",
 						["Interface\\Tooltips\\UI-Tooltip-Background"] = "Dark Flat (Tooltip bg)",
+						["Interface\\RaidFrame\\Raid-Bar-Hp-Fill"] = "Raid HP Fill",
+						["Interface\\RaidFrame\\Raid-Bar-Resource-Fill"] = "Raid Resource Fill",
+						["Interface\\TargetingFrame\\UI-StatusBar"] = "Blizzard Unit Frame",
+						["Interface\\UnitPowerBarAlt\\Generic1Texture"] = "Alternate Power",
+						["Interface\\PetBattles\\PetBattle-HealthBar"] = "Pet Battle",
 					}
 					for name, path in pairs(LSM and LSM:HashTable("statusbar") or {}) do
 						if type(path) == "string" and path ~= "" then map[path] = tostring(name) end
@@ -1076,14 +1224,16 @@ function addon.Aura.functions.addResourceFrame(container)
 				-- Size row (50%/50%)
 				local sizeRow2 = addon.functions.createContainer("SimpleGroup", "Flow")
 				sizeRow2:SetFullWidth(true)
-				local sw = addon.functions.createSliderAce(HUD_EDIT_MODE_SETTING_CHAT_FRAME_WIDTH, curW, 1, 2000, 1, function(self, _, val)
+				local labelWidth = vertical and (L["Bar thickness"] or "Bar thickness") or (L["Bar length"] or "Bar length")
+				local labelHeight = vertical and (L["Bar length"] or "Bar length") or (L["Bar thickness"] or "Bar thickness")
+				local sw = addon.functions.createSliderAce(labelWidth, curW, 1, 2000, 1, function(self, _, val)
 					cfg.width = val
 					if specIndex == addon.variables.unitSpec then addon.Aura.ResourceBars.SetPowerBarSize(val, cfg.height or defaultH, sel) end
 				end)
 				sw:SetFullWidth(false)
 				sw:SetRelativeWidth(0.5)
 				sizeRow2:AddChild(sw)
-				local sh = addon.functions.createSliderAce(HUD_EDIT_MODE_SETTING_CHAT_FRAME_HEIGHT, curH, 1, 2000, 1, function(self, _, val)
+				local sh = addon.functions.createSliderAce(labelHeight, curH, 1, 2000, 1, function(self, _, val)
 					cfg.height = val
 					if specIndex == addon.variables.unitSpec then addon.Aura.ResourceBars.SetPowerBarSize(cfg.width or defaultW, val, sel) end
 				end)
@@ -1097,6 +1247,14 @@ function addon.Aura.functions.addResourceFrame(container)
 					local textRow = addon.functions.createContainer("SimpleGroup", "Flow")
 					textRow:SetFullWidth(true)
 					groupConfig:AddChild(textRow)
+					local textOffsetSliders
+					local function updateOffsetDisabled()
+						if not textOffsetSliders then return end
+						local disabled = (cfg.textStyle or curStyle) == "NONE"
+						for _, ctrl in ipairs(textOffsetSliders) do
+							if ctrl then ctrl:SetDisabled(disabled) end
+						end
+					end
 					local function buildTextRow()
 						textRow:ReleaseChildren()
 						local tList = { PERCENT = STATUS_TEXT_PERCENT, CURMAX = L["Current/Max"], CURRENT = L["Current"], NONE = NONE }
@@ -1119,9 +1277,13 @@ function addon.Aura.functions.addResourceFrame(container)
 							sFont:SetRelativeWidth(0.5)
 							textRow:AddChild(sFont)
 						end
+						updateOffsetDisabled()
 					end
 					buildTextRow()
+					textOffsetSliders = { addTextOffsetControlsUI(groupConfig, cfg, specIndex) }
+					updateOffsetDisabled()
 					addFontControls(groupConfig, cfg)
+					addColorControls(groupConfig, cfg, specIndex)
 
 					-- Bar Texture (Power types incl. RUNES)
 					local function buildTextureOptions2()
@@ -1130,6 +1292,11 @@ function addon.Aura.functions.addResourceFrame(container)
 							[BLIZZARD_TEX] = "Blizzard: UI-StatusBar",
 							["Interface\\Buttons\\WHITE8x8"] = "Flat (white, tintable)",
 							["Interface\\Tooltips\\UI-Tooltip-Background"] = "Dark Flat (Tooltip bg)",
+							["Interface\\RaidFrame\\Raid-Bar-Hp-Fill"] = "Raid HP Fill",
+							["Interface\\RaidFrame\\Raid-Bar-Resource-Fill"] = "Raid Resource Fill",
+							["Interface\\TargetingFrame\\UI-StatusBar"] = "Blizzard Unit Frame",
+							["Interface\\UnitPowerBarAlt\\Generic1Texture"] = "Alternate Power",
+							["Interface\\PetBattles\\PetBattle-HealthBar"] = "Pet Battle",
 						}
 						for name, path in pairs(LSM and LSM:HashTable("statusbar") or {}) do
 							if type(path) == "string" and path ~= "" then map[path] = tostring(name) end
@@ -1281,13 +1448,6 @@ function addon.Aura.functions.addResourceFrame(container)
 	scroll:DoLayout()
 end
 
-local function getPowerBarColor(type)
-	local powerKey = string.upper(type)
-	local color = PowerBarColor[powerKey]
-	if color then return color.r, color.g, color.b end
-	return 1, 1, 1
-end
-
 local function updateHealthBar(evt)
 	if healthBar and healthBar:IsVisible() then
 		local maxHealth = healthBar._lastMax
@@ -1310,9 +1470,7 @@ local function updateHealthBar(evt)
 			end
 		else
 			healthBar._smoothTarget = nil
-			if healthBar._lastVal ~= curHealth then
-				healthBar:SetValue(curHealth)
-			end
+			if healthBar._lastVal ~= curHealth then healthBar:SetValue(curHealth) end
 			healthBar._smoothInitialized = nil
 		end
 		healthBar._lastVal = curHealth
@@ -1340,27 +1498,44 @@ local function updateHealthBar(evt)
 				healthBar.text:Show()
 			end
 		end
-		local bracket, r, g, b
-		if percent >= 60 then
-			bracket, r, g, b = 3, 0, 0.7, 0
-		elseif percent >= 40 then
-			bracket, r, g, b = 2, 0.7, 0.7, 0
+		local colorR, colorG, colorB
+		if settings.useBarColor then
+			local custom = settings.barColor or { 1, 1, 1, 1 }
+			colorR, colorG, colorB = custom[1] or 1, custom[2] or 1, custom[3] or 1
+			local cc = healthBar._customColor or {}
+			if cc[1] ~= colorR or cc[2] ~= colorG or cc[3] ~= colorB then
+				healthBar:SetStatusBarColor(colorR, colorG, colorB)
+				healthBar._customColor = { colorR, colorG, colorB }
+			end
+			healthBar._lastBracket = nil
 		else
-			bracket, r, g, b = 1, 0.7, 0, 0
+			local bracket, r, g, b
+			if percent >= 60 then
+				bracket, r, g, b = 3, 0, 0.7, 0
+			elseif percent >= 40 then
+				bracket, r, g, b = 2, 0.7, 0.7, 0
+			else
+				bracket, r, g, b = 1, 0.7, 0, 0
+			end
+			if healthBar._lastBracket ~= bracket then
+				healthBar:SetStatusBarColor(r, g, b)
+				healthBar._lastBracket = bracket
+			end
+			healthBar._customColor = nil
+			colorR, colorG, colorB = r, g, b
 		end
-		if healthBar._lastBracket ~= bracket then
-			healthBar:SetStatusBarColor(r, g, b)
-			healthBar._lastBracket = bracket
-		end
-		setGlow(healthBar, settings.glowAtCap == true and curHealth >= maxHealth, r, g, b)
+		setGlow(healthBar, settings, settings.glowAtCap == true and curHealth >= maxHealth, colorR, colorG, colorB)
 
-		if healthBar.absorbBar._lastMax ~= maxHealth then
-			healthBar.absorbBar:SetMinMaxValues(0, maxHealth)
-			healthBar.absorbBar._lastMax = maxHealth
-		end
-		if healthBar.absorbBar._lastVal ~= abs then
-			healthBar.absorbBar:SetValue(abs)
-			healthBar.absorbBar._lastVal = abs
+		local absorbBar = healthBar.absorbBar
+		if absorbBar then
+			if absorbBar._lastMax ~= maxHealth then
+				absorbBar:SetMinMaxValues(0, maxHealth)
+				absorbBar._lastMax = maxHealth
+			end
+			if absorbBar._lastVal ~= abs then
+				absorbBar:SetValue(abs)
+				absorbBar._lastVal = abs
+			end
 		end
 	end
 end
@@ -1472,13 +1647,12 @@ local function createHealthBar()
 	healthBar:ClearAllPoints()
 	healthBar:SetPoint(anchor.point or "TOPLEFT", rel, anchor.relativePoint or anchor.point or "TOPLEFT", anchor.x or 0, anchor.y or 0)
 	local settings = getBarSettings("HEALTH")
+	healthBar._cfg = settings
 	applyBackdrop(healthBar, settings)
 
-	if not healthBar.text then
-		healthBar.text = healthBar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-		healthBar.text:SetPoint("CENTER", healthBar, "CENTER", 3, 0)
-	end
+	if not healthBar.text then healthBar.text = healthBar:CreateFontString(nil, "OVERLAY", "GameFontHighlight") end
 	applyFontToString(healthBar.text, settings)
+	applyTextPosition(healthBar, settings, 3, 0)
 	configureBarBehavior(healthBar, settings, "HEALTH")
 
 	healthBar:SetMovable(true)
@@ -1518,6 +1692,14 @@ local function createHealthBar()
 		absorbBar:SetOrientation("HORIZONTAL")
 	end
 	if absorbBar.SetReverseFill then absorbBar:SetReverseFill(settings and settings.reverseFill == true) end
+	local absorbTex = absorbBar:GetStatusBarTexture()
+	if absorbTex then
+		if settings and settings.verticalFill then
+			absorbTex:SetRotation(math.pi / 2)
+		else
+			absorbTex:SetRotation(0)
+		end
+	end
 	healthBar.absorbBar = absorbBar
 
 	updateHealthBar("UNIT_ABSORB_AMOUNT_CHANGED")
@@ -1647,9 +1829,7 @@ function getStackSpacing(specIndex)
 	specIndex = specIndex or addon.variables.unitSpec
 	local classCfg = addon.db.personalResourceBarSettings and addon.db.personalResourceBarSettings[class]
 	local specCfg = classCfg and classCfg[specIndex]
-	if specCfg and specCfg.layout and specCfg.layout.stackSpacing ~= nil then
-		return specCfg.layout.stackSpacing
-	end
+	if specCfg and specCfg.layout and specCfg.layout.stackSpacing ~= nil then return specCfg.layout.stackSpacing end
 	return BAR_STACK_SPACING
 end
 
@@ -1836,9 +2016,7 @@ function updatePowerBar(type, runeSlot)
 			end
 		else
 			bar._smoothTarget = nil
-			if bar._lastVal ~= curPower then
-				bar:SetValue(curPower)
-			end
+			if bar._lastVal ~= curPower then bar:SetValue(curPower) end
 			bar._smoothInitialized = nil
 		end
 		bar._lastVal = curPower
@@ -1863,7 +2041,7 @@ function updatePowerBar(type, runeSlot)
 			end
 		end
 		local cr, cg, cb = bar:GetStatusBarColor()
-		setGlow(bar, cfg.glowAtCap == true and curPower >= max(maxPower, 1), cr, cg, cb)
+		setGlow(bar, cfg, cfg.glowAtCap == true and curPower >= max(maxPower, 1), cr, cg, cb)
 	end
 end
 
@@ -1922,13 +2100,33 @@ local function updateBarSeparators(pType)
 	local needed = segments - 1
 	local w = max(1, bar:GetWidth() or 0)
 	local h = max(1, bar:GetHeight() or 0)
-	local segW = w / segments
+	local vertical = cfg and cfg.verticalFill == true
+	local span = vertical and h or w
 	local desiredThickness = (cfg and cfg.separatorThickness) or SEPARATOR_THICKNESS
-	local thickness = min(desiredThickness, max(1, floor(segW - 1)))
+	local thickness
+	if vertical then
+		local segH = span / segments
+		thickness = min(desiredThickness, max(1, floor(segH - 1)))
+	else
+		local segW = span / segments
+		thickness = min(desiredThickness, max(1, floor(segW - 1)))
+	end
 	local sc = (cfg and cfg.separatorColor) or SEP_DEFAULT
 	local r, g, b, a = sc[1] or 1, sc[2] or 1, sc[3] or 1, sc[4] or 0.5
 
-	if bar._sepW == w and bar._sepH == h and bar._sepSegments == segments and bar._sepR == r and bar._sepG == g and bar._sepB == b and bar._sepA == a and bar._sepThickness == thickness then return end
+	if
+		bar._sepW == w
+		and bar._sepH == h
+		and bar._sepSegments == segments
+		and bar._sepR == r
+		and bar._sepG == g
+		and bar._sepB == b
+		and bar._sepA == a
+		and bar._sepThickness == thickness
+		and bar._sepVertical == vertical
+	then
+		return
+	end
 
 	-- Ensure we have enough textures
 	for i = #bar.separatorMarks + 1, needed do
@@ -1941,11 +2139,17 @@ local function updateBarSeparators(pType)
 		local tx = bar.separatorMarks[i]
 		tx:ClearAllPoints()
 		local frac = i / segments
-		local x = Snap(bar, w * frac)
 		local half = floor(thickness * 0.5)
-		tx:SetPoint("LEFT", bar._sepOverlay, "LEFT", x - max(0, half), 0)
-		tx:SetSize(thickness, h)
 		tx:SetColorTexture(r, g, b, a)
+		if vertical then
+			local y = Snap(bar, h * frac)
+			tx:SetPoint("TOP", bar._sepOverlay, "TOP", 0, -(y - max(0, half)))
+			tx:SetSize(w, thickness)
+		else
+			local x = Snap(bar, w * frac)
+			tx:SetPoint("LEFT", bar._sepOverlay, "LEFT", x - max(0, half), 0)
+			tx:SetSize(thickness, h)
+		end
 		tx:Show()
 	end
 	-- Hide extras
@@ -1955,6 +2159,7 @@ local function updateBarSeparators(pType)
 	-- Cache current geometry and color to fast-exit next time
 	bar._sepW, bar._sepH, bar._sepSegments, bar._sepThickness = w, h, segments, thickness
 	bar._sepR, bar._sepG, bar._sepB, bar._sepA = r, g, b, a
+	bar._sepVertical = vertical
 end
 
 -- Layout helper for DK RUNES: create or resize 6 child statusbars
@@ -1965,13 +2170,19 @@ function layoutRunes(bar)
 	local gap = 0
 	local w = max(1, bar:GetWidth() or 0)
 	local h = max(1, bar:GetHeight() or 0)
-	local segW = max(1, floor((w - gap * (count - 1)) / count + 0.5))
 	local cfg = getBarSettings("RUNES") or {}
 	local show = cfg.showCooldownText == true
 	local size = cfg.cooldownTextFontSize or 16
 	local fontPath = resolveFontFace(cfg)
 	local fontOutline = resolveFontOutline(cfg)
 	local fr, fg, fb, fa = resolveFontColor(cfg)
+	local vertical = cfg.verticalFill == true
+	local segPrimary
+	if vertical then
+		segPrimary = max(1, floor((h - gap * (count - 1)) / count + 0.5))
+	else
+		segPrimary = max(1, floor((w - gap * (count - 1)) / count + 0.5))
+	end
 	for i = 1, count do
 		local sb = bar.runes[i]
 		if not sb then
@@ -1991,16 +2202,29 @@ function layoutRunes(bar)
 			end
 		end
 		sb:ClearAllPoints()
-		sb:SetHeight(h)
-		if i == 1 then
-			sb:SetPoint("LEFT", bar, "LEFT", 0, 0)
+		if vertical then
+			sb:SetWidth(w)
+			sb:SetHeight(segPrimary)
+			sb:SetOrientation("VERTICAL")
+			if i == 1 then
+				sb:SetPoint("BOTTOM", bar, "BOTTOM", 0, 0)
+			else
+				sb:SetPoint("BOTTOM", bar.runes[i - 1], "TOP", 0, gap)
+			end
+			if i == count then sb:SetPoint("TOP", bar, "TOP", 0, 0) end
 		else
-			sb:SetPoint("LEFT", bar.runes[i - 1], "RIGHT", gap, 0)
-		end
-		if i == count then
-			sb:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
-		else
-			sb:SetWidth(segW)
+			sb:SetHeight(h)
+			sb:SetOrientation("HORIZONTAL")
+			if i == 1 then
+				sb:SetPoint("LEFT", bar, "LEFT", 0, 0)
+			else
+				sb:SetPoint("LEFT", bar.runes[i - 1], "RIGHT", gap, 0)
+			end
+			if i == count then
+				sb:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
+			else
+				sb:SetWidth(segPrimary)
+			end
 		end
 		-- cooldown text per segment
 		if not sb.fs then
@@ -2055,7 +2279,10 @@ local function createPowerBar(type, anchor)
 		bar:SetPoint("TOPLEFT", UIParent, "TOPLEFT", a.x or 0, a.y or 0)
 	else
 		if a.point then
-			if a.autoSpacing or (a.autoSpacing == nil and isEQOLFrameName(a.relativeFrame) and (a.point or "TOPLEFT") == "TOPLEFT" and (a.relativePoint or "BOTTOMLEFT") == "BOTTOMLEFT" and (a.x or 0) == 0) then
+			if
+				a.autoSpacing
+				or (a.autoSpacing == nil and isEQOLFrameName(a.relativeFrame) and (a.point or "TOPLEFT") == "TOPLEFT" and (a.relativePoint or "BOTTOMLEFT") == "BOTTOMLEFT" and (a.x or 0) == 0)
+			then
 				a.x = 0
 				a.y = stackSpacing
 				a.autoSpacing = true
@@ -2104,13 +2331,12 @@ local function createPowerBar(type, anchor)
 
 	-- Visuals and text
 	applyBackdrop(bar, settings)
+	if type ~= "RUNES" then applyBarFillColor(bar, settings, type) end
 
 	if type ~= "RUNES" then
-		if not bar.text then
-			bar.text = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-			bar.text:SetPoint("CENTER", bar, "CENTER", 3, 0)
-		end
+		if not bar.text then bar.text = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight") end
 		applyFontToString(bar.text, settings)
+		applyTextPosition(bar, settings, 3, 0)
 		bar.text:Show()
 	else
 		if bar.text then
@@ -2682,7 +2908,10 @@ function ResourceBars.Refresh()
 					a.y = (h - ph) / 2
 				end
 			end
-			if a.autoSpacing or (a.autoSpacing == nil and isEQOLFrameName(a.relativeFrame) and (a.point or "TOPLEFT") == "TOPLEFT" and (a.relativePoint or "BOTTOMLEFT") == "BOTTOMLEFT" and (a.x or 0) == 0) then
+			if
+				a.autoSpacing
+				or (a.autoSpacing == nil and isEQOLFrameName(a.relativeFrame) and (a.point or "TOPLEFT") == "TOPLEFT" and (a.relativePoint or "BOTTOMLEFT") == "BOTTOMLEFT" and (a.x or 0) == 0)
+			then
 				a.x = 0
 				a.y = getStackSpacing()
 				a.autoSpacing = true
@@ -2724,9 +2953,11 @@ function ResourceBars.Refresh()
 	-- Apply styling updates without forcing a full rebuild
 	if healthBar then
 		local hCfg = getBarSettings("HEALTH") or {}
+		healthBar._cfg = hCfg
 		healthBar:SetStatusBarTexture(resolveTexture(hCfg))
 		applyBackdrop(healthBar, hCfg)
 		if healthBar.text then applyFontToString(healthBar.text, hCfg) end
+		applyTextPosition(healthBar, hCfg, 3, 0)
 		configureBarBehavior(healthBar, hCfg, "HEALTH")
 		if healthBar.absorbBar then
 			healthBar.absorbBar:SetStatusBarTexture(resolveTexture(hCfg))
@@ -2742,6 +2973,7 @@ function ResourceBars.Refresh()
 	for pType, bar in pairs(powerbar) do
 		if bar then
 			local cfg = getBarSettings(pType) or {}
+			bar._cfg = cfg
 			if pType == "RUNES" then
 				bar:SetStatusBarTexture(resolveTexture(cfg))
 				local tex = bar:GetStatusBarTexture()
@@ -2751,7 +2983,11 @@ function ResourceBars.Refresh()
 			end
 			applyBackdrop(bar, cfg)
 			configureBarBehavior(bar, cfg, pType)
-			if pType ~= "RUNES" and bar.text then applyFontToString(bar.text, cfg) end
+			if pType ~= "RUNES" then applyBarFillColor(bar, cfg, pType) end
+			if pType ~= "RUNES" and bar.text then
+				applyFontToString(bar.text, cfg)
+				applyTextPosition(bar, cfg, 3, 0)
+			end
 			if pType == "RUNES" then layoutRunes(bar) end
 		end
 	end
@@ -2885,7 +3121,10 @@ function ResourceBars.ReanchorAll()
 		if bar then
 			local a = anchors[pType]
 			if (a.relativeFrame or "UIParent") == "UIParent" then ensureUIParentDefaults(a, bar) end
-			if a.autoSpacing or (a.autoSpacing == nil and isEQOLFrameName(a.relativeFrame) and (a.point or "TOPLEFT") == "TOPLEFT" and (a.relativePoint or "BOTTOMLEFT") == "BOTTOMLEFT" and (a.x or 0) == 0) then
+			if
+				a.autoSpacing
+				or (a.autoSpacing == nil and isEQOLFrameName(a.relativeFrame) and (a.point or "TOPLEFT") == "TOPLEFT" and (a.relativePoint or "BOTTOMLEFT") == "BOTTOMLEFT" and (a.x or 0) == 0)
+			then
 				a.x = 0
 				a.y = getStackSpacing(spec)
 				a.autoSpacing = true

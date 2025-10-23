@@ -1,5 +1,17 @@
 # Changelog
 
+## [5.11.0] – 2025-10-24
+
+### ✨ Added
+
+- More customizations to Resourcebars
+
+### 🐛 Fixed
+
+- Infinite Bazaar teleport was shown for non timerunner characters
+
+---
+
 ## [5.10.0] – 2025-10-22
 
 ### ✨ Added
