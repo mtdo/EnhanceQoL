@@ -71,6 +71,7 @@ local lastBarSelectionPerSpec = {}
 local DEFAULT_STACK_SPACING = -1
 local SEPARATOR_THICKNESS = 1
 local SEP_DEFAULT = { 1, 1, 1, 0.5 }
+local WHITE = { 1, 1, 1, 1 }
 local DEFAULT_RB_TEX = "Interface\\Buttons\\WHITE8x8" -- historical default (Solid)
 BLIZZARD_TEX = "Interface\\TargetingFrame\\UI-StatusBar"
 local SMOOTH_SPEED = 12
@@ -1690,7 +1691,7 @@ function updateHealthBar(evt)
 		end
 		local baseR, baseG, baseB, baseA
 		if settings.useBarColor then
-			local custom = settings.barColor or { 1, 1, 1, 1 }
+			local custom = settings.barColor or WHITE
 			baseR, baseG, baseB, baseA = custom[1] or 1, custom[2] or 1, custom[3] or 1, custom[4] or 1
 		else
 			if percent >= 60 then
@@ -1708,7 +1709,7 @@ function updateHealthBar(evt)
 		local useMaxColor = settings.useMaxColor == true
 		local finalR, finalG, finalB, finalA = baseR, baseG, baseB, baseA
 		if useMaxColor and reachedCap then
-			local maxCol = settings.maxColor or { 1, 1, 1, 1 }
+			local maxCol = settings.maxColor or WHITE
 			finalR, finalG, finalB, finalA = maxCol[1] or baseR, maxCol[2] or baseG, maxCol[3] or baseB, maxCol[4] or baseA
 		end
 
@@ -2191,7 +2192,8 @@ function updatePowerBar(type, runeSlot)
 							local sb = self.runes and self.runes[pos]
 							if data and sb then
 								local prog
-								if data.ready then
+								local runeReady = data.ready
+								if runeReady then
 									prog = 1
 								else
 									prog = min(1, max(0, (n - data.start) / max(data.duration, 1)))
@@ -2205,15 +2207,26 @@ function updatePowerBar(type, runeSlot)
 												end)
 											else
 												updatePowerBar("RUNES")
+												self._runeResync = false
+												return
 											end
 										end
-										return
+										runeReady = true
+										prog = 1
 									end
-									allReady = false
 								end
 								sb:SetValue(prog)
+								local wantReady = runeReady
+								if sb._isReady ~= wantReady then
+									sb._isReady = wantReady
+									if wantReady then
+										sb:SetStatusBarColor(r, g, b)
+									else
+										sb:SetStatusBarColor(grey, grey, grey)
+									end
+								end
 								if sb.fs then
-									if cfgOnUpdate.showCooldownText and not data.ready then
+									if cfgOnUpdate.showCooldownText and not runeReady then
 										local remain = ceil((data.start + data.duration) - n)
 										if remain ~= sb._lastRemain then
 											if remain > 0 then
@@ -2232,6 +2245,7 @@ function updatePowerBar(type, runeSlot)
 										sb.fs:Hide()
 									end
 								end
+								if not runeReady then allReady = false end
 							end
 						end
 						if allReady then deactivateRuneTicker(self) end
@@ -3324,16 +3338,17 @@ ResourceBars._pendingRefresh = ResourceBars._pendingRefresh or {}
 function ResourceBars.QueueRefresh(specIndex, opts)
 	local spec = specIndex or addon.variables.unitSpec
 	if not spec then return end
+	local now = GetTime and GetTime() or 0
 	local mode = (opts and opts.reanchorOnly) and "reanchor" or "full"
 	local pending = ResourceBars._pendingRefresh
 	local entry = pending[spec]
 	if not entry then
-		entry = { mode = mode }
+		entry = { mode = mode, nextRunAt = now + REFRESH_DEBOUNCE }
 		pending[spec] = entry
 	else
 		if entry.mode ~= "full" and mode == "full" then entry.mode = "full" end
+		entry.nextRunAt = now + REFRESH_DEBOUNCE
 	end
-	entry.lastRequest = GetTime and GetTime() or 0
 	if not After then
 		pending[spec] = nil
 		if spec ~= addon.variables.unitSpec then return end
@@ -3350,10 +3365,10 @@ function ResourceBars.QueueRefresh(specIndex, opts)
 	local function pump()
 		local current = pending[spec]
 		if not current then return end
-		local last = current.lastRequest or 0
-		local now = GetTime and GetTime() or last
-		if (now - last) < REFRESH_DEBOUNCE then
-			local delay = REFRESH_DEBOUNCE - (now - last)
+		local target = current.nextRunAt or 0
+		local nowTime = GetTime and GetTime() or target
+		if nowTime < target then
+			local delay = target - nowTime
 			if delay < 0.01 then delay = 0.01 end
 			After(delay, pump)
 			return
@@ -3368,7 +3383,9 @@ function ResourceBars.QueueRefresh(specIndex, opts)
 		end
 	end
 
-	After(REFRESH_DEBOUNCE, pump)
+	local initialDelay = entry.nextRunAt - now
+	if initialDelay < 0.01 then initialDelay = 0.01 end
+	After(initialDelay, pump)
 end
 
 -- Only refresh live bars when editing the active spec
