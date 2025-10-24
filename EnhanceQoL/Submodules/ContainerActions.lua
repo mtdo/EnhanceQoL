@@ -209,29 +209,30 @@ function ContainerActions:EnsureAnchor()
 
 	if EditMode and EditMode.IsAvailable and EditMode:IsAvailable() and not self.anchorRegistered then
 		local defaults = BuildAnchorLayoutSnapshot()
-		local settings
+		local dropdownSetting
 		local settingType = EditMode.lib and EditMode.lib.SettingType
 		if settingType then
-			settings = {}
-			settings[#settings + 1] = {
+			dropdownSetting = {
 				name = L["containerActionsAreaHeader"],
 				kind = settingType.Dropdown,
 				height = 180,
-				generator = function(owner, rootDescription)
+				generator = function(_, rootDescription)
 					for _, areaKey in ipairs(AREA_BLOCK_ORDER) do
 						local key = areaKey
-					rootDescription:CreateCheckbox(
-						GetAreaDisplayName(key),
-						function()
-							local layoutName = EditMode and EditMode:GetActiveLayoutName()
-							local cfg = ContainerActions:GetLayoutAreaBlocks(layoutName)
-							return not not cfg[key]
-						end,
-						function(_, checked)
-							local layoutName = EditMode and EditMode:GetActiveLayoutName()
-							ContainerActions:SetAreaBlock(layoutName, key, checked)
-						end
-					)
+						rootDescription:CreateCheckbox(
+							GetAreaDisplayName(key),
+							function()
+								local layoutName = EditMode and EditMode:GetActiveLayoutName()
+								local cfg = ContainerActions:GetLayoutAreaBlocks(layoutName)
+								return not not cfg[key]
+							end,
+							function()
+								local layoutName = EditMode and EditMode:GetActiveLayoutName()
+								local cfg = ContainerActions:GetLayoutAreaBlocks(layoutName)
+								local newState = not not cfg[key]
+								ContainerActions:SetAreaBlock(layoutName, key, not newState)
+							end
+						)
 					end
 				end,
 			}
@@ -243,7 +244,7 @@ function ContainerActions:EnsureAnchor()
 			layoutDefaults = defaults,
 			isEnabled = function() return ContainerActions:IsEnabled() end,
 			onApply = function(_, layoutName, data) ContainerActions:ApplyAnchorLayout(data) end,
-			settings = settings,
+			settings = dropdownSetting and { dropdownSetting } or nil,
 		})
 		self.anchorRegistered = true
 	end
