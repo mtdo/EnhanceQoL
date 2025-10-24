@@ -255,7 +255,7 @@ function EditMode:_prepareSetting(id, setting)
 	local field = setting.field
 	local onChange = setting.onValueChanged
 
-	local requiresField = not copy.generator
+	local requiresField = not copy.generator and copy.kind ~= EditMode.lib.SettingType.Label
 
 	if not copy.get and requiresField then
 		assert(field, "setting.field required when getter is omitted")

@@ -3719,47 +3719,6 @@ local function addContainerActionsFrame(container)
 		group:AddChild(helpLabel)
 	end
 
-	local areaGroup = addon.functions.createContainer("InlineGroup", "List")
-	areaGroup:SetFullWidth(true)
-	areaGroup:SetTitle(L["containerActionsAreaHeader"])
-	group:AddChild(areaGroup)
-
-	local areaDesc = L["containerActionsAreaDesc"]
-	if areaDesc and areaDesc ~= "" then
-		local areaLabel = addon.functions.createLabelAce(areaDesc, { r = 0.8, g = 0.8, b = 0.8 })
-		areaLabel:SetFullWidth(true)
-		areaGroup:AddChild(areaLabel)
-	end
-
-	if addon.ContainerActions and addon.ContainerActions.GetAreaBlockOptions then
-		local dropdown = AceGUI:Create("Dropdown")
-		dropdown:SetMultiselect(true)
-		dropdown:SetFullWidth(true)
-
-		local list, order = {}, {}
-		for _, option in ipairs(addon.ContainerActions:GetAreaBlockOptions()) do
-			local key = option.key
-			local text = option.label or key
-			list[key] = text
-			order[#order + 1] = key
-		end
-		dropdown:SetList(list, order)
-		dropdown:SetCallback("OnValueChanged", function(_, _, key, checked)
-			addon.db.containerActionAreaBlocks = addon.db.containerActionAreaBlocks or {}
-			addon.db.containerActionAreaBlocks[key] = checked and true or nil
-			if addon.ContainerActions and addon.ContainerActions.OnAreaBlockSettingChanged then addon.ContainerActions:OnAreaBlockSettingChanged(key, checked) end
-		end)
-
-		local config = addon.db.containerActionAreaBlocks
-		if type(config) == "table" then
-			for key, value in pairs(config) do
-				if value and list[key] then dropdown:SetItemValue(key, true) end
-			end
-		end
-
-		areaGroup:AddChild(dropdown)
-	end
-
 	local managedGroup = addon.functions.createContainer("InlineGroup", "List")
 	managedGroup:SetFullWidth(true)
 	managedGroup:SetTitle(L["containerActionsManagedItems"])
@@ -4538,6 +4497,27 @@ local function buildDatapanelFrame(container)
 	)
 	hintToggle:SetRelativeWidth(1.0)
 	controlGroup:AddChild(hintToggle)
+
+	addon.db.dataPanelsOptions.menuModifier = addon.db.dataPanelsOptions.menuModifier or "NONE"
+	local modifierList = {
+		NONE = L["Context menu modifier: None"] or (NONE or "None"),
+		SHIFT = SHIFT_KEY_TEXT or "Shift",
+		CTRL = CTRL_KEY_TEXT or "Ctrl",
+		ALT = ALT_KEY_TEXT or "Alt",
+	}
+	local modifierOrder = { "NONE", "SHIFT", "CTRL", "ALT" }
+	local modifierDropdown = addon.functions.createDropdownAce(
+		L["Context menu modifier"] or "Context menu modifier",
+		modifierList,
+		modifierOrder,
+		function(widget, _, key)
+			if addon.DataPanel.SetMenuModifier then addon.DataPanel.SetMenuModifier(key) end
+			if widget and widget.SetValue then widget:SetValue(key) end
+		end
+	)
+	if modifierDropdown.SetValue then modifierDropdown:SetValue(addon.DataPanel.GetMenuModifier and addon.DataPanel.GetMenuModifier() or "NONE") end
+	modifierDropdown:SetRelativeWidth(1.0)
+	controlGroup:AddChild(modifierDropdown)
 
 	local newName = addon.functions.createEditboxAce(L["Panel Name"] or "Panel Name")
 	newName:SetRelativeWidth(0.4)

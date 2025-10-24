@@ -135,22 +135,49 @@ local function GetAreaDisplayName(key)
 end
 
 function ContainerActions:GetAnchorConfig(layoutName)
-	local snapshot = BuildAnchorLayoutSnapshot(layoutName)
-	return FormatAnchorPoint(snapshot)
+    local snapshot = BuildAnchorLayoutSnapshot(layoutName)
+    return FormatAnchorPoint(snapshot)
+end
+
+function ContainerActions:GetLayoutAreaBlocks(layoutName)
+	local targetLayout = layoutName or (EditMode and EditMode:GetActiveLayoutName()) or "_Global"
+	addon.db.containerActionLayouts = addon.db.containerActionLayouts or {}
+	local layoutData = addon.db.containerActionLayouts[targetLayout]
+	if not layoutData then
+		local copySource = addon.db.containerActionAreaBlocks
+		layoutData = {
+			areaBlocks = copySource and CopyTable(copySource) or {},
+		}
+		addon.db.containerActionLayouts[targetLayout] = layoutData
+	end
+	layoutData.areaBlocks = layoutData.areaBlocks or {}
+	return layoutData.areaBlocks
+end
+
+function ContainerActions:SetAreaBlock(layoutName, key, enabled)
+	layoutName = layoutName or (EditMode and EditMode:GetActiveLayoutName()) or "_Global"
+	local areaBlocks = self:GetLayoutAreaBlocks(layoutName)
+	if enabled then
+		areaBlocks[key] = true
+	else
+		areaBlocks[key] = nil
+	end
+	addon.db.containerActionAreaBlocks = CopyTable(areaBlocks)
+	self:OnAreaBlockSettingChanged()
 end
 
 function ContainerActions:ApplyAnchorLayout(data)
-	local cfg = CopyAnchorConfig(data)
-	addon.db.containerActionAnchor = CopyAnchorConfig(cfg)
-	local anchor = self.anchor
-	if anchor then
-		anchor:ClearAllPoints()
-		anchor:SetPoint(cfg.point, UIParent, cfg.relativePoint, cfg.x, cfg.y)
-	end
-	if self.button then
-		self.button:ClearAllPoints()
-		self.button:SetPoint("CENTER", self:EnsureAnchor(), "CENTER", 0, 0)
-	end
+    local cfg = CopyAnchorConfig(data)
+    addon.db.containerActionAnchor = CopyAnchorConfig(cfg)
+    local anchor = self.anchor
+    if anchor then
+        anchor:ClearAllPoints()
+        anchor:SetPoint(cfg.point, UIParent, cfg.relativePoint, cfg.x, cfg.y)
+    end
+    if self.button then
+        self.button:ClearAllPoints()
+        self.button:SetPoint("CENTER", self:EnsureAnchor(), "CENTER", 0, 0)
+    end
 end
 
 function ContainerActions:EnsureAnchor()
@@ -185,33 +212,28 @@ function ContainerActions:EnsureAnchor()
 		local settings
 		local settingType = EditMode.lib and EditMode.lib.SettingType
 		if settingType then
-			settings = {
-				{
-					name = L["containerActionsAreaHeader"],
-					kind = settingType.Dropdown,
-					height = 180,
-					generator = function(_, rootDescription)
-						for _, areaKey in ipairs(AREA_BLOCK_ORDER) do
-							local key = areaKey
-							rootDescription:CreateCheckbox(
-								GetAreaDisplayName(key),
-								function()
-									local cfg = addon.db and addon.db.containerActionAreaBlocks or {}
-									return not not cfg[key]
-								end,
-								function()
-									addon.db.containerActionAreaBlocks = addon.db.containerActionAreaBlocks or {}
-									if addon.db.containerActionAreaBlocks[key] then
-										addon.db.containerActionAreaBlocks[key] = nil
-									else
-										addon.db.containerActionAreaBlocks[key] = true
-									end
-									ContainerActions:OnAreaBlockSettingChanged()
-								end
-							)
+			settings = {}
+			settings[#settings + 1] = {
+				name = L["containerActionsAreaHeader"],
+				kind = settingType.Dropdown,
+				height = 180,
+				generator = function(owner, rootDescription)
+					for _, areaKey in ipairs(AREA_BLOCK_ORDER) do
+						local key = areaKey
+					rootDescription:CreateCheckbox(
+						GetAreaDisplayName(key),
+						function()
+							local layoutName = EditMode and EditMode:GetActiveLayoutName()
+							local cfg = ContainerActions:GetLayoutAreaBlocks(layoutName)
+							return not not cfg[key]
+						end,
+						function(_, checked)
+							local layoutName = EditMode and EditMode:GetActiveLayoutName()
+							ContainerActions:SetAreaBlock(layoutName, key, checked)
 						end
-					end,
-				},
+					)
+					end
+				end,
 			}
 		end
 
@@ -715,7 +737,13 @@ function ContainerActions:UpdateItems(list)
 end
 
 function ContainerActions:UpdateAreaBlocks()
-	local config = addon.db and addon.db.containerActionAreaBlocks or {}
+	local layoutName = EditMode and EditMode:GetActiveLayoutName()
+	local config
+	if layoutName then
+		config = self:GetLayoutAreaBlocks(layoutName)
+	else
+		config = addon.db and addon.db.containerActionAreaBlocks or {}
+	end
 	local instanceType = GetCurrentInstanceType()
 	for _, key in ipairs(AREA_BLOCK_ORDER) do
 		local def = AREA_BLOCKS[key]
