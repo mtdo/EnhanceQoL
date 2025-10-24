@@ -91,7 +91,7 @@ local function registerEditModePanel(panel)
 				field = "height",
 				default = defaults.height,
 				minValue = 16,
-				maxValue = 120,
+				maxValue = 600,
 				valueStep = 1,
 			},
 			{
@@ -135,6 +135,7 @@ local function registerEditModePanel(panel)
 		onApply = function(_, _, data) panel:ApplyEditMode(data or {}) end,
 		onPositionChanged = function(_, _, data) panel:UpdatePositionInfo(data) end,
 		settings = settings,
+		showOutsideEditMode = true,
 	})
 	panel.editModeRegistered = true
 	panel.editModeId = id
