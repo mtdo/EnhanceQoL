@@ -104,6 +104,15 @@ local function getPaperdollStatOrder()
 	return order
 end
 
+local function getOptionsHint()
+	if addon.DataPanel and addon.DataPanel.GetOptionsHintText then
+		local text = addon.DataPanel.GetOptionsHintText()
+		if text ~= nil then return text end
+		return nil
+	end
+	return L["Right-Click for options"]
+end
+
 local function ensureDB()
 	addon.db.datapanel = addon.db.datapanel or {}
 	addon.db.datapanel.stats = addon.db.datapanel.stats or {}
@@ -267,7 +276,7 @@ local function checkStats(stream)
 	local sep = db.vertical and "\n" or " "
 	local size = db.fontSize or 14
 	stream.snapshot.fontSize = size
-	stream.snapshot.tooltip = L["Right-Click for options"]
+	stream.snapshot.tooltip = getOptionsHint()
 
 	local orderMap = getPaperdollStatOrder()
 	local entries = {}

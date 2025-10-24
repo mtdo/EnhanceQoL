@@ -9,6 +9,14 @@ local stream
 -- Forward declarations used across functions
 local listWindow -- AceGUI window
 local populateListWindow -- function to (re)build the list window
+local function getOptionsHint()
+	if addon.DataPanel and addon.DataPanel.GetOptionsHintText then
+		local text = addon.DataPanel.GetOptionsHintText()
+		if text ~= nil then return text end
+		return nil
+	end
+	return L["Right-Click for options"]
+end
 
 local function ensureDB()
 	addon.db.datapanel = addon.db.datapanel or {}
@@ -407,7 +415,8 @@ local provider = {
 		addSection(FRIENDS, tooltipData.friends, CreateColor(0.8, 0.8, 1.0))
 		addSection(GUILD, tooltipData.guild, CreateColor(0.25, 1.0, 0.4))
 
-		tip:AddLine(L["Right-Click for options"])
+		local hint = getOptionsHint()
+		if hint then tip:AddLine(hint) end
 		tip:Show()
 
 		-- Keep first line styling consistent

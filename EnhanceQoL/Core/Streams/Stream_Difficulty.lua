@@ -5,6 +5,14 @@ local L = addon.L
 local AceGUI = addon.AceGUI
 local db
 local stream
+local function getOptionsHint()
+	if addon.DataPanel and addon.DataPanel.GetOptionsHintText then
+		local text = addon.DataPanel.GetOptionsHintText()
+		if text ~= nil then return text end
+		return nil
+	end
+	return L["Right-Click for options"]
+end
 
 local function ensureDB()
 	addon.db.datapanel = addon.db.datapanel or {}
@@ -86,7 +94,7 @@ local function checkDifficulty(stream)
 	stream.snapshot.fontSize = size
 
 	stream.snapshot.text = I_DUNGEON .. " " .. dg .. " " .. I_RAID .. " " .. raid
-	if not stream.snapshot.tooltip then stream.snapshot.tooltip = L["Right-Click for options"] end
+	stream.snapshot.tooltip = getOptionsHint()
 end
 
 local provider = {

@@ -11,6 +11,31 @@ local function requireShiftToMove()
     return opts and opts.requireShiftToMove == true
 end
 
+local function shouldShowOptionsHint()
+    local opts = addon.db and addon.db.dataPanelsOptions
+    return not (opts and opts.hideRightClickHint)
+end
+
+function DataPanel.ShouldShowOptionsHint()
+    return shouldShowOptionsHint()
+end
+
+function DataPanel.GetOptionsHintText()
+    if shouldShowOptionsHint() then
+        return L["Right-Click for options"]
+    end
+end
+
+function DataPanel.SetShowOptionsHint(val)
+    addon.db = addon.db or {}
+    addon.db.dataPanelsOptions = addon.db.dataPanelsOptions or {}
+    if val then
+        addon.db.dataPanelsOptions.hideRightClickHint = nil
+    else
+        addon.db.dataPanelsOptions.hideRightClickHint = true
+    end
+end
+
 local function ensureSettings(id, name)
     id = tostring(id)
     addon.db = addon.db or {}
@@ -314,8 +339,11 @@ function DataPanel.Create(id, name, existingOnly)
 									end
 								end
 							end
-							GameTooltip:AddLine(" ")
-							GameTooltip:AddLine(L["Right-Click for options"])
+							local hint = DataPanel.GetOptionsHintText and DataPanel.GetOptionsHintText()
+							if hint then
+								GameTooltip:AddLine(" ")
+								GameTooltip:AddLine(hint)
+							end
 						elseif data.tooltip then
 							GameTooltip:SetText(data.tooltip)
 						end

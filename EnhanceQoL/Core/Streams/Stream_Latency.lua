@@ -6,6 +6,15 @@ local AceGUI = addon.AceGUI
 local db
 local stream
 
+local function getOptionsHint()
+	if addon.DataPanel and addon.DataPanel.GetOptionsHintText then
+		local text = addon.DataPanel.GetOptionsHintText()
+		if text ~= nil then return text end
+		return nil
+	end
+	return L["Right-Click for options"]
+end
+
 -- Micro-optimizations: localize frequently used globals
 local floor = math.floor
 local min = math.min
@@ -173,7 +182,7 @@ local function updateLatency(s)
     if s and s.interval ~= db.fpsInterval then s.interval = db.fpsInterval end
 
     local size = db.fontSize or 14
-    if not s.snapshot.tooltip then s.snapshot.tooltip = L and L["Right-Click for options"] or "Right-Click for options" end
+    s.snapshot.tooltip = getOptionsHint()
 
     local now = GetTime()
 
@@ -244,8 +253,11 @@ local provider = {
         )
 
         tip:SetText(fpsLine .. "\n" .. latencyBlock)
-        tip:AddLine(" ")
-        tip:AddLine(L and L["Right-Click for options"] or "Right-Click for options")
+        local hint = getOptionsHint()
+        if hint then
+            tip:AddLine(" ")
+            tip:AddLine(hint)
+        end
         tip:Show()
     end,
 }

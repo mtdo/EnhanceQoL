@@ -6,6 +6,14 @@ local L = addon.L
 local AceGUI = addon.AceGUI
 local db
 local stream
+local function getOptionsHint()
+	if addon.DataPanel and addon.DataPanel.GetOptionsHintText then
+		local text = addon.DataPanel.GetOptionsHintText()
+		if text ~= nil then return text end
+		return nil
+	end
+	return L["Right-Click for options"]
+end
 
 local function ensureDB()
 	addon.db.datapanel = addon.db.datapanel or {}
@@ -157,7 +165,8 @@ local provider = {
 			local r, g, b = NORMAL_FONT_COLOR:GetRGB()
 			tip:AddDoubleLine(v.slot, v.dur, r, g, b)
 		end
-		tip:AddLine(L["Right-Click for options"])
+		local hint = getOptionsHint()
+		if hint then tip:AddLine(hint) end
 		tip:Show()
 
 		local name = tip:GetName()

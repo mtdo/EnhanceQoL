@@ -10,6 +10,14 @@ local trackedDirty = true
 
 local checkCurrencies
 local updateCurrency
+local function getOptionsHint()
+	if addon.DataPanel and addon.DataPanel.GetOptionsHintText then
+		local text = addon.DataPanel.GetOptionsHintText()
+		if text ~= nil then return text end
+		return nil
+	end
+	return L["Right-Click for options"]
+end
 
 local function publish(s)
 	s = s or stream
@@ -220,11 +228,18 @@ local function rebuildTooltip(s)
 	end
 	if #tips > 0 then
 		if tips[#tips] == "" then tips[#tips] = nil end
-		tips[#tips + 1] = ""
-		tips[#tips + 1] = L["Right-Click for options"]
-		s.snapshot.tooltip = table.concat(tips, "\n")
+		local hint = getOptionsHint()
+		if hint then
+			tips[#tips + 1] = ""
+			tips[#tips + 1] = hint
+		end
+		if #tips > 0 then
+			s.snapshot.tooltip = table.concat(tips, "\n")
+		else
+			s.snapshot.tooltip = hint
+		end
 	else
-		s.snapshot.tooltip = L["Right-Click for options"]
+		s.snapshot.tooltip = getOptionsHint()
 	end
 	s.snapshot.perCurrency = false
 	s.snapshot.showDescription = db.showDescription
@@ -285,12 +300,13 @@ checkCurrencies = function(s)
 			end
 		end
 	end
+	local hint = getOptionsHint()
 	if #parts > 0 then
 		s.snapshot.parts = parts
 		s.snapshot.text = nil
 	else
 		s.snapshot.parts = nil
-		s.snapshot.text = L["Right-Click for options"]
+		s.snapshot.text = hint
 	end
 	s.snapshot.fontSize = size
 	rebuildTooltip(s)

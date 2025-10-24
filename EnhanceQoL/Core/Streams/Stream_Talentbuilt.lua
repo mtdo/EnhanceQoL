@@ -7,6 +7,15 @@ local db
 local stream
 local provider
 
+local function getOptionsHint()
+	if addon.DataPanel and addon.DataPanel.GetOptionsHintText then
+		local text = addon.DataPanel.GetOptionsHintText()
+		if text ~= nil then return text end
+		return nil
+	end
+	return L["Right-Click for options"]
+end
+
 local function ensureDB()
 	addon.db.datapanel = addon.db.datapanel or {}
 	addon.db.datapanel.talent = addon.db.datapanel.talent or {}
@@ -98,7 +107,7 @@ local function GetCurrentTalents(stream)
 	end
 	stream.snapshot.text = icon .. prefix .. name
 	stream.snapshot.fontSize = db.fontSize
-	if not stream.snapshot.tooltip then stream.snapshot.tooltip = L["Right-Click for options"] end
+	stream.snapshot.tooltip = getOptionsHint()
 end
 
 provider = {
