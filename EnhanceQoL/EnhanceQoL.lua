@@ -4474,16 +4474,17 @@ local function buildDatapanelFrame(container)
 	controlGroup:SetTitle(L["Panels"] or "Panels")
 	wrapper:AddChild(controlGroup)
 
-	-- Global option: require Shift to move panels
 	addon.db = addon.db or {}
 	addon.db.dataPanelsOptions = addon.db.dataPanelsOptions or {}
-	local shiftLock = addon.functions.createCheckboxAce(
-		L["Lock DataPanel position (hold Shift to move)"] or "Lock DataPanel position (hold Shift to move)",
-		addon.db.dataPanelsOptions.requireShiftToMove == true,
-		function(_, _, val) addon.db.dataPanelsOptions.requireShiftToMove = val and true or false end
+
+	local editModeHint = addon.functions.createLabelAce(
+		"|cffffd700" .. (L["DataPanelEditModeHint"] or "Configure DataPanels in Edit Mode.") .. "|r",
+		nil,
+		nil,
+		12
 	)
-	shiftLock:SetRelativeWidth(1.0)
-	controlGroup:AddChild(shiftLock)
+	editModeHint:SetFullWidth(true)
+	controlGroup:AddChild(editModeHint)
 
 	local hintToggle = addon.functions.createCheckboxAce(
 		L["Show options tooltip hint"],
@@ -4555,15 +4556,6 @@ local function buildDatapanelFrame(container)
 	end)
 	removeButton:SetRelativeWidth(0.3)
 	controlGroup:AddChild(removeButton)
-
-	local editModeHint = addon.functions.createLabelAce(
-		"|cffffd700" .. (L["DataPanelEditModeHint"] or "Configure DataPanels in Edit Mode.") .. "|r",
-		nil,
-		nil,
-		12
-	)
-	editModeHint:SetFullWidth(true)
-	wrapper:AddChild(editModeHint)
 	scroll:DoLayout()
 end
 

@@ -6,6 +6,14 @@
 
 - More customizations to Resourcebars
 - Option to reposition the BR Tracker outside of Raid and M+
+- Import/Export Resourcebars settings
+- Copy Resourcebars settings from your other specs
+
+### 🔄 Changed
+
+- Datapanels are now configurable in size and position with the Edit Mode
+- BR Tracker is now part of the Edit Mode
+- Container open quick button is part of the Edit Mode
 
 ### 🐛 Fixed
 

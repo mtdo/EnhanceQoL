@@ -36,6 +36,7 @@ local CopyTable = CopyTable
 local tostring = tostring
 local floor, max, min, ceil, abs = math.floor, math.max, math.min, math.ceil, math.abs
 local tinsert, tsort = table.insert, table.sort
+local tconcat = table.concat
 
 local frameAnchor
 local mainFrame
@@ -51,6 +52,8 @@ local updatePowerBar
 local forceColorUpdate
 local lastBarSelectionPerSpec = {}
 local lastSpecCopySelection = {}
+local lastProfileShareScope = {}
+local RESOURCE_SHARE_KIND = "EQOL_RESOURCE_BAR_PROFILE"
 local DEFAULT_STACK_SPACING = 0
 local SEPARATOR_THICKNESS = 1
 local SEP_DEFAULT = { 1, 1, 1, 0.5 }
@@ -195,6 +198,141 @@ local function cloneArray(src)
 		dest[i] = src[i]
 	end
 	return dest
+end
+
+local function trim(str)
+	if type(str) ~= "string" then return str end
+	return str:match("^%s*(.-)%s*$")
+end
+
+local function notifyUser(msg)
+	if not msg or msg == "" then return end
+	print("|cff00ff98Enhance QoL|r: " .. tostring(msg))
+end
+
+local function specNameByIndex(specIndex)
+	local classID = addon.variables.unitClassID
+	if not classID or not GetSpecializationInfoForClassID or not specIndex then return nil end
+	local _, specName = GetSpecializationInfoForClassID(classID, specIndex)
+	return specName
+end
+
+local function exportResourceProfile(scopeKey)
+	scopeKey = scopeKey or "ALL"
+	local classKey = addon.variables.unitClass
+	if not classKey then return nil, "NO_CLASS" end
+	addon.db.personalResourceBarSettings = addon.db.personalResourceBarSettings or {}
+	local classConfig = addon.db.personalResourceBarSettings[classKey]
+	if type(classConfig) ~= "table" then return nil, "NO_DATA" end
+
+	local payload = {
+		kind = RESOURCE_SHARE_KIND,
+		version = 1,
+		class = classKey,
+		enableResourceFrame = addon.db["enableResourceFrame"] and true or false,
+		specs = {},
+		specNames = {},
+	}
+
+	if scopeKey == "ALL" then
+		local hasData = false
+		for specIndex, specCfg in pairs(classConfig) do
+			if type(specCfg) == "table" then
+				payload.specs[specIndex] = CopyTable(specCfg)
+				local idx = tonumber(specIndex)
+				if idx then
+					local specName = specNameByIndex(idx)
+					if specName then payload.specNames[idx] = specName end
+				end
+				hasData = true
+			end
+		end
+		if not hasData then return nil, "EMPTY" end
+	else
+		local specIndex = tonumber(scopeKey)
+		if not specIndex then return nil, "NO_SPEC" end
+		local specCfg = classConfig[specIndex]
+		if type(specCfg) ~= "table" then return nil, "SPEC_EMPTY" end
+		payload.specs[specIndex] = CopyTable(specCfg)
+		local specName = specNameByIndex(specIndex)
+		if specName then payload.specNames[specIndex] = specName end
+	end
+
+	local serializer = LibStub("AceSerializer-3.0")
+	local deflate = LibStub("LibDeflate")
+	local serialized = serializer:Serialize(payload)
+	local compressed = deflate:CompressDeflate(serialized)
+	return deflate:EncodeForPrint(compressed)
+end
+
+local function importResourceProfile(encoded, scopeKey)
+	scopeKey = scopeKey or "ALL"
+	encoded = trim(encoded or "")
+	if not encoded or encoded == "" then return false, "NO_INPUT" end
+
+	local deflate = LibStub("LibDeflate")
+	local serializer = LibStub("AceSerializer-3.0")
+	local decoded = deflate:DecodeForPrint(encoded) or deflate:DecodeForWoWChatChannel(encoded) or deflate:DecodeForWoWAddonChannel(encoded)
+	if not decoded then return false, "DECODE" end
+	local decompressed = deflate:DecompressDeflate(decoded)
+	if not decompressed then return false, "DECOMPRESS" end
+	local ok, data = serializer:Deserialize(decompressed)
+	if not ok or type(data) ~= "table" then return false, "DESERIALIZE" end
+
+	if data.kind ~= RESOURCE_SHARE_KIND then return false, "WRONG_KIND" end
+	if data.class and data.class ~= addon.variables.unitClass then return false, "WRONG_CLASS", data.class end
+
+	local specs = data.specs
+	if type(specs) ~= "table" then return false, "NO_SPECS" end
+
+	addon.db.personalResourceBarSettings = addon.db.personalResourceBarSettings or {}
+	local classKey = addon.variables.unitClass
+	addon.db.personalResourceBarSettings[classKey] = addon.db.personalResourceBarSettings[classKey] or {}
+	local classConfig = addon.db.personalResourceBarSettings[classKey]
+	local applied = {}
+
+	local enableState = data.enableResourceFrame
+	if scopeKey == "ALL" then
+		for specIndex, specCfg in pairs(specs) do
+			local idx = tonumber(specIndex)
+			if idx and type(specCfg) == "table" then
+				classConfig[idx] = CopyTable(specCfg)
+				applied[#applied + 1] = idx
+			end
+		end
+		if #applied == 0 then return false, "NO_SPECS" end
+	else
+		local targetIndex = tonumber(scopeKey)
+		if not targetIndex then return false, "NO_SPEC" end
+		local sourceCfg = specs[targetIndex] or specs[tostring(targetIndex)]
+		if type(sourceCfg) ~= "table" then return false, "SPEC_MISMATCH" end
+		classConfig[targetIndex] = CopyTable(sourceCfg)
+		applied[#applied + 1] = targetIndex
+	end
+
+	tsort(applied)
+	return true, applied, enableState
+end
+
+local function exportErrorMessage(reason)
+	if reason == "NO_DATA" or reason == "EMPTY" then return L["ExportProfileEmpty"] or "Nothing to export for this selection." end
+	if reason == "SPEC_EMPTY" then return L["ExportProfileSpecEmpty"] or "The selected specialization has no saved settings yet." end
+	return L["ExportProfileFailed"] or "Could not create an export code."
+end
+
+local function importErrorMessage(reason, extra)
+	if reason == "NO_INPUT" then return L["ImportProfileEmpty"] or "Please enter a code to import." end
+	if reason == "DECODE" or reason == "DECOMPRESS" or reason == "DESERIALIZE" or reason == "WRONG_KIND" then
+		return L["ImportProfileInvalid"] or "The code could not be read."
+	end
+	if reason == "WRONG_CLASS" then
+		local className = extra or UNKNOWN or "Unknown class"
+		return (L["ImportProfileWrongClass"] or "This profile belongs to %s."):format(className)
+	end
+	if reason == "NO_SPECS" then return L["ImportProfileNoSpecs"] or "The code does not contain any Resource Bars settings." end
+	if reason == "SPEC_MISMATCH" or reason == "NO_SPEC" then return L["ImportProfileMissingSpec"] or "The code does not contain settings for that specialization." end
+	if reason == "SPEC_EMPTY" then return L["ImportProfileInvalid"] or "The code could not be read." end
+	return L["ImportProfileFailed"] or "Could not import the Resource Bars profile."
 end
 
 local function rebuildTextureCache()
@@ -711,6 +849,136 @@ function addon.Aura.functions.addResourceFrame(container)
 		groupCore:AddChild(cbElement)
 	end
 
+	local specTabs = {}
+	if addon.variables.unitClassID and GetNumSpecializationsForClassID then
+		for i = 1, (GetNumSpecializationsForClassID(addon.variables.unitClassID) or 0) do
+			local _, specName = GetSpecializationInfoForClassID(addon.variables.unitClassID, i)
+			tinsert(specTabs, { text = specName, value = i })
+		end
+	end
+
+	if #specTabs > 0 then
+		local classKey = addon.variables.unitClass or "UNKNOWN"
+		lastProfileShareScope[classKey] = lastProfileShareScope[classKey] or "ALL"
+
+		local scopeList, scopeOrder = {}, {}
+		scopeList.ALL = L["All specs"] or "All specs"
+		scopeOrder[1] = "ALL"
+		for _, tab in ipairs(specTabs) do
+			local key = tostring(tab.value)
+			scopeList[key] = tab.text
+			scopeOrder[#scopeOrder + 1] = key
+		end
+		if not scopeList[lastProfileShareScope[classKey]] then lastProfileShareScope[classKey] = "ALL" end
+
+		local shareRow = addon.functions.createContainer("SimpleGroup", "Flow")
+		shareRow:SetFullWidth(true)
+		groupCore:AddChild(shareRow)
+
+		local scopeDropdown = addon.functions.createDropdownAce(L["ProfileScope"] or "Apply to", scopeList, scopeOrder, function(_, _, key)
+			lastProfileShareScope[classKey] = key
+		end)
+		scopeDropdown:SetFullWidth(false)
+		scopeDropdown:SetRelativeWidth(0.5)
+		scopeDropdown:SetValue(lastProfileShareScope[classKey])
+		shareRow:AddChild(scopeDropdown)
+
+		local exportBtn = addon.functions.createButtonAce(L["Export"] or "Export", 120, function()
+			local scopeKey = lastProfileShareScope[classKey] or "ALL"
+			local code, reason = exportResourceProfile(scopeKey)
+			if not code then
+				notifyUser(exportErrorMessage(reason))
+				return
+			end
+			StaticPopupDialogs["EQOL_RESOURCEBAR_EXPORT"] = StaticPopupDialogs["EQOL_RESOURCEBAR_EXPORT"]
+				or {
+					text = L["ExportProfileTitle"] or "Export Resource Bars",
+					button1 = CLOSE,
+					hasEditBox = true,
+					editBoxWidth = 320,
+					timeout = 0,
+					whileDead = true,
+					hideOnEscape = true,
+					preferredIndex = 3,
+				}
+			StaticPopupDialogs["EQOL_RESOURCEBAR_EXPORT"].OnShow = function(self)
+				self:SetFrameStrata("TOOLTIP")
+				local editBox = self.editBox or self:GetEditBox()
+				editBox:SetText(code)
+				editBox:HighlightText()
+				editBox:SetFocus()
+			end
+			StaticPopup_Show("EQOL_RESOURCEBAR_EXPORT")
+		end)
+		exportBtn:SetFullWidth(false)
+		exportBtn:SetRelativeWidth(0.25)
+		shareRow:AddChild(exportBtn)
+
+		local importBtn = addon.functions.createButtonAce(L["Import"] or "Import", 120, function()
+			StaticPopupDialogs["EQOL_RESOURCEBAR_IMPORT"] = StaticPopupDialogs["EQOL_RESOURCEBAR_IMPORT"]
+				or {
+					text = L["ImportProfileTitle"] or "Import Resource Bars",
+					button1 = OKAY,
+					button2 = CANCEL,
+					hasEditBox = true,
+					editBoxWidth = 320,
+					timeout = 0,
+					whileDead = true,
+					hideOnEscape = true,
+					preferredIndex = 3,
+				}
+			StaticPopupDialogs["EQOL_RESOURCEBAR_IMPORT"].OnShow = function(self)
+				self:SetFrameStrata("TOOLTIP")
+				local editBox = self.editBox or self:GetEditBox()
+				editBox:SetText("")
+				editBox:SetFocus()
+			end
+			StaticPopupDialogs["EQOL_RESOURCEBAR_IMPORT"].EditBoxOnEnterPressed = function(editBox)
+				local parent = editBox:GetParent()
+				if parent and parent.button1 then parent.button1:Click() end
+			end
+			StaticPopupDialogs["EQOL_RESOURCEBAR_IMPORT"].OnAccept = function(self)
+				local editBox = self.editBox or self:GetEditBox()
+				local input = editBox:GetText() or ""
+				local scopeKey = lastProfileShareScope[classKey] or "ALL"
+				local ok, applied, enableState = importResourceProfile(input, scopeKey)
+				if not ok then
+					notifyUser(importErrorMessage(applied, enableState))
+					return
+				end
+				if enableState ~= nil and scopeKey == "ALL" then
+					local prev = addon.db["enableResourceFrame"]
+					addon.db["enableResourceFrame"] = enableState and true or false
+					if enableState and prev ~= true and addon.Aura.ResourceBars and addon.Aura.ResourceBars.EnableResourceBars then
+						addon.Aura.ResourceBars.EnableResourceBars()
+					elseif not enableState and prev ~= false and addon.Aura.ResourceBars and addon.Aura.ResourceBars.DisableResourceBars then
+						addon.Aura.ResourceBars.DisableResourceBars()
+					end
+				end
+				if applied then
+					for _, specIndex in ipairs(applied) do
+						requestActiveRefresh(specIndex)
+					end
+				end
+				container:ReleaseChildren()
+				addon.Aura.functions.addResourceFrame(container)
+				if applied and #applied > 0 then
+					local specNames = {}
+					for _, specIndex in ipairs(applied) do
+						specNames[#specNames + 1] = specNameByIndex(specIndex) or tostring(specIndex)
+					end
+					notifyUser((L["ImportProfileSuccess"] or "Resource Bars updated for: %s"):format(tconcat(specNames, ", ")))
+				else
+					notifyUser(L["ImportProfileSuccessGeneric"] or "Resource Bars profile imported.")
+				end
+			end
+			StaticPopup_Show("EQOL_RESOURCEBAR_IMPORT")
+		end)
+		importBtn:SetFullWidth(false)
+		importBtn:SetRelativeWidth(0.25)
+		shareRow:AddChild(importBtn)
+	end
+
 	if addon.db["enableResourceFrame"] then
 		-- No global defaults; everything is per-spec and per-bar below
 
@@ -913,12 +1181,6 @@ function addon.Aura.functions.addResourceFrame(container)
 			buildAnchorSub()
 
 			parent:AddChild(addon.functions.createSpacerAce())
-		end
-
-		local specTabs = {}
-		for i = 1, (GetNumSpecializationsForClassID and GetNumSpecializationsForClassID(addon.variables.unitClassID) or 0) do
-			local _, specName = GetSpecializationInfoForClassID(addon.variables.unitClassID, i)
-			tinsert(specTabs, { text = specName, value = i })
 		end
 
 		local tabGroup = addon.functions.createContainer("TabGroup", "Flow")
