@@ -2514,7 +2514,7 @@ function LegionRemix:CreateOverlay()
 	-- content:SetSize(1, 1)
 	-- scrollFrame:SetScrollChild(content)
 
-	frame.collapsedHeight = header:GetHeight() + 20
+	frame.collapsedHeight = header:GetHeight() + 30
 	frame.header = header
 	frame.title = title
 	frame.bronzeText = bronzeText
