@@ -41,7 +41,14 @@ LegionRemix.cachedPhases = nil
 
 local ikName
 local function SetIKName()
-	if nil == ikName then ikName = C_CurrencyInfo.GetCurrencyInfo(3292) and C_CurrencyInfo.GetCurrencyInfo(3292).name end
+	if ikName then return false end
+	local info = C_CurrencyInfo.GetCurrencyInfo(3292)
+	local name = info and info.name
+	if name and name ~= "" then
+		ikName = name
+		return true
+	end
+	return false
 end
 
 function LegionRemix:GetAllPhases()
@@ -480,7 +487,161 @@ local CATEGORY_DATA = {
 			{
 				type = "bronze_achievement",
 				cost = 0,
-				items = {},
+				items = {
+					42312,
+					42502,
+					42503,
+					42516,
+					42518,
+					42517,
+					42515,
+					60809,
+					60810,
+					60811,
+					42594,
+					60815,
+					60803,
+					60804,
+					60805,
+					42642,
+					60818,
+					60816,
+					42567,
+					60806,
+					60807,
+					60808,
+					42590,
+					61103,
+					61106,
+					61104,
+					61105,
+					61107,
+					42593,
+					42318,
+					42619,
+					42547,
+					42658,
+					42628,
+					61218,
+					42655,
+					42627,
+					60846,
+					60847,
+					60848,
+					60834,
+					60835,
+					60836,
+					60843,
+					60844,
+					60845,
+					60837,
+					60838,
+					60839,
+					60819,
+					60820,
+					60821,
+					60831,
+					60832,
+					60833,
+					60828,
+					60829,
+					60830,
+					60825,
+					60826,
+					60827,
+					60840,
+					60841,
+					60842,
+					60822,
+					60823,
+					60824,
+					42692,
+					60849,
+					60851,
+					60853,
+					42615,
+					42689,
+					60856,
+					60857,
+					60858,
+					42603,
+					42531,
+					42651,
+					42558,
+					42639,
+					42636,
+					60861,
+					60862,
+					60863,
+					60864,
+					42553,
+					42543,
+					42544,
+					60866,
+					60867,
+					60868,
+					60869,
+					42649,
+					42661,
+					42576,
+					60871,
+					60872,
+					60873,
+					60874,
+					42554,
+					42664,
+					42321,
+					42519,
+					42663,
+					42533,
+					42578,
+					42551,
+					42540,
+					42618,
+					42559,
+					42526,
+					42542,
+					42614,
+					42529,
+					42527,
+					42637,
+					42536,
+					42659,
+					42610,
+					42669,
+					42662,
+					42643,
+					42629,
+					42530,
+					42581,
+					42574,
+					42538,
+					42604,
+					42616,
+					42534,
+					42624,
+					42539,
+					42570,
+					42674,
+					42675,
+					42694,
+					42695,
+					42698,
+					42699,
+					61057,
+					61056,
+					61054,
+					61059,
+					61058,
+					61071,
+					61323,
+					61061,
+					61060,
+					61055,
+					61072,
+					61174,
+					42565,
+				},
 			},
 		},
 	},
@@ -624,6 +785,45 @@ local CATEGORY_DATA = {
 		},
 	},
 }
+
+local categoryDataSorted = false
+
+local function applyDynamicCategoryLabels()
+	local updated = false
+	if ikName and ikName ~= "" then
+		for _, category in ipairs(CATEGORY_DATA) do
+			if category.key == "infinity_knowledge" and category.label ~= ikName then
+				category.label = ikName
+				updated = true
+				break
+			end
+		end
+	end
+	return updated
+end
+
+local function normalizeCategoryLabel(label)
+	if type(label) == "string" then return label end
+	if label == nil then return "" end
+	return tostring(label)
+end
+
+local function sortCategoryData(force)
+	if categoryDataSorted and not force then return end
+	table.sort(CATEGORY_DATA, function(a, b)
+		local labelA = normalizeCategoryLabel(a and a.label)
+		local labelB = normalizeCategoryLabel(b and b.label)
+		local lowerA = string.lower(labelA)
+		local lowerB = string.lower(labelB)
+		if lowerA == lowerB then
+			local keyA = a and a.key or ""
+			local keyB = b and b.key or ""
+			return keyA < keyB
+		end
+		return lowerA < lowerB
+	end)
+	categoryDataSorted = true
+end
 
 local CATEGORY_PHASE_KIND_OVERRIDES = {
 	rare_appearance = "rare_appearance",
@@ -1568,8 +1768,15 @@ end
 
 function LegionRemix:UpdateActivationState()
 	if not addon or not addon.db then return end
+
+	local nameChanged = SetIKName()
+	local labelsUpdated = applyDynamicCategoryLabels()
+	local shouldResort = nameChanged or labelsUpdated or not categoryDataSorted
+	if shouldResort then sortCategoryData(true) end
+
 	local db = self:GetDB()
 	local shouldActivate = self:IsActive(db)
+
 	if shouldActivate then
 		if not self.eventsRegistered then self:RegisterEvents() end
 		if not self.active then
@@ -1578,9 +1785,12 @@ function LegionRemix:UpdateActivationState()
 			self.playerClass = nil
 			self:RefreshData()
 		else
-			self:UpdateOverlay()
+			if nameChanged or labelsUpdated then
+				self:RefreshData()
+			else
+				self:UpdateOverlay()
+			end
 		end
-		SetIKName()
 	else
 		if self.eventsRegistered then self:UnregisterEvents() end
 		if self.active then self.active = false end
@@ -2611,7 +2821,17 @@ for _, eventName in ipairs(activationEvents) do
 end
 
 activationWatcher:SetScript("OnEvent", function(_, event, ...)
-	if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
+	if event == "PLAYER_LOGIN" then
+		SetIKName()
+		applyDynamicCategoryLabels()
+		sortCategoryData(true)
+		LegionRemix:UpdateActivationState()
+		return
+	end
+	if event == "PLAYER_ENTERING_WORLD" then
+		local nameChanged = SetIKName()
+		local labelsUpdated = applyDynamicCategoryLabels()
+		if nameChanged or labelsUpdated or not categoryDataSorted then sortCategoryData(true) end
 		LegionRemix:UpdateActivationState()
 		return
 	end
