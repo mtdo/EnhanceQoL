@@ -20,7 +20,6 @@ end
 
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_DrinkMacro")
 local LSM = LibStub("LibSharedMedia-3.0")
-local DEFAULT_SOUND_SENTINEL = "__DEFAULT_SOUND__"
 
 local function createMacroIfMissing()
 	-- Respect enable toggle and guard against protected calls while in combat lockdown
@@ -256,97 +255,24 @@ local function addDrinkFrame(container)
 	end
 
 	local function buildReminder()
-		local g, known = ensureGroup("reminder", L["MageFoodReminderHeadline"] or "Mage food reminder for Healer")
+	local g, known = ensureGroup("reminder", L["MageFoodReminderHeadline"] or "Mage food reminder for Healer")
 
-		local cbReminder = addon.functions.createCheckboxAce(L["mageFoodReminder"], addon.db.mageFoodReminder, function(_, _, v)
-			addon.db.mageFoodReminder = v
-			addon.Drinks.functions.updateRole()
-			buildReminder()
-		end, L["mageFoodReminderDesc2"])
-		g:AddChild(cbReminder)
+	local cbReminder = addon.functions.createCheckboxAce(L["mageFoodReminder"], addon.db.mageFoodReminder, function(_, _, v)
+		addon.db.mageFoodReminder = v
+		addon.Drinks.functions.updateRole()
+		buildReminder()
+	end, L["mageFoodReminderDesc2"])
+	g:AddChild(cbReminder)
 
-	if addon.db.mageFoodReminder then
-		if addon.ChatIM and addon.ChatIM.BuildSoundTable and not addon.ChatIM.availableSounds then addon.ChatIM:BuildSoundTable() end
-		local availableSounds = (addon.ChatIM and addon.ChatIM.availableSounds) or (LSM and LSM:HashTable("sound"))
-		local soundOptions, soundOrder = {}, {}
-		soundOptions[""] = NONE or (L["None"] or "None")
-		soundOrder[#soundOrder + 1] = ""
-		soundOptions[DEFAULT_SOUND_SENTINEL] = L["mageFoodReminderDefaultSound"] or DEFAULT
-		soundOrder[#soundOrder + 1] = DEFAULT_SOUND_SENTINEL
-		if availableSounds then
-			local names = {}
-			for name in pairs(availableSounds) do names[#names + 1] = name end
-			table.sort(names)
-			for _, name in ipairs(names) do
-				soundOptions[name] = name
-				soundOrder[#soundOrder + 1] = name
-			end
-		end
+	local hint = addon.functions.createLabelAce(L["mageFoodReminderEditModeHint"] or "Configure details in Edit Mode.")
+	hint:SetFullWidth(true)
+	g:AddChild(hint)
 
-		local function applySoundSelection(dbKey, value)
-			if value == DEFAULT_SOUND_SENTINEL then
-				addon.db[dbKey] = nil
-				PlaySound(SOUNDKIT.RAID_WARNING)
-			elseif value == "" then
-				addon.db[dbKey] = ""
-			else
-				addon.db[dbKey] = value
-				local file = availableSounds and availableSounds[value]
-				if file then PlaySoundFile(file, "Master") end
-			end
-			addon.Drinks.functions.updateRole()
-		end
-
-		local dropJoin = addon.functions.createDropdownAce(L["mageFoodReminderJoinSound"], soundOptions, soundOrder, function(widget, _, val)
-			applySoundSelection("mageFoodReminderJoinSoundFile", val)
-			widget:SetValue(val)
-		end)
-		local joinVal = addon.db.mageFoodReminderJoinSoundFile
-		dropJoin:SetValue(joinVal == nil and DEFAULT_SOUND_SENTINEL or joinVal)
-		g:AddChild(dropJoin)
-
-		local dropLeave = addon.functions.createDropdownAce(L["mageFoodReminderLeaveSound"], soundOptions, soundOrder, function(widget, _, val)
-			applySoundSelection("mageFoodReminderLeaveSoundFile", val)
-			widget:SetValue(val)
-		end)
-		local leaveVal = addon.db.mageFoodReminderLeaveSoundFile
-		dropLeave:SetValue(leaveVal == nil and DEFAULT_SOUND_SENTINEL or leaveVal)
-		g:AddChild(dropLeave)
-
-		local scale = addon.db.mageFoodReminderScale or 1
-		scale = tonumber(string.format("%.2f", scale))
-		local sliderReminderSize = addon.functions.createSliderAce(
-			L["mageFoodReminderSize"] .. ": " .. string.format("%.2f", scale),
-			scale,
-			0.1,
-			2.0,
-			0.05,
-			function(self, _, v)
-				v = tonumber(v) or scale
-				v = math.floor(v / 0.05 + 0.5) * 0.05
-				if v < 0.1 then v = 0.1 elseif v > 2.0 then v = 2.0 end
-				v = tonumber(string.format("%.2f", v))
-				addon.db.mageFoodReminderScale = v
-				addon.Drinks.functions.updateRole()
-				self:SetLabel(L["mageFoodReminderSize"] .. ": " .. string.format("%.2f", v))
-			end
-		)
-		g:AddChild(sliderReminderSize)
-
-		local resetReminderPos = addon.functions.createButtonAce(L["mageFoodReminderReset"], 150, function()
-			addon.db.mageFoodReminderPos = { point = "TOP", x = 0, y = -100 }
-			addon.db.mageFoodReminderScale = 1
-			addon.Drinks.functions.updateRole()
-			buildReminder()
-		end)
-		g:AddChild(resetReminderPos)
+	if known then
+		g:ResumeLayout()
+		doLayout()
 	end
-
-		if known then
-			g:ResumeLayout()
-			doLayout()
-		end
-	end
+end
 
 	local function buildHealth()
 		local g, known = ensureGroup("health", L["Health Macro"])

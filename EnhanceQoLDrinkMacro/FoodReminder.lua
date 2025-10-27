@@ -115,7 +115,9 @@ local function ensureAnchor()
 	anchor:ClearAllPoints()
 	anchor:SetPoint(pos.point or defaultPos.point, UIParent, pos.point or defaultPos.point, pos.x or defaultPos.x, pos.y or defaultPos.y)
 	local scale = addon.db["mageFoodReminderScale"] or 1
+	scale = math.floor(scale / 0.05 + 0.5) * 0.05
 	if scale < 0.1 then scale = 0.1 elseif scale > 2.0 then scale = 2.0 end
+	scale = tonumber(string.format("%.2f", scale))
 	anchor:SetScale(scale)
 	addon.db["mageFoodReminderScale"] = scale
 	anchor:Hide()
@@ -255,7 +257,7 @@ end
 local function createBRFrame()
 	removeBRFrame()
 	local anchor = ensureAnchor()
-	brButton = CreateFrame("Button", nil, anchor)
+	brButton = CreateFrame("Button", "EQOLMFButton", UIParent)
 	brButton:SetAllPoints(anchor)
 	brButton:SetFrameStrata("HIGH")
 	brButton:SetScript("OnClick", function()
@@ -495,6 +497,11 @@ registerEditModeFrame = function()
 				value = tonumber(string.format("%.2f", value))
 				addon.db.mageFoodReminderScale = value
 				applyButtonSettings()
+			end,
+			formatter = function(value)
+				value = math.floor(value / 0.05 + 0.5) * 0.05
+				if value < 0.1 then value = 0.1 elseif value > 2.0 then value = 2.0 end
+				return string.format("%.2f", value)
 			end,
 		}
 	end

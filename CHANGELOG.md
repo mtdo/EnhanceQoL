@@ -12,13 +12,14 @@
   - Overlay frame strata can now be adjusted, and a gear button beside collapse opens the Legion Remix options directly.
 - Edit Mode data panels can now pick their frame strata per panel for finer layering control.
 - Data Panels now have an Edit Mode delete button with a confirmation prompt for faster cleanup.
-- Food Reminder now appears in Edit Mode with slider, dropdown, and checkbox settings for quick tuning.
-- Simplified Food Reminder sound selection to a single dropdown with None/Default/custom choices.
+- Food Reminder now appears in Edit Mode with slider and dropdown settings for quick tuning.
 - Tooltip: target context menu can now copy NPC Wowhead links (toggle in Tooltip → Unit → NPCs).
 
 ### 🔄 Changed
 
 - Removed the old options dropdown for deleting Data Panels; use the Edit Mode button instead.
+- Food Reminder options panel now only offers an enable toggle; detailed settings live in Edit Mode.
+- Simplified Food Reminder sound selection to a single dropdown with None/Default/custom choices.
 - Tooltip → Unit options are now grouped into Player/NPC inline sections with a Player detail multiselect and dedicated modifier settings, keeping the panel compact.
 
 ### 🐛 Fixed
