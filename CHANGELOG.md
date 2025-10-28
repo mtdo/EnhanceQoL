@@ -15,7 +15,7 @@
 - Food Reminder now appears in Edit Mode with slider and dropdown settings for quick tuning.
 - Tooltip: target context menu can now copy NPC Wowhead links (toggle in Tooltip → Unit → NPCs).
 - Chat Frame option to show loot and currency icons alongside their chat links (disabled by default).
-- Encounter Journal loot spec overlay now adds per-loot specialization icons in the Dungeon Journal (Map & Navigation -> Encounter Journal loot spec icons).
+- Encounter Journal loot spec overlay now adds per-loot specialization icons with configuration under Interface → EnhanceQoL → Items & Inventory → Loot.
 
 ### 🔄 Changed
 
