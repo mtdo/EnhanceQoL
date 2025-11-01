@@ -7,7 +7,6 @@
 - Loot → _Group loot roll frames_ section with an enable toggle and live scale slider for the new anchor system.
 - Social → _Friends list enhancements_ panel to toggle the decorator and adjust location visibility, home-realm hiding, and name font size.
 - Action Bar → _Button growth_ controls that let you enable custom anchors per bar and choose growth directions from a compact dropdown grid.
-- Friends list decorator on the friends panel with class-coloured names, faction badges, status/game icon tweaks, and Real ID display (toggleable via module API)
 
 ### 🐛 Fixed
 

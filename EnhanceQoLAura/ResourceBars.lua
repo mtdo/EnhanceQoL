@@ -54,6 +54,9 @@ local forceColorUpdate
 local lastBarSelectionPerSpec = {}
 local lastSpecCopySelection = {}
 local lastProfileShareScope = {}
+local lastSpecCopyMode = {}
+local lastSpecCopyBar = {}
+local lastSpecCopyCosmetic = {}
 local RESOURCE_SHARE_KIND = "EQOL_RESOURCE_BAR_PROFILE"
 local DEFAULT_STACK_SPACING = 0
 local SEPARATOR_THICKNESS = 1
@@ -69,6 +72,31 @@ local REANCHOR_REFRESH = { reanchorOnly = true }
 local tryActivateSmooth
 local requestActiveRefresh
 local getStatusbarDropdownLists
+local COSMETIC_BAR_KEYS = {
+	"barTexture",
+	"width",
+	"height",
+	"textStyle",
+	"fontSize",
+	"fontFace",
+	"fontOutline",
+	"fontColor",
+	"textOffset",
+	"useBarColor",
+	"barColor",
+	"useMaxColor",
+	"maxColor",
+	"reverseFill",
+	"verticalFill",
+	"smoothFill",
+	"smoothDeadzone",
+	"showSeparator",
+	"separatorColor",
+	"separatorThickness",
+	"showCooldownText",
+	"cooldownTextFontSize",
+	"backdrop",
+}
 
 local function getPowerBarColor(type)
 	local colorTable = PowerBarColor
@@ -199,6 +227,18 @@ local function cloneArray(src)
 		dest[i] = src[i]
 	end
 	return dest
+end
+
+local function copyCosmeticBarSettings(source, dest)
+	if not source or not dest then return end
+	for _, key in ipairs(COSMETIC_BAR_KEYS) do
+		local value = source[key]
+		if type(value) == "table" then
+			dest[key] = CopyTable(value)
+		else
+			dest[key] = value
+		end
+	end
 end
 
 local function trim(str)
@@ -1264,6 +1304,7 @@ function addon.Aura.functions.addResourceFrame(container)
 					smoothFill = false,
 					anchor = {},
 				}
+			local specKey = tostring(specIndex)
 			local function fontDropdownData()
 				local map = {
 					[addon.variables.defaultFont] = L["Default"] or "Default",
@@ -1651,6 +1692,20 @@ function addon.Aura.functions.addResourceFrame(container)
 			end
 
 			-- Copy configuration from another specialization
+			local copyBarList, copyBarOrder = {}, {}
+			local function registerCopyBar(pType)
+				if not pType or copyBarList[pType] then return end
+				copyBarList[pType] = displayNameForBarType and displayNameForBarType(pType) or (_G["POWER_TYPE_" .. pType] or _G[pType] or pType)
+				copyBarOrder[#copyBarOrder + 1] = pType
+			end
+			registerCopyBar("HEALTH")
+			for _, pType in ipairs(addon.Aura.ResourceBars.classPowerTypes) do
+				if available[pType] then registerCopyBar(pType) end
+			end
+			if not lastSpecCopyMode[specKey] then lastSpecCopyMode[specKey] = "ALL" end
+			if #copyBarOrder > 0 and (not lastSpecCopyBar[specKey] or not copyBarList[lastSpecCopyBar[specKey]]) then lastSpecCopyBar[specKey] = copyBarOrder[1] end
+			if lastSpecCopyCosmetic[specKey] == nil then lastSpecCopyCosmetic[specKey] = false end
+
 			local copyGroup = addon.functions.createContainer("InlineGroup", "Flow")
 			copyGroup:SetTitle(L["Copy settings"] or "Copy settings")
 			copyGroup:SetFullWidth(true)
@@ -1672,26 +1727,75 @@ function addon.Aura.functions.addResourceFrame(container)
 				noSpecs:SetFullWidth(true)
 				copyGroup:AddChild(noSpecs)
 			else
-				local copyKey = tostring(specIndex)
-				if not lastSpecCopySelection[copyKey] or not copyList[lastSpecCopySelection[copyKey]] then lastSpecCopySelection[copyKey] = copyOrder[1] end
-
+				if not lastSpecCopySelection[specKey] or not copyList[lastSpecCopySelection[specKey]] then lastSpecCopySelection[specKey] = copyOrder[1] end
+				local dropBar
+				local function updateDropBarState()
+					if not dropBar then return end
+					local mode = lastSpecCopyMode[specKey] or "ALL"
+					dropBar:SetDisabled(mode ~= "BAR" or #copyBarOrder == 0)
+				end
 				local copyRow = addon.functions.createContainer("SimpleGroup", "Flow")
 				copyRow:SetFullWidth(true)
 				copyGroup:AddChild(copyRow)
 
-				local dropCopy = addon.functions.createDropdownAce(L["Copy from spec"] or "Copy from specialization", copyList, copyOrder, function(_, _, key) lastSpecCopySelection[copyKey] = key end)
+				local dropCopy = addon.functions.createDropdownAce(L["Copy from spec"] or "Copy from specialization", copyList, copyOrder, function(_, _, key) lastSpecCopySelection[specKey] = key end)
 				dropCopy:SetFullWidth(false)
-				dropCopy:SetRelativeWidth(0.7)
-				dropCopy:SetValue(lastSpecCopySelection[copyKey])
+				dropCopy:SetRelativeWidth(0.45)
+				dropCopy:SetValue(lastSpecCopySelection[specKey])
 				copyRow:AddChild(dropCopy)
 
+				local scopeList = {
+					ALL = L["All bars"] or "All bars",
+					BAR = L["Selected bar only"] or "Selected bar only",
+				}
+				local scopeOrder = { "ALL", "BAR" }
+				local dropScope = addon.functions.createDropdownAce(L["Copy scope"] or "Copy scope", scopeList, scopeOrder, function(_, _, key)
+					lastSpecCopyMode[specKey] = key
+					updateDropBarState()
+				end)
+				dropScope:SetFullWidth(false)
+				dropScope:SetRelativeWidth(0.25)
+				dropScope:SetValue(lastSpecCopyMode[specKey] or "ALL")
+				copyRow:AddChild(dropScope)
+
 				local copyButton = addon.functions.createButtonAce(L["Copy"] or "Copy", 120, function()
-					local selected = lastSpecCopySelection[copyKey]
+					local selected = lastSpecCopySelection[specKey]
 					local fromSpec = selected and tonumber(selected)
 					if not classConfig or not fromSpec or fromSpec == specIndex then return end
 					local sourceSettings = classConfig[fromSpec]
 					if not sourceSettings then return end
-					classConfig[specIndex] = CopyTable(sourceSettings)
+					classConfig[specIndex] = classConfig[specIndex] or {}
+					local destSpec = classConfig[specIndex]
+					local mode = lastSpecCopyMode[specKey] or "ALL"
+					local cosmeticOnly = lastSpecCopyCosmetic[specKey] == true
+					if mode == "ALL" then
+						if cosmeticOnly then
+							for _, barType in ipairs(copyBarOrder) do
+								local srcBar = sourceSettings[barType]
+								if type(srcBar) == "table" then
+									destSpec[barType] = destSpec[barType] or {}
+									copyCosmeticBarSettings(srcBar, destSpec[barType])
+								end
+							end
+						else
+							classConfig[specIndex] = CopyTable(sourceSettings)
+							destSpec = classConfig[specIndex]
+						end
+					else
+						local barType = lastSpecCopyBar[specKey]
+						if not barType or not copyBarList[barType] then return end
+						local srcBar = sourceSettings[barType]
+						if type(srcBar) ~= "table" then
+							notifyUser(L["Copy settings missing bar"] or "The selected specialization has no saved settings for that bar.")
+							return
+						end
+						destSpec[barType] = destSpec[barType] or {}
+						if cosmeticOnly then
+							copyCosmeticBarSettings(srcBar, destSpec[barType])
+						else
+							destSpec[barType] = CopyTable(srcBar)
+						end
+					end
 					requestActiveRefresh(specIndex)
 					buildSpec(container, specIndex)
 				end)
@@ -1699,7 +1803,24 @@ function addon.Aura.functions.addResourceFrame(container)
 				copyButton:SetRelativeWidth(0.3)
 				copyRow:AddChild(copyButton)
 
-				local info = addon.functions.createLabelAce(L["Copy settings info"] or "Copies all bar settings from the selected specialization.")
+				local optionsRow = addon.functions.createContainer("SimpleGroup", "Flow")
+				optionsRow:SetFullWidth(true)
+				copyGroup:AddChild(optionsRow)
+
+				dropBar = addon.functions.createDropdownAce(L["Bar to copy"] or "Bar to copy", copyBarList, copyBarOrder, function(_, _, key) lastSpecCopyBar[specKey] = key end)
+				dropBar:SetFullWidth(false)
+				dropBar:SetRelativeWidth(0.6)
+				if lastSpecCopyBar[specKey] then dropBar:SetValue(lastSpecCopyBar[specKey]) end
+				optionsRow:AddChild(dropBar)
+
+				local cbCosmetic = addon.functions.createCheckboxAce(L["Appearance only"] or "Appearance only", lastSpecCopyCosmetic[specKey] == true, function(_, _, val) lastSpecCopyCosmetic[specKey] = val and true or false end)
+				cbCosmetic:SetFullWidth(false)
+				cbCosmetic:SetRelativeWidth(0.4)
+				optionsRow:AddChild(cbCosmetic)
+
+				updateDropBarState()
+
+				local info = addon.functions.createLabelAce(L["Copy settings info"] or "Copies settings from the selected specialization. Use scope and appearance options above to control what is copied.")
 				info:SetFullWidth(true)
 				copyGroup:AddChild(info)
 			end
@@ -1720,7 +1841,6 @@ function addon.Aura.functions.addResourceFrame(container)
 				end
 			end
 
-			local specKey = tostring(specIndex)
 			if not lastBarSelectionPerSpec[specKey] or not cfgList[lastBarSelectionPerSpec[specKey]] then
 				lastBarSelectionPerSpec[specKey] = (specInfo.MAIN and cfgList[specInfo.MAIN]) and specInfo.MAIN or (cfgList.HEALTH and "HEALTH" or next(cfgList))
 			end

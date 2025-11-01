@@ -1202,11 +1202,7 @@ function LegionRemix:RegisterEditModeFrame()
 			maxValue = 1.6,
 			valueStep = 0.05,
 			get = function() return self:GetOverlayScale() end,
-			set = function(_, value)
-				self.applyingEditMode = true
-				self:SetOverlayScale(value)
-				self.applyingEditMode = nil
-			end,
+			set = function(_, value) self:SetOverlayScale(value) end,
 			formatter = function(value)
 				value = tonumber(value) or defaults.scale or 1
 				value = math.floor((value / 0.05) + 0.5) * 0.05
@@ -1226,11 +1222,7 @@ function LegionRemix:RegisterEditModeFrame()
 			default = defaults.strata,
 			values = STRATA_VALUES,
 			get = function() return self:GetOverlayStrata() end,
-			set = function(_, value)
-				self.applyingEditMode = true
-				self:SetOverlayStrata(value)
-				self.applyingEditMode = nil
-			end,
+			set = function(_, value) self:SetOverlayStrata(value) end,
 		}
 
 		local zoneOrder = self:GetZoneFilterOrder()
@@ -1261,11 +1253,7 @@ function LegionRemix:RegisterEditModeFrame()
 			field = "hideComplete",
 			default = defaults.hideComplete,
 			get = function() return self:IsHidingCompleteCategories() end,
-			set = function(_, value)
-				self.applyingEditMode = true
-				self:SetHideCompleteCategories(value)
-				self.applyingEditMode = nil
-			end,
+			set = function(_, value) self:SetHideCompleteCategories(value) end,
 		}
 
 		settings[#settings + 1] = {
@@ -1274,11 +1262,7 @@ function LegionRemix:RegisterEditModeFrame()
 			field = "collapsed",
 			default = defaults.collapsed,
 			get = function() return self:IsCollapsed() end,
-			set = function(_, value)
-				self.applyingEditMode = true
-				self:SetCollapsed(value)
-				self.applyingEditMode = nil
-			end,
+			set = function(_, value) self:SetCollapsed(value) end,
 		}
 
 		settings[#settings + 1] = {
@@ -1287,11 +1271,7 @@ function LegionRemix:RegisterEditModeFrame()
 			field = "classOnly",
 			default = defaults.classOnly,
 			get = function() return self:IsClassOnly() end,
-			set = function(_, value)
-				self.applyingEditMode = true
-				self:SetClassOnly(value)
-				self.applyingEditMode = nil
-			end,
+			set = function(_, value) self:SetClassOnly(value) end,
 		}
 
 		settings[#settings + 1] = {
@@ -1300,11 +1280,7 @@ function LegionRemix:RegisterEditModeFrame()
 			field = "enhancedTracking",
 			default = defaults.enhancedTracking,
 			get = function() return self:IsEnhancedTrackingEnabled() end,
-			set = function(_, value)
-				self.applyingEditMode = true
-				self:SetEnhancedTracking(value)
-				self.applyingEditMode = nil
-			end,
+			set = function(_, value) self:SetEnhancedTracking(value) end,
 		}
 
 		local categoryOrder = self:GetCategoryOrder()
@@ -1344,14 +1320,14 @@ function LegionRemix:RegisterEditModeFrame()
 	self.editModeRegistered = true
 	self.editModeId = id
 	self:SyncEditModePosition()
-	self:SyncEditModeValue("scale", defaults.scale)
-	self:SyncEditModeValue("strata", defaults.strata)
-	self:SyncEditModeValue("hideComplete", defaults.hideComplete)
-	self:SyncEditModeValue("zoneFilters", CopyTable(defaults.zoneFilters or {}))
-	self:SyncEditModeValue("visibleCategories", CopyTable(defaults.visibleCategories or {}))
-	self:SyncEditModeValue("collapsed", defaults.collapsed)
-	self:SyncEditModeValue("classOnly", defaults.classOnly)
-	self:SyncEditModeValue("enhancedTracking", defaults.enhancedTracking)
+	self:SyncEditModeValue("scale", self:GetOverlayScale())
+	self:SyncEditModeValue("strata", self:GetOverlayStrata())
+	self:SyncEditModeValue("hideComplete", self:IsHidingCompleteCategories())
+	self:SyncEditModeValue("zoneFilters", CopyTable(self:GetZoneFilterSelection()))
+	self:SyncEditModeValue("visibleCategories", CopyTable(self:GetVisibleCategoryKeys()))
+	self:SyncEditModeValue("collapsed", self:IsCollapsed())
+	self:SyncEditModeValue("classOnly", self:IsClassOnly())
+	self:SyncEditModeValue("enhancedTracking", self:IsEnhancedTrackingEnabled())
 	self:UpdateOverlay()
 end
 
@@ -2246,6 +2222,7 @@ function LegionRemix:UpdateActivationState()
 	local shouldActivate = self:IsActive(db)
 
 	if shouldActivate then
+		self:RegisterEditModeFrame()
 		if not self.eventsRegistered then self:RegisterEvents() end
 		if not self.active then
 			self.active = true
