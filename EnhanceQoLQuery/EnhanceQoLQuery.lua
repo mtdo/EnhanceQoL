@@ -51,6 +51,9 @@ local function scheduleProfilerReset()
 		if type(SlashCmdList) ~= "table" then return end
 		local handler = SlashCmdList["NUMY_ADDON_PROFILER"]
 		if type(handler) == "function" then handler("reset") end
+		if NumyAddonProfilerFrameSearchBox then
+			NumyAddonProfilerFrameSearchBox:SetText("EnhanceQoL")
+		end
 	end)
 end
 

@@ -13,6 +13,7 @@ local sellMoreButton
 local hasMoreItems = false
 local sellMarkLookup = {}
 local destroyMarkLookup = {}
+local applySellDestroyOverlaysToFrame
 local updateSellMarks
 local updateDestroyUI
 local updateDestroyButtonState
@@ -75,7 +76,7 @@ local pendingDestroyButtonUpdate = false
 local function scheduleDestroyButtonUpdate()
 	if pendingDestroyButtonUpdate then return end
 	pendingDestroyButtonUpdate = true
-	C_Timer.After(0.05, function()
+	C_Timer.After(0.1, function()
 		pendingDestroyButtonUpdate = false
 		updateDestroyButtonState()
 	end)
@@ -206,43 +207,6 @@ local function removeDestroyItem(itemID)
 	updateSellMarks(nil, true)
 end
 
-local function ensureDestroyButton()
-	if destroyState.list and destroyState.list:IsObjectType("Frame") then return destroyState.list end
-	if InCombatLockdown and InCombatLockdown() then return nil end
-	local button = destroyState.button
-	if not button then return nil end
-
-	local frame = CreateFrame("Frame", addonName .. "_DestroyList", button, "BackdropTemplate")
-	frame:SetFrameStrata("DIALOG")
-	frame:SetBackdrop({
-		bgFile = "Interface\\Buttons\\WHITE8x8",
-		edgeFile = "Interface\\Buttons\\WHITE8x8",
-		edgeSize = 1,
-	})
-	frame:SetBackdropColor(0, 0, 0, 0.85)
-	frame:SetBackdropBorderColor(0.9, 0.2, 0.2, 1)
-	frame:SetSize(220, 40)
-	frame:EnableMouse(true)
-	frame:SetScript("OnLeave", function()
-		C_Timer.After(0.05, function()
-			if destroyState.button and destroyState.button:IsMouseOver() then return end
-			if frame:IsMouseOver() then return end
-			frame:Hide()
-		end)
-	end)
-	destroyState.list = frame
-	destroyState.rows = {}
-
-	local emptyLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	emptyLabel:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -8)
-	emptyLabel:SetWidth(200)
-	emptyLabel:SetJustifyH("LEFT")
-	emptyLabel:SetText(L["vendorDestroyListEmpty"])
-	frame.emptyLabel = emptyLabel
-
-	return frame
-end
-
 local function destroyRefreshList()
 	local listFrame = ensureDestroyListFrame()
 	if not listFrame then return end
@@ -307,6 +271,81 @@ end
 
 local function destroyHideList()
 	if destroyState.list and destroyState.list:IsShown() then destroyState.list:Hide() end
+end
+
+local function applySellDestroyOverlaysToFrame(frame)
+	if not frame or not frame:IsShown() then return end
+	local overlaySell = addon.db["vendorShowSellOverlay"]
+	local overlayDestroy = addon.db["vendorDestroyEnable"] and addon.db["vendorShowDestroyOverlay"]
+
+	for _, itemButton in frame:EnumerateValidItems() do
+		local bag = itemButton:GetBagID()
+		local slot = itemButton:GetID()
+		local key = bag .. "_" .. slot
+		local isDestroy = destroyMarkLookup[key]
+		local showSell = overlaySell and sellMarkLookup[key] and not isDestroy
+		local showDestroy = overlayDestroy and isDestroy
+
+		if showSell then
+			if not itemButton.ItemMarkSell then
+				itemButton.ItemMarkSell = itemButton:CreateTexture(nil, "OVERLAY", nil, 7)
+				itemButton.ItemMarkSell:SetTexture("Interface\\buttons\\ui-grouploot-coin-up")
+				itemButton.ItemMarkSell:SetSize(16, 16)
+				itemButton.ItemMarkSell:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 0, -1)
+				itemButton.SellOverlay = itemButton:CreateTexture(nil, "OVERLAY", nil, 6)
+				itemButton.SellOverlay:SetAllPoints()
+				itemButton.SellOverlay:SetColorTexture(1, 0, 0, 0.45)
+			end
+			itemButton.ItemMarkSell:Show()
+			if addon.db["vendorShowSellHighContrast"] then
+				itemButton.SellOverlay:Show()
+			else
+				itemButton.SellOverlay:Hide()
+			end
+			if not itemButton.matchesSearch then
+				itemButton.ItemMarkSell:SetAlpha(0.1)
+				itemButton.SellOverlay:Hide()
+			else
+				if addon.db["vendorShowSellHighContrast"] then itemButton.SellOverlay:Show() end
+				itemButton.ItemMarkSell:SetAlpha(1)
+			end
+		elseif itemButton.ItemMarkSell then
+			itemButton.ItemMarkSell:Hide()
+			itemButton.SellOverlay:Hide()
+		end
+
+		if showDestroy then
+			if not itemButton.ItemMarkDestroy then
+				itemButton.ItemMarkDestroy = itemButton:CreateTexture(nil, "OVERLAY", nil, 7)
+				itemButton.ItemMarkDestroy:SetTexture("Interface\\Buttons\\UI-GroupLoot-DE-Up")
+				itemButton.ItemMarkDestroy:SetSize(16, 16)
+				itemButton.ItemMarkDestroy:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 0, -1)
+				itemButton.DestroyOverlay = itemButton:CreateTexture(nil, "OVERLAY", nil, 6)
+				itemButton.DestroyOverlay:SetAllPoints()
+				itemButton.DestroyOverlay:SetColorTexture(0.85, 0.1, 0.1, 0.45)
+			end
+			itemButton.ItemMarkDestroy:Show()
+			if addon.db["vendorShowSellHighContrast"] and itemButton.DestroyOverlay then
+				itemButton.DestroyOverlay:Show()
+			elseif itemButton.DestroyOverlay then
+				itemButton.DestroyOverlay:Hide()
+			end
+			if not itemButton.matchesSearch then
+				itemButton.ItemMarkDestroy:SetAlpha(0.1)
+				if itemButton.DestroyOverlay then itemButton.DestroyOverlay:Hide() end
+			else
+				itemButton.ItemMarkDestroy:SetAlpha(1)
+				if addon.db["vendorShowSellHighContrast"] and itemButton.DestroyOverlay then itemButton.DestroyOverlay:Show() end
+			end
+			if itemButton.ItemMarkSell then
+				itemButton.ItemMarkSell:Hide()
+				itemButton.SellOverlay:Hide()
+			end
+		elseif itemButton.ItemMarkDestroy then
+			itemButton.ItemMarkDestroy:Hide()
+			if itemButton.DestroyOverlay then itemButton.DestroyOverlay:Hide() end
+		end
+	end
 end
 
 local function setDestroyButtonVisibility(button, visible)
@@ -458,7 +497,7 @@ updateDestroyButtonState = function()
 		destroyState.pendingQueue = nil
 	end
 
-	if not addon.db["vendorDestroyEnable"] then
+	if not addon.db["vendorDestroyEnable"] or not inventoryOpen() then
 		if destroyState.button then setDestroyButtonVisibility(destroyState.button, false) end
 		destroyHideList()
 		destroyState.pendingUpdate = false
@@ -475,7 +514,6 @@ updateDestroyButtonState = function()
 		destroyState.pendingUpdate = true
 		return
 	end
-	anchorDestroyButton(button)
 
 	local queue = destroyState.queue or {}
 	while #queue > 0 do
@@ -629,6 +667,44 @@ local function getTooltipInfo(bag, slot, quality)
 	tooltipCache[key] = { bType, canUpgrade, isIgnoredUpgradeTrack }
 	return bType, canUpgrade, isIgnoredUpgradeTrack
 end
+
+local function lookupDestroyItemsFast()
+	local itemsToDestroy = {}
+	local includeDestroy = addon.db["vendorIncludeDestroyList"]
+	local includeSell = addon.db["vendorIncludeSellList"]
+
+	for bag = 0, NUM_TOTAL_EQUIPPED_BAG_SLOTS do
+		local numSlots = C_Container.GetContainerNumSlots(bag)
+		if numSlots and numSlots > 0 then
+			for slot = 1, numSlots do
+				local info = C_Container.GetContainerItemInfo(bag, slot)
+				local itemID = info and info.itemID or C_Container.GetContainerItemID(bag, slot)
+				if itemID and info then
+					local inDestroy = includeDestroy and includeDestroy[itemID]
+					local inSell = includeSell and includeSell[itemID]
+
+					if info.hasNoValue and (inDestroy or inSell) then
+						if not getDestroyProtectionReason(itemID, info, info.quality) then
+							table.insert(itemsToDestroy, createDestroyEntry(bag, slot, itemID, info.itemName, info))
+						end
+					elseif inDestroy then
+						if not getDestroyProtectionReason(itemID, info, info.quality) then
+							table.insert(itemsToDestroy, createDestroyEntry(bag, slot, itemID, info.itemName, info))
+						end
+					elseif inSell then
+						local sellPrice = select(11, C_Item.GetItemInfo(itemID)) or 0
+						if sellPrice <= 0 and not getDestroyProtectionReason(itemID, info, info.quality) then
+							table.insert(itemsToDestroy, createDestroyEntry(bag, slot, itemID, info.itemName, info))
+						end
+					end
+				end
+			end
+		end
+	end
+
+	return itemsToDestroy
+end
+
 local function lookupItems()
 	local _, avgItemLevelEquipped = GetAverageItemLevel()
 	local itemsToSell = {}
@@ -770,10 +846,12 @@ local eventHandlers = {
 		hasMoreItems = false
 		updateSellMoreButton()
 		wipe(tooltipCache)
+		updateSellMarks(nil, true)
 		if addon.db["vendorDestroyEnable"] then scheduleDestroyButtonUpdate() end
 	end,
 	["BAG_UPDATE_DELAYED"] = function()
 		wipe(tooltipCache)
+		updateSellMarks(nil, true)
 		if addon.db["vendorDestroyEnable"] then scheduleDestroyButtonUpdate() end
 	end,
 	["ITEM_DATA_LOAD_RESULT"] = function(arg1, arg2)
@@ -799,7 +877,11 @@ local eventHandlers = {
 		end
 	end,
 	["INVENTORY_SEARCH_UPDATE"] = function()
-		C_Timer.After(0, function() updateSellMarks() end)
+		applySellDestroyOverlaysToFrame(ContainerFrameCombinedBags)
+		local frames = ContainerFrameContainer and ContainerFrameContainer.ContainerFrames or {}
+		for _, frame in ipairs(frames) do
+			applySellDestroyOverlaysToFrame(frame)
+		end
 	end,
 	["PLAYER_REGEN_ENABLED"] = function()
 		if destroyState.pendingQueue then
@@ -1394,7 +1476,7 @@ local function performUpdateSellMarks(resetCache)
 	if not overlaySell and not overlayDestroy and not tooltip then
 		-- Keep the destroy queue in sync even when overlays/tooltips are off
 		if addon.db["vendorDestroyEnable"] and inventoryOpen() then
-			local _, itemsToDestroy = lookupItems()
+			local itemsToDestroy = lookupDestroyItemsFast()
 			updateDestroyUI(itemsToDestroy or {})
 		else
 			-- No need to scan; make sure the button hides
@@ -1425,82 +1507,9 @@ local function performUpdateSellMarks(resetCache)
 		destroyMarkLookup[v.bag .. "_" .. v.slot] = v
 	end
 
-	local function processFrame(frame)
-		if frame and frame:IsShown() then
-			for _, itemButton in frame:EnumerateValidItems() do
-				local bag = itemButton:GetBagID()
-				local slot = itemButton:GetID()
-				local key = bag .. "_" .. slot
-				local isDestroy = destroyMarkLookup[key]
-				local showSell = overlaySell and sellMarkLookup[key] and not isDestroy
-				local showDestroy = overlayDestroy and isDestroy
-
-				if showSell then
-					if not itemButton.ItemMarkSell then
-						itemButton.ItemMarkSell = itemButton:CreateTexture(nil, "OVERLAY", nil, 7)
-						itemButton.ItemMarkSell:SetTexture("Interface\\buttons\\ui-grouploot-coin-up")
-						itemButton.ItemMarkSell:SetSize(16, 16)
-						itemButton.ItemMarkSell:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 0, -1)
-						itemButton.SellOverlay = itemButton:CreateTexture(nil, "OVERLAY", nil, 6)
-						itemButton.SellOverlay:SetAllPoints()
-						itemButton.SellOverlay:SetColorTexture(1, 0, 0, 0.45)
-					end
-					itemButton.ItemMarkSell:Show()
-					if addon.db["vendorShowSellHighContrast"] then
-						itemButton.SellOverlay:Show()
-					else
-						itemButton.SellOverlay:Hide()
-					end
-					if not itemButton.matchesSearch then
-						itemButton.ItemMarkSell:SetAlpha(0.1)
-						itemButton.SellOverlay:Hide()
-					else
-						if addon.db["vendorShowSellHighContrast"] then itemButton.SellOverlay:Show() end
-						itemButton.ItemMarkSell:SetAlpha(1)
-					end
-				elseif itemButton.ItemMarkSell then
-					itemButton.ItemMarkSell:Hide()
-					itemButton.SellOverlay:Hide()
-				end
-
-				if showDestroy then
-					if not itemButton.ItemMarkDestroy then
-						itemButton.ItemMarkDestroy = itemButton:CreateTexture(nil, "OVERLAY", nil, 7)
-						itemButton.ItemMarkDestroy:SetTexture("Interface\\Buttons\\UI-GroupLoot-DE-Up")
-						itemButton.ItemMarkDestroy:SetSize(16, 16)
-						itemButton.ItemMarkDestroy:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 0, -1)
-						itemButton.DestroyOverlay = itemButton:CreateTexture(nil, "OVERLAY", nil, 6)
-						itemButton.DestroyOverlay:SetAllPoints()
-						itemButton.DestroyOverlay:SetColorTexture(0.85, 0.1, 0.1, 0.45)
-					end
-					itemButton.ItemMarkDestroy:Show()
-					if addon.db["vendorShowSellHighContrast"] and itemButton.DestroyOverlay then
-						itemButton.DestroyOverlay:Show()
-					elseif itemButton.DestroyOverlay then
-						itemButton.DestroyOverlay:Hide()
-					end
-					if not itemButton.matchesSearch then
-						itemButton.ItemMarkDestroy:SetAlpha(0.1)
-						if itemButton.DestroyOverlay then itemButton.DestroyOverlay:Hide() end
-					else
-						itemButton.ItemMarkDestroy:SetAlpha(1)
-						if addon.db["vendorShowSellHighContrast"] and itemButton.DestroyOverlay then itemButton.DestroyOverlay:Show() end
-					end
-					if itemButton.ItemMarkSell then
-						itemButton.ItemMarkSell:Hide()
-						itemButton.SellOverlay:Hide()
-					end
-				elseif itemButton.ItemMarkDestroy then
-					itemButton.ItemMarkDestroy:Hide()
-					if itemButton.DestroyOverlay then itemButton.DestroyOverlay:Hide() end
-				end
-			end
-		end
-	end
-
-	processFrame(ContainerFrameCombinedBags)
+	applySellDestroyOverlaysToFrame(ContainerFrameCombinedBags)
 	for _, frame in ipairs(frames) do
-		processFrame(frame)
+		applySellDestroyOverlaysToFrame(frame)
 	end
 end
 
@@ -1582,10 +1591,14 @@ local function hookBagFrame(frame)
 	if not frame then return end
 	if frame._EnhanceQoLVendorDestroyHook then return end
 	frame._EnhanceQoLVendorDestroyHook = true
-	hooksecurefunc(frame, "UpdateItems", function(...)
-		updateSellMarks(...)
+	hooksecurefunc(frame, "UpdateItems", function(self)
+		applySellDestroyOverlaysToFrame(self)
 	end)
 	frame:HookScript("OnShow", function()
+		if destroyState.button and (not InCombatLockdown or not InCombatLockdown()) then
+			anchorDestroyButton(destroyState.button)
+		end
+		updateSellMarks(nil, true)
 		if addon.db["vendorDestroyEnable"] then scheduleDestroyButtonUpdate() end
 	end)
 	frame:HookScript("OnHide", function()
