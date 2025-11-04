@@ -9100,6 +9100,7 @@ local eventHandlers = {
 	end,
 	["PLAYER_LOGIN"] = function()
 		if addon.db["enableMinimapButtonBin"] then addon.functions.toggleButtonSink() end
+		if addon.db["actionBarAnchorEnabled"] then RefreshAllActionBarAnchors() end
 		addon.variables.unitSpec = C_SpecializationInfo.GetSpecialization()
 		if addon.variables.unitSpec then
 			local specId, specName = C_SpecializationInfo.GetSpecializationInfo(addon.variables.unitSpec)

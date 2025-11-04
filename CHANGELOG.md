@@ -1,5 +1,18 @@
 # Changelog
 
+## [5.14.0] – 2025-11-04
+
+### ✨ Added
+
+- Hide the _release button_ and only make it usable with a modifier
+  - Enable it by difficulty
+
+### 🐛 Fixed
+
+- Action Bar growth direction wasn't applied on first login
+
+---
+
 ## [5.13.0] – 2025-11-03
 
 ### ✨ Added
