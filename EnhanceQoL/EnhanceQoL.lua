@@ -3277,6 +3277,43 @@ local modifierDisplayNames = {
 	ALT = getGlobalStringValue("ALT_KEY_TEXT") or "ALT",
 }
 
+local DEFAULT_TIMEOUT_RELEASE_HINT = "Hold %s to release"
+
+local function getTimeoutReleaseModifierKey()
+	local modifierKey = addon.db and addon.db["timeoutReleaseModifier"] or "SHIFT"
+	if not modifierCheckers[modifierKey] then modifierKey = "SHIFT" end
+	return modifierKey
+end
+
+local function isTimeoutReleaseModifierDown(modifierKey)
+	local checker = modifierCheckers[modifierKey]
+	return checker and checker() or false
+end
+
+local function getTimeoutReleaseModifierDisplayName(modifierKey) return modifierDisplayNames[modifierKey] or modifierKey end
+
+local function showTimeoutReleaseHint(popup, modifierDisplayName)
+	if not popup then return end
+	local label = popup.eqolTimeoutReleaseLabel
+	if not label then
+		label = popup:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		label:SetJustifyH("CENTER")
+		label:SetPoint("BOTTOM", popup, "TOP", 0, 8)
+		label:SetTextColor(1, 0.82, 0)
+		label:SetWordWrap(true)
+		popup.eqolTimeoutReleaseLabel = label
+	end
+	local hintTemplate = rawget(L, "timeoutReleaseHoldHint") or DEFAULT_TIMEOUT_RELEASE_HINT
+	label:SetWidth(popup:GetWidth())
+	label:SetText(hintTemplate:format(modifierDisplayName))
+	label:Show()
+end
+
+local function hideTimeoutReleaseHint(popup)
+	local label = popup and popup.eqolTimeoutReleaseLabel
+	if label then label:Hide() end
+end
+
 local function addDungeonFrame(container, d)
 	local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
 	scroll:SetFullWidth(true)
@@ -3405,7 +3442,6 @@ local function addDungeonFrame(container, d)
 		end)
 		modifierDropdown:SetValue(addon.db["timeoutReleaseModifier"] or "SHIFT")
 		groupCore:AddChild(modifierDropdown)
-
 	end
 
 	if addon.db["groupfinderSkipRoleSelect"] then
@@ -6433,7 +6469,6 @@ local function initMisc()
 	addon.functions.InitDBValue("confirmReplaceEnchant", false)
 	addon.functions.InitDBValue("confirmSocketReplace", false)
 	addon.functions.InitDBValue("timeoutRelease", false)
-	addon.functions.InitDBValue("timeoutReleaseHoldDuration", 3)
 	addon.functions.InitDBValue("timeoutReleaseModifier", "SHIFT")
 	addon.functions.InitDBValue("hideRaidTools", false)
 	addon.functions.InitDBValue("autoRepair", false)
@@ -6461,15 +6496,30 @@ local function initMisc()
 		if popup then
 			hooksecurefunc(popup, "Show", function(self)
 				if self then
+					if self.which == "RECOVER_CORPSE" then
+						local acceptbtn = self:GetButton(1)
+						if acceptbtn then
+							if acceptbtn:GetAlpha() ~= 1 then acceptbtn:SetAlpha(1) end
+						end
+						return
+					end
 					local isDeathPopup = (self.which == "DEATH") and (self.numButtons or 0) > 0 and self.GetButton
 					if isDeathPopup then
 						local releaseButton = self:GetButton(1)
+						local shouldGateRelease = addon.db["timeoutRelease"] and shouldUseTimeoutReleaseForCurrentContext()
 
-						if addon.db["timeoutRelease"] and shouldUseTimeoutReleaseForCurrentContext() then
-							if releaseButton then releaseButton:SetAlpha(0) end
+						if shouldGateRelease then
+							local modifierKey = getTimeoutReleaseModifierKey()
+							local modifierDisplayName = getTimeoutReleaseModifierDisplayName(modifierKey)
+							local isModifierDown = isTimeoutReleaseModifierDown(modifierKey)
+							if releaseButton then releaseButton:SetAlpha(isModifierDown and 1 or 0) end
+							showTimeoutReleaseHint(self, modifierDisplayName)
 						else
 							if releaseButton then releaseButton:SetAlpha(1) end
+							hideTimeoutReleaseHint(self)
 						end
+					else
+						hideTimeoutReleaseHint(self)
 					end
 
 					if addon.db["sellAllJunk"] and self.data and type(self.data) == "table" and self.data.text == SELL_ALL_JUNK_ITEMS_POPUP and self.button1 then
@@ -6493,6 +6543,10 @@ local function initMisc()
 					end
 				end
 			end)
+			if not popup._eqolTimeoutReleaseOnHideHooked then
+				popup:HookScript("OnHide", function(self) hideTimeoutReleaseHint(self) end)
+				popup._eqolTimeoutReleaseOnHideHooked = true
+			end
 		end
 	end
 
@@ -8910,14 +8964,15 @@ local eventHandlers = {
 		end
 	end,
 	["MODIFIER_STATE_CHANGED"] = function(arg1, arg2)
-		if addon.db["timeoutRelease"] then
-			local _, stp = StaticPopup_Visible("DEATH")
-			if stp and stp.GetButton and shouldUseTimeoutReleaseForCurrentContext() then
-				if arg1 and arg1:match(addon.db["timeoutReleaseModifier"]) then
-					local btn = stp:GetButton(1)
-					if btn then btn:SetAlpha(arg2) end
-				end
-			end
+		if not addon.db["timeoutRelease"] then return end
+		if not UnitIsDead("player") then return end
+		local modifierKey = getTimeoutReleaseModifierKey()
+		if not (arg1 and arg1:match(modifierKey)) then return end
+
+		local _, stp = StaticPopup_Visible("DEATH")
+		if stp and stp.GetButton and shouldUseTimeoutReleaseForCurrentContext() then
+			local btn = stp:GetButton(1)
+			if btn then btn:SetAlpha(arg2 or 0) end
 		end
 	end,
 	["INSPECT_READY"] = function(arg1)

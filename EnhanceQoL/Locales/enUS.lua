@@ -231,9 +231,7 @@ L["timeoutReleasePrefixScenario"] = "Scenario"
 L["timeoutReleasePrefixPvP"] = "PvP"
 L["timeoutReleasePrefixWorld"] = "World"
 L["timeoutReleaseModifierLabel"] = "Modifier to hold"
-L["timeoutReleaseHoldDuration"] = "Hold duration: %ds"
-L["timeoutReleaseHoldInstruction"] = "Hold %s for %d seconds to release"
-L["timeoutReleaseHoldCountdown"] = "%s (%d)"
+L["timeoutReleaseHoldHint"] = "Hold %s to release"
 
 -- Quest
 L["ignoreTrivialQuests"] = "Don't automatically handle trivial %s"
