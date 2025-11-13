@@ -149,9 +149,7 @@ local function ensureBRAnchor()
 				y = "mythicPlusBRTrackerY",
 				size = "mythicPlusBRButtonSize",
 			},
-			isEnabled = function()
-				return addon.db["mythicPlusBRTrackerEnabled"]
-			end,
+			isEnabled = function() return addon.db["mythicPlusBRTrackerEnabled"] end,
 			onApply = function(_, layoutName, data) applyBRLayoutData(data) end,
 			settings = settings,
 		})
@@ -369,10 +367,12 @@ end
 frameLoad:RegisterEvent("CHALLENGE_MODE_KEYSTONE_RECEPTABLE_OPEN")
 frameLoad:RegisterEvent("READY_CHECK_FINISHED")
 frameLoad:RegisterEvent("LFG_ROLE_CHECK_SHOW")
-frameLoad:RegisterEvent("RAID_TARGET_UPDATE")
-frameLoad:RegisterEvent("PLAYER_ROLES_ASSIGNED")
-frameLoad:RegisterEvent("READY_CHECK")
-frameLoad:RegisterEvent("GROUP_ROSTER_UPDATE")
+if not addon.variables.isMidnight then
+	frameLoad:RegisterEvent("RAID_TARGET_UPDATE")
+	frameLoad:RegisterEvent("PLAYER_ROLES_ASSIGNED")
+	frameLoad:RegisterEvent("READY_CHECK")
+	frameLoad:RegisterEvent("GROUP_ROSTER_UPDATE")
+end
 frameLoad:RegisterEvent("SPELL_UPDATE_CHARGES")
 frameLoad:RegisterEvent("ENCOUNTER_END")
 frameLoad:RegisterEvent("ENCOUNTER_START")
@@ -431,6 +431,8 @@ local function checkRaidMarker()
 end
 
 local function checkCondition()
+	-- TODO remove feature on midnight release
+	if addon.variables.isMidnight then return false end
 	if addon.db["mythicPlusNoHealerMark"] and UnitInParty("player") and UnitGroupRolesAssigned("player") == "HEALER" then
 		local rIndex = GetRaidTargetIndex("player")
 		if nil ~= rIndex then SetRaidTarget("player", 0) end
@@ -682,15 +684,18 @@ local function addTeleportFrame(container)
 			text = L["portalHideMissing"],
 			var = "portalHideMissing",
 		},
-		{
+	}
+	-- TODO bug in tooltip in midnight beta - remove for now
+	if not addon.variables.isMidnight then
+		table.insert(data, {
 			text = L["portalShowTooltip"],
 			var = "portalShowTooltip",
 			func = function(self, _, value)
 				addon.db["portalShowTooltip"] = value
 				if addon.MythicPlus.functions.RefreshWorldMapTeleportPanel then addon.MythicPlus.functions.RefreshWorldMapTeleportPanel() end
 			end,
-		},
-	}
+		})
+	end
 
 	table.sort(data, function(a, b) return a.text < b.text end)
 
@@ -712,8 +717,9 @@ local function addTeleportFrame(container)
 	wrapper:DoLayout()
 end
 
--- TODO after the other TODOs where we change some frames and pack them into this, go and optimize the "ReleaseChildren" and addAutoMarkFrame so we have less frame garbage collecting
 local function addAutoMarkFrame(container)
+	-- TODO this feature will be removed, as it is restricted to hardware events
+	if addon.variables.isMidnight then return end
 	local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
 	scroll:SetFullWidth(true)
 	scroll:SetFullHeight(true)
@@ -1091,15 +1097,16 @@ addon.functions.addToTree("combat", { value = "mythicplus", text = PLAYER_DIFFIC
 
 -- Keep remaining Mythic+ related entries top-level if not in the grouped category
 local mpChildren = {
-	{ value = "automark", text = L["AutoMark"] },
 	{ value = "talents", text = L["TalentReminder"] },
 }
+if not addon.variables.isMidnight then table.insert(mpChildren, { value = "automark", text = L["AutoMark"] }) end
+
 for _, child in ipairs(mpChildren) do
 	addon.functions.addToTree("combat", child, true)
 end
 
 -- Place Potion Tracker under Combat (works everywhere)
-addon.functions.addToTree("combat", { value = "potiontracker", text = L["Potion Tracker"] }, true)
+if not addon.variables.isMidnight then addon.functions.addToTree("combat", { value = "potiontracker", text = L["Potion Tracker"] }, true) end
 
 -- Place Teleports under Map & Navigation
 addon.functions.addToTree("nav", { value = "teleports", text = L["Teleports"] }, true)
@@ -1269,17 +1276,12 @@ local function addMythicPlusRootFrame(container)
 
 	local function buildBR()
 		local g, known = ensureGroup("brtracker", L["BRTracker"])
-		local cb = addon.functions.createCheckboxAce(
-			L["mythicPlusBRTrackerEnabled"],
-			addon.db["mythicPlusBRTrackerEnabled"],
-			function(_, _, v)
-				addon.db["mythicPlusBRTrackerEnabled"] = v
-				createBRFrame()
-				if EditMode then EditMode:RefreshFrame(BR_EDITMODE_ID) end
-				buildBR()
-			end,
-			L["mythicPlusBRTrackerEditModeHint"]
-		)
+		local cb = addon.functions.createCheckboxAce(L["mythicPlusBRTrackerEnabled"], addon.db["mythicPlusBRTrackerEnabled"], function(_, _, v)
+			addon.db["mythicPlusBRTrackerEnabled"] = v
+			createBRFrame()
+			if EditMode then EditMode:RefreshFrame(BR_EDITMODE_ID) end
+			buildBR()
+		end, L["mythicPlusBRTrackerEditModeHint"])
 		g:AddChild(cb)
 
 		if known then

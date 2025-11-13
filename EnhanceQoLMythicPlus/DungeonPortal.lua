@@ -424,14 +424,17 @@ local function CreatePortalButtonsWithCooldown(frame, spells)
 			label:SetPoint("TOP", button, "BOTTOM", 0, -2)
 			label:SetText(spellData.text)
 
-			button:SetScript("OnEnter", function(self)
-				if addon.db["portalShowTooltip"] then
-					GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-					GameTooltip:SetSpellByID(spellID)
-					GameTooltip:Show()
-				end
-			end)
-			button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+			-- TODO bug in tooltip in midnight beta - remove for now
+			if not addon.variables.isMidnight then
+				button:SetScript("OnEnter", function(self)
+					if addon.db["portalShowTooltip"] then
+						GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+						GameTooltip:SetSpellByID(spellID)
+						GameTooltip:Show()
+					end
+				end)
+				button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+			end
 
 			-- Button speichern
 			table.insert(frame.buttons, button)

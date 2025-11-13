@@ -13,6 +13,10 @@
   - feature to hide buffs on raid frames in midnight beta (disabled until a fix is found)
   - account moneyframe feature because of a bug with tooltip handling in midnight beta
   - Module CombatMeter
+  - MythicPlus features
+    - Automark of tank and healer (these require hardware events now)
+    - Potiontracker
+    - Tooltip for Dungeon Teleports
 
 ### 🐛 Fixed
 
