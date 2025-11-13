@@ -106,17 +106,25 @@ local COSMETIC_BAR_KEYS = {
 	"backdrop",
 }
 
+local wasMax = false
 local curve = C_CurveUtil and C_CurveUtil.CreateColorCurve()
-if curve then
-	curve:SetType(Enum.LuaCurveType.Cosine)
-	-- 1.0 = 100% = Grün
-	curve:AddPoint(1.0, CreateColor(0.0, 0.85, 0.0, 1)) -- sattes Grün
-	curve:AddPoint(0.8, CreateColor(0.6, 0.85, 0.0, 1)) -- Gelbgrün
-	curve:AddPoint(0.6, CreateColor(0.9, 0.9, 0.0, 1)) -- Knallgelb
-	curve:AddPoint(0.4, CreateColor(0.95, 0.6, 0.0, 1)) -- Orange
-	curve:AddPoint(0.2, CreateColor(0.95, 0.25, 0.0, 1)) -- Rot-Orange
-	curve:AddPoint(0.0, CreateColor(0.9, 0.0, 0.0, 1)) -- Rot
+local function SetColorCurvePoints(maxColor)
+	if curve then
+		curve = C_CurveUtil and C_CurveUtil.CreateColorCurve()
+		curve:SetType(Enum.LuaCurveType.Cosine)
+		if maxColor then
+			curve:AddPoint(1.0, CreateColor(maxColor[1], maxColor[2], maxColor[3], maxColor[4])) -- sattes Grün
+		else
+			curve:AddPoint(1.0, CreateColor(0.0, 0.85, 0.0, 1)) -- sattes Grün
+		end
+		curve:AddPoint(0.8, CreateColor(0.6, 0.85, 0.0, 1)) -- Gelbgrün
+		curve:AddPoint(0.6, CreateColor(0.9, 0.9, 0.0, 1)) -- Knallgelb
+		curve:AddPoint(0.4, CreateColor(0.95, 0.6, 0.0, 1)) -- Orange
+		curve:AddPoint(0.2, CreateColor(0.95, 0.25, 0.0, 1)) -- Rot-Orange
+		curve:AddPoint(0.0, CreateColor(0.9, 0.0, 0.0, 1)) -- Rot
+	end
 end
+SetColorCurvePoints()
 
 local function getPlayerClassColor()
 	local class = addon and addon.variables and addon.variables.unitClass
@@ -2415,6 +2423,10 @@ function updateHealthBar(evt)
 					healthBar._lastColor = lc
 					healthBar:SetStatusBarColor(baseR, baseG, baseB, baseA)
 				else
+					if wasMax ~= settings.useMaxColor then
+						wasMax = settings.useMaxColor
+						SetColorCurvePoints(settings.maxColor or WHITE)
+					end
 					local color = UnitHealthPercentColor("player", curve)
 					healthBar:GetStatusBarTexture():SetVertexColor(color:GetRGB())
 				end
