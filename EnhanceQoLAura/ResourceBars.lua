@@ -107,7 +107,9 @@ local COSMETIC_BAR_KEYS = {
 }
 
 local wasMax = false
+local wasMaxPower = {}
 local curve = C_CurveUtil and C_CurveUtil.CreateColorCurve()
+local curvePower = {}
 local function SetColorCurvePoints(maxColor)
 	if curve then
 		curve = C_CurveUtil and C_CurveUtil.CreateColorCurve()
@@ -122,6 +124,17 @@ local function SetColorCurvePoints(maxColor)
 		curve:AddPoint(0.4, CreateColor(0.95, 0.6, 0.0, 1)) -- Orange
 		curve:AddPoint(0.2, CreateColor(0.95, 0.25, 0.0, 1)) -- Rot-Orange
 		curve:AddPoint(0.0, CreateColor(0.9, 0.0, 0.0, 1)) -- Rot
+	end
+end
+local function SetColorCurvePointsPower(pType, maxColor, defColor)
+	if curve then
+		curvePower[pType] = C_CurveUtil and C_CurveUtil.CreateColorCurve()
+		curvePower[pType]:SetType(Enum.LuaCurveType.Cosine)
+		if maxColor then
+			curvePower[pType]:AddPoint(1.0, CreateColor(maxColor[1], maxColor[2], maxColor[3], maxColor[4])) -- sattes Grün
+		else
+			curvePower[pType]:AddPoint(1.0, CreateColor(0.0, 0.85, 0.0, 1)) -- sattes Grün
+		end
 	end
 end
 SetColorCurvePoints()
@@ -1690,29 +1703,33 @@ function addon.Aura.functions.addResourceFrame(container)
 					group:AddChild(classColorCheckbox)
 				end
 
-				maxColorCheckbox = addon.functions.createCheckboxAce(L["Use max color"] or "Use max color at maximum", cfg.useMaxColor == true, function(_, _, val)
-					cfg.useMaxColor = val and true or false
-					wasMax = nil
+				if not addon.variables.isMidnight then
+					maxColorCheckbox = addon.functions.createCheckboxAce(L["Use max color"] or "Use max color at maximum", cfg.useMaxColor == true, function(_, _, val)
+						cfg.useMaxColor = val and true or false
+						wasMax = nil
+						refreshMaxColorControls()
+						notifyRefresh()
+					end)
+					maxColorCheckbox:SetFullWidth(true)
+					group:AddChild(maxColorCheckbox)
+
+					maxColorPicker = AceGUI:Create("ColorPicker")
+					maxColorPicker:SetLabel(L["Max color"] or "Max color")
+					maxColorPicker:SetHasAlpha(true)
+					local mc = cfg.maxColor or { 1, 1, 1, 1 }
+					maxColorPicker:SetColor(mc[1] or 1, mc[2] or 1, mc[3] or 1, mc[4] or 1)
+					maxColorPicker:SetCallback("OnValueChanged", function(_, _, r, g, b, a)
+						cfg.maxColor = { r, g, b, a }
+						notifyRefresh()
+					end)
+					maxColorPicker:SetFullWidth(false)
+					maxColorPicker:SetRelativeWidth(0.5)
+					group:AddChild(maxColorPicker)
+
 					refreshMaxColorControls()
-					notifyRefresh()
-				end)
-				maxColorCheckbox:SetFullWidth(true)
-				group:AddChild(maxColorCheckbox)
-
-				maxColorPicker = AceGUI:Create("ColorPicker")
-				maxColorPicker:SetLabel(L["Max color"] or "Max color")
-				maxColorPicker:SetHasAlpha(true)
-				local mc = cfg.maxColor or { 1, 1, 1, 1 }
-				maxColorPicker:SetColor(mc[1] or 1, mc[2] or 1, mc[3] or 1, mc[4] or 1)
-				maxColorPicker:SetCallback("OnValueChanged", function(_, _, r, g, b, a)
-					cfg.maxColor = { r, g, b, a }
-					notifyRefresh()
-				end)
-				maxColorPicker:SetFullWidth(false)
-				maxColorPicker:SetRelativeWidth(0.5)
-				group:AddChild(maxColorPicker)
-
-				refreshMaxColorControls()
+				else
+					cfg.useMaxColor = false
+				end
 				refreshColorPickerState()
 			end
 
@@ -3018,12 +3035,24 @@ function updatePowerBar(type, runeSlot)
 		bar._smoothTarget = nil
 		bar._smoothDeadzone = cfg.smoothDeadzone or bar._smoothDeadzone or DEFAULT_SMOOTH_DEADZONE
 		bar._smoothSpeed = SMOOTH_SPEED
-		if bar._lastVal ~= curPower then bar:SetValue(curPower) end
+		if (not addon.variables.isMidnight and bar._lastVal ~= curPower) or (issecretvalue and not issecretvalue(curPower) and bar._lastVal ~= curPower) then
+			bar:SetValue(curPower)
+		else
+			bar:SetValue(curPower)
+		end
 		bar._smoothInitialized = nil
 		bar._smoothEnabled = false
 		stopSmoothUpdater(bar)
 	end
 	bar._lastVal = curPower
+	local percent, percentStr
+	if addon.variables.isMidnight then
+		percent = AbbreviateLargeNumbers(UnitPowerPercent("player", pType, true, true) or 0)
+		percentStr = string.format("%s%%", percent)
+	else
+		percent = (curPower / max(maxPower, 1)) * 100
+		percentStr = tostring(floor(percent + 0.5))
+	end
 	if bar.text then
 		if style == "NONE" then
 			if bar._textShown then
@@ -3038,15 +3067,18 @@ function updatePowerBar(type, runeSlot)
 		else
 			local text
 			if style == "PERCENT" then
-				text = tostring(floor(((curPower / max(maxPower, 1)) * 100) + 0.5))
+				text = percentStr
 			elseif style == "CURRENT" then
+				text = AbbreviateLargeNumbers(curPower)
 				text = tostring(curPower)
 			else -- CURMAX
-				text = curPower .. " / " .. maxPower
+				text = AbbreviateLargeNumbers(curPower) .. " / " .. (AbbreviateLargeNumbers(maxPower))
 			end
-			if bar._lastText ~= text then
+			if (not addon.variables.isMidnight or (issecretvalue and not issecretvalue(text))) and bar._lastText ~= text then
 				bar.text:SetText(text)
 				bar._lastText = text
+			else
+				bar.text:SetText(text)
 			end
 			if not bar._textShown then
 				bar.text:Show()
@@ -3054,36 +3086,56 @@ function updatePowerBar(type, runeSlot)
 			end
 		end
 	end
+
 	bar._baseColor = bar._baseColor or {}
 	if bar._baseColor[1] == nil then
 		local br, bg, bb, ba = bar:GetStatusBarColor()
 		bar._baseColor[1], bar._baseColor[2], bar._baseColor[3], bar._baseColor[4] = br, bg, bb, ba or 1
 	end
+	if cfg.useBarColor then
+		local custom = cfg.barColor or WHITE
+		bar._baseColor[1], bar._baseColor[2], bar._baseColor[3], bar._baseColor[4] = custom[1] or 1, custom[2] or 1, custom[3] or 1, custom[4] or 1
+	end
 
-	local reachedCap = curPower >= max(maxPower, 1)
-	local useMaxColor = cfg.useMaxColor == true
-	if useMaxColor and reachedCap then
-		local maxCol = cfg.maxColor or WHITE
-		local mr, mg, mb, ma = maxCol[1] or 1, maxCol[2] or 1, maxCol[3] or 1, maxCol[4] or (bar._baseColor[4] or 1)
-		local lc = bar._lastColor or {}
-		if bar._usingMaxColor ~= true or lc[1] ~= mr or lc[2] ~= mg or lc[3] ~= mb or lc[4] ~= ma then
-			lc[1], lc[2], lc[3], lc[4] = mr, mg, mb, ma
-			bar._lastColor = lc
-			bar:SetStatusBarColor(lc[1], lc[2], lc[3], lc[4])
-			bar._usingMaxColor = true
-		end
-	else
-		local base = bar._baseColor
-		if base then
+	if not addon.variables.isMidnight or (issecretvalue and not issecretvalue(curPower) and not issecretvalue(maxPower)) then
+		local reachedCap = curPower >= max(maxPower, 1)
+		local useMaxColor = cfg.useMaxColor == true
+		if useMaxColor and reachedCap then
+			local maxCol = cfg.maxColor or WHITE
+			local mr, mg, mb, ma = maxCol[1] or 1, maxCol[2] or 1, maxCol[3] or 1, maxCol[4] or (bar._baseColor[4] or 1)
 			local lc = bar._lastColor or {}
-			local br, bgc, bb, ba = base[1] or 1, base[2] or 1, base[3] or 1, base[4] or 1
-			if bar._usingMaxColor == true or lc[1] ~= br or lc[2] ~= bgc or lc[3] ~= bb or lc[4] ~= ba then
-				lc[1], lc[2], lc[3], lc[4] = br, bgc, bb, ba
+			if bar._usingMaxColor ~= true or lc[1] ~= mr or lc[2] ~= mg or lc[3] ~= mb or lc[4] ~= ma then
+				lc[1], lc[2], lc[3], lc[4] = mr, mg, mb, ma
 				bar._lastColor = lc
 				bar:SetStatusBarColor(lc[1], lc[2], lc[3], lc[4])
+				bar._usingMaxColor = true
+			end
+		else
+			local base = bar._baseColor
+			if base then
+				local lc = bar._lastColor or {}
+				local br, bgc, bb, ba = base[1] or 1, base[2] or 1, base[3] or 1, base[4] or 1
+				if bar._usingMaxColor == true or lc[1] ~= br or lc[2] ~= bgc or lc[3] ~= bb or lc[4] ~= ba then
+					lc[1], lc[2], lc[3], lc[4] = br, bgc, bb, ba
+					bar._lastColor = lc
+					bar:SetStatusBarColor(lc[1], lc[2], lc[3], lc[4])
+				end
+			end
+			bar._usingMaxColor = false
+		end
+	else
+		local lc = bar._lastColor or {}
+		local base = bar._baseColor
+		if base then
+			local br, bgc, bb, ba = base[1] or 1, base[2] or 1, base[3] or 1, base[4] or 1
+			if lc[1] ~= br or lc[2] ~= bgc or lc[3] ~= bb or lc[4] ~= ba then
+				if cfg.useBarColor and not cfg.useMaxColor then
+					bar._lastColor = lc
+					bar:GetStatusBarTexture():SetVertexColor(1, 1, 1, 1)
+					bar:SetStatusBarColor(br, bgc, bb, ba)
+				end
 			end
 		end
-		bar._usingMaxColor = false
 	end
 
 	configureSpecialTexture(bar, type, cfg)
