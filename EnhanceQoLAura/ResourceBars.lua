@@ -2421,6 +2421,7 @@ function updateHealthBar(evt)
 			if lc[1] ~= baseR or lc[2] ~= baseG or lc[3] ~= baseB or lc[4] ~= baseA then
 				if (settings.useBarColor or settings.useClassColor) and not settings.useMaxColor then
 					healthBar._lastColor = lc
+					healthBar:GetStatusBarTexture():SetVertexColor(1, 1, 1, 1)
 					healthBar:SetStatusBarColor(baseR, baseG, baseB, baseA)
 				else
 					if wasMax ~= settings.useMaxColor then
@@ -2432,7 +2433,7 @@ function updateHealthBar(evt)
 				end
 			end
 		end
-		setBarDesaturated(healthBar, settings.useClassColor == true and settings.useBarColor ~= true)
+		setBarDesaturated(healthBar, true)
 
 		local absorbBar = healthBar.absorbBar
 		if absorbBar then
