@@ -63,6 +63,8 @@ local lastSpecCopyMode = {}
 local lastSpecCopyBar = {}
 local lastSpecCopyCosmetic = {}
 local RESOURCE_SHARE_KIND = "EQOL_RESOURCE_BAR_PROFILE"
+local COOLDOWN_VIEWER_FRAME_NAME = "EssentialCooldownViewer"
+local MIN_RESOURCE_BAR_WIDTH = 50
 local DEFAULT_STACK_SPACING = 0
 local SEPARATOR_THICKNESS = 1
 local SEP_DEFAULT = { 1, 1, 1, 0.5 }
@@ -79,6 +81,8 @@ local visibilityDriverWatcher
 local tryActivateSmooth
 local requestActiveRefresh
 local getStatusbarDropdownLists
+local ensureRelativeFrameHooks
+local scheduleRelativeFrameWidthSync
 local COSMETIC_BAR_KEYS = {
 	"barTexture",
 	"width",
@@ -1119,7 +1123,7 @@ function addon.Aura.functions.addResourceFrame(container)
 			TargetFrame = "TargetFrame",
 		}
 		local extraAnchorFrames = {
-			EssentialCooldownViewer = "EssentialCooldownViewer",
+			[COOLDOWN_VIEWER_FRAME_NAME] = COOLDOWN_VIEWER_FRAME_NAME,
 			UtilityCooldownViewer = "UtilityCooldownViewer",
 			BuffBarCooldownViewer = "BuffBarCooldownViewer",
 			BuffIconCooldownViewer = "BuffIconCooldownViewer",
@@ -1138,6 +1142,22 @@ function addon.Aura.functions.addResourceFrame(container)
 			local s = _G["POWER_TYPE_" .. pType] or _G[pType]
 			if type(s) == "string" and s ~= "" then return s end
 			return pType
+		end
+
+			local buildSpec
+
+		local function enforceMinWidthForSpec(barType, specIndex)
+			if not barType then return nil end
+			local class = addon.variables.unitClass
+			local spec = specIndex or addon.variables.unitSpec
+			if not class or not spec then return nil end
+			addon.db.personalResourceBarSettings = addon.db.personalResourceBarSettings or {}
+			addon.db.personalResourceBarSettings[class] = addon.db.personalResourceBarSettings[class] or {}
+			addon.db.personalResourceBarSettings[class][spec] = addon.db.personalResourceBarSettings[class][spec] or {}
+			addon.db.personalResourceBarSettings[class][spec][barType] = addon.db.personalResourceBarSettings[class][spec][barType] or {}
+			local cfg = addon.db.personalResourceBarSettings[class][spec][barType]
+			cfg.width = MIN_RESOURCE_BAR_WIDTH
+			return cfg
 		end
 
 		local function addAnchorOptions(barType, parent, info, frameList, specIndex)
@@ -1210,6 +1230,9 @@ function addon.Aura.functions.addResourceFrame(container)
 				if not filtered[initial] then initial = "UIParent" end
 				-- Ensure DB reflects a valid selection
 				info.relativeFrame = initial
+				if (info.relativeFrame or "UIParent") == "UIParent" then
+					info.matchRelativeWidth = nil
+				end
 				local dropFrame = addon.functions.createDropdownAce(L["Relative Frame"], filtered, nil, nil)
 				dropFrame:SetValue(initial)
 				dropFrame:SetFullWidth(false)
@@ -1258,6 +1281,35 @@ function addon.Aura.functions.addResourceFrame(container)
 				offsetRow:AddChild(sliderY)
 				anchorSub:AddChild(offsetRow)
 
+				if (info.relativeFrame or "UIParent") ~= "UIParent" then
+					local cbMatch = addon.functions.createCheckboxAce(L["MatchRelativeFrameWidth"] or "Match Relative Frame width", info.matchRelativeWidth == true, function(_, _, val)
+						info.matchRelativeWidth = val and true or nil
+						if info.matchRelativeWidth then ensureRelativeFrameHooks(info.relativeFrame) end
+						if val then
+							local cfg = enforceMinWidthForSpec(barType, specIndex)
+							if specIndex == addon.variables.unitSpec then
+								local defH = (barType == "HEALTH") and (cfg and cfg.height or DEFAULT_HEALTH_HEIGHT) or (cfg and cfg.height or DEFAULT_POWER_HEIGHT)
+								if barType == "HEALTH" then
+									if addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.SetHealthBarSize then addon.Aura.ResourceBars.SetHealthBarSize(MIN_RESOURCE_BAR_WIDTH, defH) end
+								else
+									if addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.SetPowerBarSize then addon.Aura.ResourceBars.SetPowerBarSize(MIN_RESOURCE_BAR_WIDTH, defH, barType) end
+								end
+							end
+						end
+						if ResourceBars and ResourceBars.ui and ResourceBars.ui.barWidthSliders and ResourceBars.ui.barWidthSliders[specIndex] and ResourceBars.ui.barWidthSliders[specIndex][barType] then
+							local slider = ResourceBars.ui.barWidthSliders[specIndex][barType]
+							slider:SetDisabled(info.matchRelativeWidth == true)
+							if info.matchRelativeWidth then slider:SetValue(MIN_RESOURCE_BAR_WIDTH) end
+						end
+						requestActiveRefresh(specIndex, REANCHOR_REFRESH)
+						if ResourceBars and ResourceBars.SyncRelativeFrameWidths then ResourceBars.SyncRelativeFrameWidths() end
+					end)
+					cbMatch:SetFullWidth(true)
+					anchorSub:AddChild(cbMatch)
+				else
+					info.matchRelativeWidth = nil
+				end
+
 				if (info.relativeFrame or "UIParent") == "UIParent" then
 					local hint = addon.functions.createLabelAce(L["Movable while holding SHIFT"], nil, nil, 10)
 					anchorSub:AddChild(hint)
@@ -1281,8 +1333,18 @@ function addon.Aura.functions.addResourceFrame(container)
 						info.y = 0
 						info.autoSpacing = nil
 					end
+					if val ~= "UIParent" then
+						if info.matchRelativeWidth then ensureRelativeFrameHooks(val) end
+					else
+						info.matchRelativeWidth = nil
+					end
 					buildAnchorSub()
 					requestActiveRefresh(specIndex, REANCHOR_REFRESH)
+					if ResourceBars and ResourceBars.ui and ResourceBars.ui.barWidthSliders and ResourceBars.ui.barWidthSliders[specIndex] and ResourceBars.ui.barWidthSliders[specIndex][barType] then
+						local slider = ResourceBars.ui.barWidthSliders[specIndex][barType]
+						slider:SetDisabled(info.matchRelativeWidth == true)
+						if info.matchRelativeWidth then slider:SetValue(MIN_RESOURCE_BAR_WIDTH) end
+					end
 				end
 
 				dropFrame:SetCallback("OnValueChanged", onFrameChanged)
@@ -1306,7 +1368,7 @@ function addon.Aura.functions.addResourceFrame(container)
 		end
 
 		local tabGroup = addon.functions.createContainer("TabGroup", "Flow")
-		local function buildSpec(container, specIndex)
+		buildSpec = function(container, specIndex)
 			container:ReleaseChildren()
 			if not addon.Aura.ResourceBars.powertypeClasses[addon.variables.unitClass] then return end
 			local specInfo = addon.Aura.ResourceBars.powertypeClasses[addon.variables.unitClass][specIndex]
@@ -2014,18 +2076,26 @@ function addon.Aura.functions.addResourceFrame(container)
 
 			if sel == "HEALTH" then
 				local hCfg = dbSpec.HEALTH
+				local anchorInfo = getAnchor("HEALTH", specIndex)
 				-- Size row (50%/50%)
 				local sizeRow = addon.functions.createContainer("SimpleGroup", "Flow")
 				sizeRow:SetFullWidth(true)
 				local verticalHealth = hCfg.verticalFill == true
 				local labelWidth = verticalHealth and (L["Bar thickness"] or "Bar thickness") or (L["Bar length"] or "Bar length")
 				local labelHeight = verticalHealth and (L["Bar length"] or "Bar length") or (L["Bar thickness"] or "Bar thickness")
-				local sw = addon.functions.createSliderAce(labelWidth, hCfg.width or DEFAULT_HEALTH_WIDTH, 1, 2000, 1, function(self, _, val)
-					hCfg.width = val
+				if hCfg.width and hCfg.width < MIN_RESOURCE_BAR_WIDTH then hCfg.width = MIN_RESOURCE_BAR_WIDTH end
+				local currentHealthWidth = max(MIN_RESOURCE_BAR_WIDTH, hCfg.width or DEFAULT_HEALTH_WIDTH)
+				local sw = addon.functions.createSliderAce(labelWidth, currentHealthWidth, MIN_RESOURCE_BAR_WIDTH, 2000, 1, function(self, _, val)
+					hCfg.width = max(MIN_RESOURCE_BAR_WIDTH, val or MIN_RESOURCE_BAR_WIDTH)
 					if specIndex == addon.variables.unitSpec then addon.Aura.ResourceBars.SetHealthBarSize(hCfg.width, hCfg.height or DEFAULT_HEALTH_HEIGHT) end
 				end)
 				sw:SetFullWidth(false)
 				sw:SetRelativeWidth(0.5)
+				sw:SetDisabled(anchorInfo and anchorInfo.matchRelativeWidth == true)
+				ResourceBars.ui = ResourceBars.ui or {}
+				ResourceBars.ui.barWidthSliders = ResourceBars.ui.barWidthSliders or {}
+				ResourceBars.ui.barWidthSliders[specIndex] = ResourceBars.ui.barWidthSliders[specIndex] or {}
+				ResourceBars.ui.barWidthSliders[specIndex].HEALTH = sw
 				sizeRow:AddChild(sw)
 				local sh = addon.functions.createSliderAce(labelHeight, hCfg.height or DEFAULT_HEALTH_HEIGHT, 1, 2000, 1, function(self, _, val)
 					hCfg.height = val
@@ -2097,9 +2167,11 @@ function addon.Aura.functions.addResourceFrame(container)
 				addAnchorOptions("HEALTH", groupConfig, hCfg.anchor, frames, specIndex)
 			else
 				local cfg = dbSpec[sel] or {}
+				local anchorInfo = getAnchor(sel, specIndex)
 				local defaultW = DEFAULT_POWER_WIDTH
 				local defaultH = DEFAULT_POWER_HEIGHT
-				local curW = cfg.width or defaultW
+				if cfg.width and cfg.width < MIN_RESOURCE_BAR_WIDTH then cfg.width = MIN_RESOURCE_BAR_WIDTH end
+				local curW = max(MIN_RESOURCE_BAR_WIDTH, cfg.width or defaultW)
 				local curH = cfg.height or defaultH
 				local defaultStyle = (sel == "MANA") and "PERCENT" or "CURMAX"
 				local curStyle = cfg.textStyle or defaultStyle
@@ -2111,12 +2183,18 @@ function addon.Aura.functions.addResourceFrame(container)
 				sizeRow2:SetFullWidth(true)
 				local labelWidth = vertical and (L["Bar thickness"] or "Bar thickness") or (L["Bar length"] or "Bar length")
 				local labelHeight = vertical and (L["Bar length"] or "Bar length") or (L["Bar thickness"] or "Bar thickness")
-				local sw = addon.functions.createSliderAce(labelWidth, curW, 1, 2000, 1, function(self, _, val)
-					cfg.width = val
-					if specIndex == addon.variables.unitSpec then addon.Aura.ResourceBars.SetPowerBarSize(val, cfg.height or defaultH, sel) end
+				local sw = addon.functions.createSliderAce(labelWidth, curW, MIN_RESOURCE_BAR_WIDTH, 2000, 1, function(self, _, val)
+					local width = max(MIN_RESOURCE_BAR_WIDTH, val or MIN_RESOURCE_BAR_WIDTH)
+					cfg.width = width
+					if specIndex == addon.variables.unitSpec then addon.Aura.ResourceBars.SetPowerBarSize(width, cfg.height or defaultH, sel) end
 				end)
 				sw:SetFullWidth(false)
 				sw:SetRelativeWidth(0.5)
+				sw:SetDisabled(anchorInfo and anchorInfo.matchRelativeWidth == true)
+				ResourceBars.ui = ResourceBars.ui or {}
+				ResourceBars.ui.barWidthSliders = ResourceBars.ui.barWidthSliders or {}
+				ResourceBars.ui.barWidthSliders[specIndex] = ResourceBars.ui.barWidthSliders[specIndex] or {}
+				ResourceBars.ui.barWidthSliders[specIndex][sel] = sw
 				sizeRow2:AddChild(sw)
 				local sh = addon.functions.createSliderAce(labelHeight, curH, 1, 2000, 1, function(self, _, val)
 					cfg.height = val
@@ -2498,7 +2576,13 @@ function getAnchor(name, spec)
 	addon.db.personalResourceBarSettings[class][spec][name] = addon.db.personalResourceBarSettings[class][spec][name] or {}
 	local cfg = addon.db.personalResourceBarSettings[class][spec][name]
 	cfg.anchor = cfg.anchor or {}
-	return cfg.anchor
+	local anchor = cfg.anchor
+	if anchor.matchRelativeWidth == nil and anchor.matchEssentialWidth ~= nil then
+		anchor.matchRelativeWidth = anchor.matchEssentialWidth and true or nil
+		anchor.matchEssentialWidth = nil
+	end
+	if (anchor.relativeFrame or "UIParent") == "UIParent" then anchor.matchRelativeWidth = nil end
+	return anchor
 end
 
 local function resolveAnchor(info, type)
@@ -2558,7 +2642,7 @@ function createHealthBar()
 	healthBar._rbType = "HEALTH"
 	do
 		local cfg = getBarSettings("HEALTH")
-		local w = (cfg and cfg.width) or DEFAULT_HEALTH_WIDTH
+		local w = max(MIN_RESOURCE_BAR_WIDTH, (cfg and cfg.width) or DEFAULT_HEALTH_WIDTH)
 		local h = (cfg and cfg.height) or DEFAULT_HEALTH_HEIGHT
 		healthBar:SetSize(w, h)
 	end
@@ -2774,6 +2858,105 @@ function getBarSettings(pType)
 		return addon.db.personalResourceBarSettings[class][spec][pType]
 	end
 	return nil
+end
+
+local function wantsRelativeFrameWidthMatch(anchor)
+	return anchor and (anchor.relativeFrame or "UIParent") ~= "UIParent" and anchor.matchRelativeWidth == true
+end
+
+local function getConfiguredBarWidth(pType)
+	local cfg = getBarSettings(pType)
+	local default = (pType == "HEALTH") and DEFAULT_HEALTH_WIDTH or DEFAULT_POWER_WIDTH
+	local width = (cfg and type(cfg.width) == "number" and cfg.width > 0 and cfg.width) or default or MIN_RESOURCE_BAR_WIDTH
+	return max(MIN_RESOURCE_BAR_WIDTH, width or MIN_RESOURCE_BAR_WIDTH)
+end
+
+local function syncBarWidthWithAnchor(pType)
+	local frame = (pType == "HEALTH") and healthBar or powerbar[pType]
+	if not frame then return false end
+	local anchor = getAnchor(pType, addon.variables.unitSpec)
+	local baseWidth = max(1, getConfiguredBarWidth(pType) or 0)
+	if not wantsRelativeFrameWidthMatch(anchor) then
+		local current = frame:GetWidth() or 0
+		if abs(current - baseWidth) < 0.5 then return false end
+		frame:SetWidth(baseWidth)
+		return true
+	end
+	local relativeFrameName = anchor.relativeFrame
+	ensureRelativeFrameHooks(relativeFrameName)
+	local relFrame = relativeFrameName and _G[relativeFrameName]
+	if not relFrame or not relFrame.GetWidth then
+		local current = frame:GetWidth() or 0
+		if abs(current - baseWidth) < 0.5 then return false end
+		frame:SetWidth(baseWidth)
+		return true
+	end
+	local relWidth = relFrame:GetWidth() or 0
+	local desired = max(MIN_RESOURCE_BAR_WIDTH, relWidth or 0)
+	desired = max(desired, 1)
+	local current = frame:GetWidth() or 0
+	if abs(current - desired) < 0.5 then return false end
+	frame:SetWidth(desired)
+	return true
+end
+
+local function syncRelativeFrameWidths()
+	local changed = false
+	if healthBar then changed = syncBarWidthWithAnchor("HEALTH") or changed end
+	for pType, bar in pairs(powerbar) do
+		if bar then changed = syncBarWidthWithAnchor(pType) or changed end
+	end
+	return changed
+end
+
+ResourceBars.SyncRelativeFrameWidths = syncRelativeFrameWidths
+
+local function handleRelativeFrameGeometryChanged()
+	if scheduleRelativeFrameWidthSync then
+		scheduleRelativeFrameWidthSync()
+	elseif ResourceBars and ResourceBars.SyncRelativeFrameWidths then
+		ResourceBars.SyncRelativeFrameWidths()
+	end
+end
+
+local widthMatchHookedFrames = {}
+local pendingHookRetries = {}
+
+ensureRelativeFrameHooks = function(frameName)
+	if not frameName or frameName == "UIParent" then return end
+	local frame = _G[frameName]
+	if not frame then
+		if After and not pendingHookRetries[frameName] then
+			pendingHookRetries[frameName] = true
+			After(1, function()
+				pendingHookRetries[frameName] = nil
+				if ensureRelativeFrameHooks then ensureRelativeFrameHooks(frameName) end
+			end)
+		end
+		return
+	end
+	if widthMatchHookedFrames[frameName] then return end
+	if frame.HookScript then
+		local okSize = pcall(frame.HookScript, frame, "OnSizeChanged", handleRelativeFrameGeometryChanged)
+		local okShow = pcall(frame.HookScript, frame, "OnShow", handleRelativeFrameGeometryChanged)
+		local okHide = pcall(frame.HookScript, frame, "OnHide", handleRelativeFrameGeometryChanged)
+		if okSize or okShow or okHide then widthMatchHookedFrames[frameName] = true end
+	end
+end
+
+local relativeFrameWidthPending = false
+scheduleRelativeFrameWidthSync = function()
+	if not ResourceBars.SyncRelativeFrameWidths then return end
+	if not After then
+		ResourceBars.SyncRelativeFrameWidths()
+		return
+	end
+	if relativeFrameWidthPending then return end
+	relativeFrameWidthPending = true
+	After(0.25, function()
+		relativeFrameWidthPending = false
+		ResourceBars.SyncRelativeFrameWidths()
+	end)
 end
 
 function updatePowerBar(type, runeSlot)
@@ -3375,7 +3558,7 @@ local function createPowerBar(type, anchor)
 	if bar:GetParent() ~= UIParent then bar:SetParent(UIParent) end
 
 	local settings = getBarSettings(type)
-	local w = settings and settings.width or DEFAULT_POWER_WIDTH
+	local w = max(MIN_RESOURCE_BAR_WIDTH, (settings and settings.width) or DEFAULT_POWER_WIDTH)
 	local h = settings and settings.height or DEFAULT_POWER_HEIGHT
 	bar._cfg = settings
 	bar._rbType = type
@@ -3666,6 +3849,7 @@ local function setPowerbars()
 	end
 
 	if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.ApplyVisibilityPreference then addon.Aura.ResourceBars.ApplyVisibilityPreference("fromSetPowerbars") end
+	if ResourceBars and ResourceBars.SyncRelativeFrameWidths then ResourceBars.SyncRelativeFrameWidths() end
 end
 
 local function shouldHideResourceBarsOutOfCombat() return addon and addon.db and addon.db.resourceBarsHideOutOfCombat == true end
@@ -3833,11 +4017,14 @@ local function eventHandler(self, event, unit, arg1)
 		setPowerbars()
 	elseif event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED" then
 		scheduleSpecRefresh()
+		if scheduleRelativeFrameWidthSync then scheduleRelativeFrameWidthSync() end
 	elseif event == "TRAIT_CONFIG_UPDATED" then
 		scheduleSpecRefresh()
+		if scheduleRelativeFrameWidthSync then scheduleRelativeFrameWidthSync() end
 	elseif event == "PLAYER_ENTERING_WORLD" then
 		updateHealthBar("UNIT_ABSORB_AMOUNT_CHANGED")
 		setPowerbars()
+		if scheduleRelativeFrameWidthSync then scheduleRelativeFrameWidthSync() end
 	elseif event == "UPDATE_SHAPESHIFT_FORM" then
 		setPowerbars()
 		-- After initial creation, run a re-anchor pass to ensure all dependent anchors resolve
@@ -3904,6 +4091,7 @@ function ResourceBars.EnableResourceBars()
 		if setPowerbars then setPowerbars() end
 		if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.ReanchorAll then addon.Aura.ResourceBars.ReanchorAll() end
 	end
+	if ResourceBars and ResourceBars.SyncRelativeFrameWidths then ResourceBars.SyncRelativeFrameWidths() end
 	if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.UpdateRuneEventRegistration then addon.Aura.ResourceBars.UpdateRuneEventRegistration() end
 end
 
@@ -4028,7 +4216,10 @@ function ResourceBars.DetachAnchorsFrom(disabledType, specIndex)
 end
 
 function ResourceBars.SetHealthBarSize(w, h)
-	if healthBar then healthBar:SetSize(w, h) end
+	local width = max(MIN_RESOURCE_BAR_WIDTH, w or DEFAULT_HEALTH_WIDTH)
+	local height = h or DEFAULT_HEALTH_HEIGHT
+	if healthBar then healthBar:SetSize(width, height) end
+	if ResourceBars and ResourceBars.SyncRelativeFrameWidths then ResourceBars.SyncRelativeFrameWidths() end
 end
 
 function ResourceBars.SetPowerBarSize(w, h, pType)
@@ -4038,7 +4229,7 @@ function ResourceBars.SetPowerBarSize(w, h, pType)
 		local s = getBarSettings(pType)
 		local defaultW = DEFAULT_POWER_WIDTH
 		local defaultH = DEFAULT_POWER_HEIGHT
-		w = w or (s and s.width) or defaultW
+		w = max(MIN_RESOURCE_BAR_WIDTH, w or (s and s.width) or defaultW)
 		h = h or (s and s.height) or defaultH
 	end
 	if pType then
@@ -4047,8 +4238,10 @@ function ResourceBars.SetPowerBarSize(w, h, pType)
 			changed[getFrameName(pType)] = true
 		end
 	else
+		local width = max(MIN_RESOURCE_BAR_WIDTH, w or DEFAULT_POWER_WIDTH)
+		local height = h or DEFAULT_POWER_HEIGHT
 		for t, bar in pairs(powerbar) do
-			bar:SetSize(w, h)
+			bar:SetSize(width, height)
 			changed[getFrameName(t)] = true
 		end
 	end
@@ -4071,6 +4264,7 @@ function ResourceBars.SetPowerBarSize(w, h, pType)
 			end
 		end
 	end
+	if ResourceBars and ResourceBars.SyncRelativeFrameWidths then ResourceBars.SyncRelativeFrameWidths() end
 end
 
 -- Re-apply anchors for any bars that currently reference a given frame name
@@ -4233,6 +4427,7 @@ function ResourceBars.Refresh()
 			if pType == "RUNES" then layoutRunes(bar) end
 		end
 	end
+	if ResourceBars and ResourceBars.SyncRelativeFrameWidths then ResourceBars.SyncRelativeFrameWidths() end
 	updateHealthBar("UNIT_ABSORB_AMOUNT_CHANGED")
 	if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.UpdateRuneEventRegistration then addon.Aura.ResourceBars.UpdateRuneEventRegistration() end
 	-- Ensure RUNES animation stops when not visible/enabled
@@ -4442,6 +4637,7 @@ function ResourceBars.ReanchorAll()
 	end
 
 	updateHealthBar("UNIT_ABSORB_AMOUNT_CHANGED")
+	if ResourceBars and ResourceBars.SyncRelativeFrameWidths then ResourceBars.SyncRelativeFrameWidths() end
 	ResourceBars._reanchoring = false
 end
 

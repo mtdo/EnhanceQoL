@@ -7,6 +7,13 @@
 - Actionbar and Frame fading if you choose to hide it
 - PlayerFrame
   - Show when I target something
+- Sync the width of your resource bars with the relative frame
+
+### 🐛 Fixed
+
+- Error: attempt to perform indexed assignment on field 'moneyTracker'
+
+---
 
 ## [6.0.0] – 2025-11-15
 

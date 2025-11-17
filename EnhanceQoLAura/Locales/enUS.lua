@@ -106,6 +106,7 @@ L["Copy settings unavailable"] = "Configure another specialization first to copy
 L["Copy"] = "Copy"
 L["Relative Frame"] = "Relative Frame"
 L["Relative Point"] = "Relative Point"
+L["MatchRelativeFrameWidth"] = "Match Relative Frame width"
 L["Movable while holding SHIFT"] = "Movable while holding SHIFT"
 L["Current/Max"] = "Current/Max"
 L["Current"] = "Current"
