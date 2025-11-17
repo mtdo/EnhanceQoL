@@ -5588,7 +5588,7 @@ function addon.functions.checkReloadFrame()
 	if addon.variables.requireReload == false then return end
 	if _G["ReloadUIPopup"] and _G["ReloadUIPopup"]:IsShown() then return end
 
-	if _G["ReloadUIPopup"] and _G["ReloadUIPopup"] then
+	if _G["ReloadUIPopup"] then
 		_G["ReloadUIPopup"]:Show()
 		return
 	end
