@@ -77,6 +77,7 @@ local defaults = {
 		anchor = { point = "CENTER", relativeTo = "UIParent", relativePoint = "CENTER", x = 0, y = -200 },
 		strata = nil,
 		frameLevel = nil,
+		barGap = 0,
 		border = { enabled = true, color = { 0, 0, 0, 0.8 }, edgeSize = 1, inset = 0 },
 		health = {
 			useClassColor = true,
@@ -254,6 +255,11 @@ local function updateHealth(cfg)
 		hr, hg, hb, ha = color[1] or 0, color[2] or 0.8, color[3] or 0, color[4] or 1
 	end
 	state.health:SetStatusBarColor(hr or 0, hg or 0.8, hb or 0, ha or 1)
+	if hc.useClassColor then
+		if state.health.SetStatusBarDesaturated then state.health:SetStatusBarDesaturated(true) end
+	else
+		if state.health.SetStatusBarDesaturated then state.health.SetStatusBarDesaturated(false) end
+	end
 	if state.absorb then
 		local abs = UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(PLAYER_UNIT) or 0
 		state.absorb:SetMinMaxValues(0, maxv > 0 and maxv or 1)
@@ -327,7 +333,7 @@ local function updateStatus(cfg)
 		state.nameText:SetText(UnitName(PLAYER_UNIT) or "")
 		state.nameText:SetTextColor(nc and (nc.r or nc[1] or 1) or 1, nc and (nc.g or nc[2] or 1) or 1, nc and (nc.b or nc[3] or 1) or 1, nc and (nc.a or nc[4] or 1) or 1)
 		state.nameText:ClearAllPoints()
-		state.nameText:SetPoint("LEFT", state.status, "LEFT", (scfg.nameOffset and scfg.nameOffset.x) or 0, (scfg.nameOffset and scfg.nameOffset.y) or 0)
+		state.nameText:SetPoint(scfg.nameAnchor or "LEFT", state.status, scfg.nameAnchor or "LEFT", (scfg.nameOffset and scfg.nameOffset.x) or 0, (scfg.nameOffset and scfg.nameOffset.y) or 0)
 		state.nameText:SetShown(scfg.enabled ~= false)
 	end
 	if state.levelText then
@@ -336,7 +342,7 @@ local function updateStatus(cfg)
 		state.levelText:SetText(UnitLevel(PLAYER_UNIT) or "")
 		state.levelText:SetTextColor(lc[1] or 1, lc[2] or 0.85, lc[3] or 0, lc[4] or 1)
 		state.levelText:ClearAllPoints()
-		state.levelText:SetPoint("RIGHT", state.status, "RIGHT", (scfg.levelOffset and scfg.levelOffset.x) or 0, (scfg.levelOffset and scfg.levelOffset.y) or 0)
+		state.levelText:SetPoint(scfg.levelAnchor or "RIGHT", state.status, scfg.levelAnchor or "RIGHT", (scfg.levelOffset and scfg.levelOffset.x) or 0, (scfg.levelOffset and scfg.levelOffset.y) or 0)
 		state.levelText:SetShown(scfg.enabled ~= false and scfg.levelEnabled ~= false)
 	end
 end
@@ -347,6 +353,7 @@ local function layoutFrame(cfg)
 	local statusHeight = (cfg.status and cfg.status.enabled == false) and 0 or (cfg.statusHeight or defaults.player.statusHeight)
 	local healthHeight = cfg.healthHeight or defaults.player.healthHeight
 	local powerHeight = cfg.powerHeight or defaults.player.powerHeight
+	local barGap = cfg.barGap or 0
 	local borderInset = 0
 	if cfg.border and cfg.border.enabled then borderInset = (cfg.border.edgeSize or 1) end
 	state.frame:SetWidth(width + borderInset * 2)
@@ -375,22 +382,22 @@ local function layoutFrame(cfg)
 	state.frame:ClearAllPoints()
 	state.frame:SetPoint(anchor.point or "CENTER", rel or UIParent, anchor.relativePoint or anchor.point or "CENTER", anchor.x or 0, anchor.y or 0)
 
-	local y = -borderInset
+	local y = 0
 	if statusHeight > 0 then
-		state.status:SetPoint("TOPLEFT", state.frame, "TOPLEFT", borderInset, -borderInset)
-		state.status:SetPoint("TOPRIGHT", state.frame, "TOPRIGHT", -borderInset, -borderInset)
-		y = y - statusHeight
+		state.status:SetPoint("TOPLEFT", state.frame, "TOPLEFT", 0, 0)
+		state.status:SetPoint("TOPRIGHT", state.frame, "TOPRIGHT", 0, 0)
+		y = -statusHeight
 	else
-		state.status:SetPoint("TOPLEFT", state.frame, "TOPLEFT", borderInset, -borderInset)
-		state.status:SetPoint("TOPRIGHT", state.frame, "TOPRIGHT", -borderInset, -borderInset)
+		state.status:SetPoint("TOPLEFT", state.frame, "TOPLEFT", 0, 0)
+		state.status:SetPoint("TOPRIGHT", state.frame, "TOPRIGHT", 0, 0)
 	end
 
-	state.health:SetPoint("TOPLEFT", state.frame, "TOPLEFT", borderInset, y)
-	state.health:SetPoint("TOPRIGHT", state.frame, "TOPRIGHT", -borderInset, y)
-	state.power:SetPoint("TOPLEFT", state.health, "BOTTOMLEFT", 0, 0)
-	state.power:SetPoint("TOPRIGHT", state.health, "BOTTOMRIGHT", 0, 0)
+	state.health:SetPoint("TOPLEFT", state.frame, "TOPLEFT", borderInset, y - borderInset)
+	state.health:SetPoint("TOPRIGHT", state.frame, "TOPRIGHT", -borderInset, y - borderInset)
+	state.power:SetPoint("TOPLEFT", state.health, "BOTTOMLEFT", 0, -barGap)
+	state.power:SetPoint("TOPRIGHT", state.health, "BOTTOMRIGHT", 0, -barGap)
 
-	local totalHeight = statusHeight + healthHeight + powerHeight + borderInset * 2
+	local totalHeight = statusHeight + healthHeight + powerHeight + barGap + borderInset * 2
 	state.frame:SetHeight(totalHeight)
 
 	layoutTexts(state.health, state.healthTextLeft, state.healthTextRight, cfg.health, width)
@@ -401,7 +408,11 @@ end
 
 local function ensureFrames()
 	if state.frame then return end
-	state.frame = _G[FRAME_NAME] or CreateFrame("Frame", FRAME_NAME, UIParent, "BackdropTemplate")
+	state.frame = _G[FRAME_NAME] or CreateFrame("Button", FRAME_NAME, UIParent, "BackdropTemplate,SecureUnitButtonTemplate")
+	state.frame:SetAttribute("unit", "player")
+	state.frame:SetAttribute("type1", "target")
+	state.frame:SetAttribute("type2", "togglemenu")
+	state.frame.menu = function(self) ToggleDropDownMenu(1, nil, PlayerFrameDropDown, self, 0, 0) end
 	state.frame:SetClampedToScreen(true)
 	state.status = _G[STATUS_NAME] or CreateFrame("Frame", STATUS_NAME, state.frame)
 	state.health = _G[HEALTH_NAME] or CreateFrame("StatusBar", HEALTH_NAME, state.frame, "BackdropTemplate")
@@ -419,9 +430,11 @@ local function ensureFrames()
 	state.frame:EnableMouse(true)
 	state.frame:RegisterForDrag("LeftButton")
 	state.frame:SetScript("OnDragStart", function(self)
+		if InCombatLockdown() then return end
 		if IsShiftKeyDown() then self:StartMoving() end
 	end)
 	state.frame:SetScript("OnDragStop", function(self)
+		if InCombatLockdown() then return end
 		self:StopMovingOrSizing()
 		local point, rel, relPoint, x, y = self:GetPoint(1)
 		local cfg = ensureDB("player")
@@ -631,6 +644,16 @@ local function addOptions(container, skipClear)
 	shPower:SetRelativeWidth(0.25)
 	sizeRow:AddChild(shPower)
 
+	local gapRow = addon.functions.createContainer("SimpleGroup", "Flow")
+	gapRow:SetFullWidth(true)
+	parent:AddChild(gapRow)
+	local gapSlider = addon.functions.createSliderAce(L["UFBarGap"] or "Gap between bars", cfg.barGap or defaults.player.barGap or 0, 0, 10, 1, function(_, _, val)
+		cfg.barGap = val or 0
+		UF.Refresh()
+	end)
+	gapSlider:SetFullWidth(true)
+	gapRow:AddChild(gapSlider)
+
 	local strataRow = addon.functions.createContainer("SimpleGroup", "Flow")
 	strataRow:SetFullWidth(true)
 	parent:AddChild(strataRow)
@@ -645,7 +668,9 @@ local function addOptions(container, skipClear)
 		"TOOLTIP",
 	}
 	local strataMap = {}
-	for _, k in ipairs(strataList) do strataMap[k] = k end
+	for _, k in ipairs(strataList) do
+		strataMap[k] = k
+	end
 	local ddStrata = addon.functions.createDropdownAce(L["UFStrata"] or "Frame strata", strataMap, strataList, function(_, _, key)
 		cfg.strata = key ~= "" and key or nil
 		UF.Refresh()
@@ -857,12 +882,15 @@ local function addOptions(container, skipClear)
 		function(_, _, key)
 			cfg.status.nameColorMode = key
 			UF.Refresh()
+			if UF.ui and UF.ui.nameColorPicker then UF.ui.nameColorPicker:SetDisabled(key == "CLASS") end
 		end
 	)
 	nameColorMode:SetValue(cfg.status.nameColorMode or "CLASS")
 	nameColorMode:SetRelativeWidth(0.33)
 	colorRowStatus:AddChild(nameColorMode)
-	addColorPicker(colorRowStatus, L["UFNameColor"] or "Name color", cfg.status.nameColor or defaults.player.status.nameColor, function() UF.Refresh() end)
+	UF.ui = UF.ui or {}
+	UF.ui.nameColorPicker = addColorPicker(colorRowStatus, L["UFNameColor"] or "Name color", cfg.status.nameColor or defaults.player.status.nameColor, function() UF.Refresh() end)
+	if UF.ui.nameColorPicker then UF.ui.nameColorPicker:SetDisabled((cfg.status.nameColorMode or "CLASS") == "CLASS") end
 	addColorPicker(colorRowStatus, L["UFLevelColor"] or "Level color", cfg.status.levelColor or defaults.player.status.levelColor, function() UF.Refresh() end)
 
 	local sFont = addon.functions.createSliderAce(L["FontSize"] or "Font size", cfg.status.fontSize or 14, 8, 30, 1, function(_, _, val)
@@ -875,6 +903,17 @@ local function addOptions(container, skipClear)
 	local statusOffsets = addon.functions.createContainer("SimpleGroup", "Flow")
 	statusOffsets:SetFullWidth(true)
 	statusGroup:AddChild(statusOffsets)
+
+	local anchorList = { LEFT = "LEFT", CENTER = "CENTER", RIGHT = "RIGHT" }
+	local anchorOrder = { "LEFT", "CENTER", "RIGHT" }
+	local nameAnchor = addon.functions.createDropdownAce(L["UFNameAnchor"] or "Name anchor", anchorList, anchorOrder, function(_, _, key)
+		cfg.status.nameAnchor = key
+		UF.Refresh()
+	end)
+	nameAnchor:SetRelativeWidth(0.25)
+	nameAnchor:SetValue(cfg.status.nameAnchor or "LEFT")
+	statusOffsets:AddChild(nameAnchor)
+
 	local nameX = addon.functions.createSliderAce(L["UFNameX"] or "Name X offset", (cfg.status.nameOffset and cfg.status.nameOffset.x) or 0, -200, 200, 1, function(_, _, val)
 		cfg.status.nameOffset = cfg.status.nameOffset or {}
 		cfg.status.nameOffset.x = val
@@ -889,6 +928,15 @@ local function addOptions(container, skipClear)
 	end)
 	nameY:SetRelativeWidth(0.25)
 	statusOffsets:AddChild(nameY)
+
+	local levelAnchor = addon.functions.createDropdownAce(L["UFLevelAnchor"] or "Level anchor", anchorList, anchorOrder, function(_, _, key)
+		cfg.status.levelAnchor = key
+		UF.Refresh()
+	end)
+	levelAnchor:SetRelativeWidth(0.25)
+	levelAnchor:SetValue(cfg.status.levelAnchor or "RIGHT")
+	statusOffsets:AddChild(levelAnchor)
+
 	local lvlX = addon.functions.createSliderAce(L["UFLevelX"] or "Level X offset", (cfg.status.levelOffset and cfg.status.levelOffset.x) or 0, -200, 200, 1, function(_, _, val)
 		cfg.status.levelOffset = cfg.status.levelOffset or {}
 		cfg.status.levelOffset.x = val
