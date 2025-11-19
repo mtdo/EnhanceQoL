@@ -8,6 +8,28 @@ local stream
 local tracked = {}
 local trackedDirty = true
 
+local abs = math.abs
+local floor = math.floor
+local ceil = math.ceil
+
+local MAX_DECIMALS = 3
+local SHORT_SUFFIXES = { "K", "M", "B", "T", "P", "E" }
+local FORMAT_RULES = {
+	full = { mode = "full", decimals = 0 },
+	short0 = { mode = "short", decimals = 0 },
+	short1 = { mode = "short", decimals = 1 },
+	short2 = { mode = "short", decimals = 2 },
+	short3 = { mode = "short", decimals = 3 },
+}
+local FORMAT_LABELS = {
+	full = L["CurrencyFormatFull"] or "Full (13,343)",
+	short0 = L["CurrencyFormatShort0"] or "Short (13k)",
+	short1 = L["CurrencyFormatShort1"] or "Short (13.3k)",
+	short2 = L["CurrencyFormatShort2"] or "Short (13.34k)",
+	short3 = L["CurrencyFormatShort3"] or "Short (13.343k)",
+}
+local FORMAT_ORDER = { "full", "short0", "short1", "short2", "short3" }
+
 local checkCurrencies
 local updateCurrency
 local function getOptionsHint()
@@ -48,9 +70,90 @@ local function ensureDB()
 	db = addon.db.datapanel.currency
 	db.fontSize = db.fontSize or 14
 	db.ids = db.ids or {}
+	db.currencyOptions = db.currencyOptions or {}
 	db.tooltipPerCurrency = db.tooltipPerCurrency or false
 	if db.showDescription == nil then db.showDescription = true end
 	if trackedDirty then rebuildTracked() end
+end
+
+local function clampDecimals(value)
+	local decimals = tonumber(value) or 0
+	if decimals < 0 then decimals = 0 elseif decimals > MAX_DECIMALS then decimals = MAX_DECIMALS end
+	return floor(decimals + 0.5)
+end
+
+local function getCurrencyOptions(id)
+	db.currencyOptions[id] = db.currencyOptions[id] or {}
+	local opts = db.currencyOptions[id]
+	opts.mode = opts.mode == "short" and "short" or "full"
+	opts.decimals = clampDecimals(opts.decimals)
+	return opts
+end
+
+local function getFormatKey(opts)
+	if opts.mode == "short" then
+		local dec = clampDecimals(opts.decimals)
+		if dec < 0 then dec = 0 elseif dec > MAX_DECIMALS then dec = MAX_DECIMALS end
+		return "short" .. dec
+	end
+	return "full"
+end
+
+local function applyFormatChoice(opts, key)
+	local choice = FORMAT_RULES[key]
+	if not choice then return end
+	opts.mode = choice.mode
+	opts.decimals = clampDecimals(choice.decimals)
+end
+
+local function trimDecimals(text)
+	local trimmed = text:gsub("(%..-)0+$", "%1")
+	return trimmed:gsub("%.$", "")
+end
+
+local function truncateDecimals(value, decimals)
+	decimals = decimals or 0
+	if decimals <= 0 then return value >= 0 and floor(value) or ceil(value) end
+	local factor = 10 ^ decimals
+	if value >= 0 then
+		return floor(value * factor) / factor
+	else
+		return ceil(value * factor) / factor
+	end
+end
+
+local function abbreviateNumber(value, decimals)
+	local absValue = abs(value)
+	local suffix = ""
+	local scaled = value
+	for i = 1, #SHORT_SUFFIXES do
+		if absValue >= 1000 then
+			absValue = absValue / 1000
+			scaled = scaled / 1000
+			suffix = SHORT_SUFFIXES[i]
+		else
+			break
+		end
+	end
+	if suffix == "" then
+		if BreakUpLargeNumbers then return BreakUpLargeNumbers(value) end
+		return tostring(value)
+	end
+	local truncated = truncateDecimals(scaled, decimals)
+	local text
+	if decimals > 0 then
+		text = trimDecimals(("%." .. decimals .. "f"):format(truncated))
+	else
+		text = ("%d"):format(truncated)
+	end
+	return text .. suffix
+end
+
+local function formatCurrencyAmount(id, amount)
+	local opts = getCurrencyOptions(id)
+	if opts.mode == "short" then return abbreviateNumber(amount, opts.decimals or 0) end
+	if BreakUpLargeNumbers then return BreakUpLargeNumbers(amount) end
+	return tostring(amount)
 end
 
 local aceWindowWidget -- AceGUI widget
@@ -64,6 +167,7 @@ local function renderList()
 		local idx = i -- wichtig: stabiles Capturing pro Zeile
 		local info = C_CurrencyInfo.GetCurrencyInfo(id)
 		local name = info and info.name or ("ID %d"):format(id)
+		local options = getCurrencyOptions(id)
 
 		local row = addon.functions.createContainer("SimpleGroup", "Flow")
 
@@ -71,6 +175,17 @@ local function renderList()
 		label:SetText(("%s (%d)"):format(name, id))
 		label:SetWidth(160)
 		row:AddChild(label)
+
+		local formatDropdown = AceGUI:Create("Dropdown")
+		formatDropdown:SetList(FORMAT_LABELS, FORMAT_ORDER)
+		formatDropdown:SetValue(getFormatKey(options))
+		formatDropdown:SetWidth(150)
+		formatDropdown:SetCallback("OnValueChanged", function(_, _, key)
+			applyFormatChoice(options, key)
+			formatDropdown:SetValue(getFormatKey(options))
+			fullUpdate()
+		end)
+		row:AddChild(formatDropdown)
 
 		if idx > 1 then
 			local up = AceGUI:Create("Icon")
@@ -112,6 +227,7 @@ local function renderList()
 		remove:SetWidth(30)
 		remove:SetCallback("OnClick", function()
 			table.remove(db.ids, idx)
+			db.currencyOptions[id] = nil
 			rebuildTracked()
 			renderList()
 			fullUpdate()
@@ -269,9 +385,10 @@ checkCurrencies = function(s)
 			elseif info.maxQuantity and info.maxQuantity > 0 and qty >= info.maxQuantity then
 				colorCode = RED_FONT_COLOR_CODE
 			end
+			local qtyText = formatCurrencyAmount(id, qty)
 			parts[#parts + 1] = {
 				id = id,
-				text = ("|T%s:%d:%d:0:0|t %s%d%s"):format(icon or 0, size, size, colorCode, qty, FONT_COLOR_CODE_CLOSE),
+				text = ("|T%s:%d:%d:0:0|t %s%s%s"):format(icon or 0, size, size, colorCode, qtyText, FONT_COLOR_CODE_CLOSE),
 			}
 			idToIndex[id] = #parts
 			if not db.tooltipPerCurrency then
@@ -333,7 +450,8 @@ updateCurrency = function(s, id)
 		colorCode = RED_FONT_COLOR_CODE
 	end
 	local size = db.fontSize or 14
-	s.snapshot.parts[idx].text = ("|T%s:%d:%d:0:0|t %s%d%s"):format(icon or 0, size, size, colorCode, qty, FONT_COLOR_CODE_CLOSE)
+	local qtyText = formatCurrencyAmount(id, qty)
+	s.snapshot.parts[idx].text = ("|T%s:%d:%d:0:0|t %s%s%s"):format(icon or 0, size, size, colorCode, qtyText, FONT_COLOR_CODE_CLOSE)
 	if not db.tooltipPerCurrency then
 		local lines = {}
 		local color = ITEM_QUALITY_COLORS[info.quality]
