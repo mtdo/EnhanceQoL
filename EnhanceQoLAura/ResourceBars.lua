@@ -890,6 +890,17 @@ tsort(druidStanceOrder)
 local druidStanceString = table.concat(druidStanceOrder, "/")
 local DRUID_HUMANOID_VISIBILITY_CLAUSE = (druidStanceString and druidStanceString ~= "") and ("[combat,nostance:%s] show"):format(druidStanceString) or "[combat] show"
 local DRUID_FORM_SEQUENCE = { "HUMANOID", "BEAR", "CAT", "TRAVEL", "MOONKIN", "TREANT", "STAG" }
+local function shouldUseDruidFormDriver(cfg)
+	if addon.variables.unitClass ~= "DRUID" then return false end
+	if type(cfg) ~= "table" then return false end
+	local showForms = cfg.showForms
+	if type(showForms) ~= "table" then return false end
+	for _, key in ipairs(DRUID_FORM_SEQUENCE) do
+		if showForms[key] == false then return true end
+	end
+	return false
+end
+ResourceBars.ShouldUseDruidFormDriver = shouldUseDruidFormDriver
 local function mapFormNameToKey(name)
 	if not name then return nil end
 	name = tostring(name):lower()
@@ -3817,8 +3828,10 @@ local function setPowerbars()
 		if shouldShow then
 			-- Per-form filter for Druid
 			local formAllowed = true
-			if isDruid and specCfg and specCfg[pType] and specCfg[pType].showForms then
-				local allowed = specCfg[pType].showForms
+			local barCfg = specCfg and specCfg[pType]
+			local delegateFormsToDriver = barCfg and ResourceBars.ShouldUseDruidFormDriver(barCfg)
+			if isDruid and barCfg and barCfg.showForms and not delegateFormsToDriver then
+				local allowed = barCfg.showForms
 				if druidForm and allowed[druidForm] == false then formAllowed = false end
 			end
 			if formAllowed and addon.variables.unitClass == "DRUID" then
@@ -3894,25 +3907,36 @@ local function resolveBarConfigForFrame(pType, frame)
 	return cfg
 end
 
-local function buildDruidVisibilityExpression(cfg)
-	if not cfg or addon.variables.unitClass ~= "DRUID" then return nil end
+local function buildDruidVisibilityExpression(cfg, hideOutOfCombat)
+	if not shouldUseDruidFormDriver(cfg) then return nil end
 	local showForms = cfg.showForms
-	if not showForms then return nil end
-	local restricted = false
-	for _, key in ipairs(DRUID_FORM_SEQUENCE) do
-		if showForms[key] == false then
-			restricted = true
-			break
-		end
-	end
-	if not restricted then return nil end
 	local clauses = {}
-	if showForms.HUMANOID ~= false then clauses[#clauses + 1] = DRUID_HUMANOID_VISIBILITY_CLAUSE end
+	local function appendClause(formCondition)
+		local cond = formCondition
+		if hideOutOfCombat then
+			if cond and cond ~= "" then
+				cond = "combat," .. cond
+			else
+				cond = "combat"
+			end
+		end
+		if cond and cond ~= "" then clauses[#clauses + 1] = ("[%s] show"):format(cond) end
+	end
+
+	if showForms.HUMANOID ~= false then
+		local humanoidCondition
+		if druidStanceString and druidStanceString ~= "" then
+			humanoidCondition = "nostance:" .. druidStanceString
+		else
+			humanoidCondition = "nostance"
+		end
+		appendClause(humanoidCondition)
+	end
 	for i = 2, #DRUID_FORM_SEQUENCE do
 		local key = DRUID_FORM_SEQUENCE[i]
 		if showForms[key] ~= false then
 			local idx = formKeyToIndex[key]
-			if idx and idx > 0 then clauses[#clauses + 1] = ("[combat,stance:%d] show"):format(idx) end
+			if idx and idx > 0 then appendClause("stance:" .. idx) end
 		end
 	end
 	if #clauses == 0 then return "hide" end
@@ -3924,28 +3948,31 @@ local function buildVisibilityDriverForBar(cfg)
 	local hideOOC = shouldHideResourceBarsOutOfCombat()
 	local hideMounted = shouldHideResourceBarsMounted()
 	local hideVehicle = shouldHideResourceBarsInVehicle()
-	if not hideOOC and not hideMounted and not hideVehicle then return nil end
-
 	cfg = cfg or {}
+	local druidExpr = buildDruidVisibilityExpression(cfg, hideOOC)
+	if not hideOOC and not hideMounted and not hideVehicle and not druidExpr then return nil, false end
+
 	local clauses = {}
-	if hideVehicle then clauses[#clauses + 1] = "[unithasvehicleui] hide" end
+	if hideVehicle then clauses[#clauses + 1] = "[vehicleui] hide" end
 	if hideMounted then
 		clauses[#clauses + 1] = "[mounted] hide"
-		clauses[#clauses + 1] = "[stance:3] hide"
+		if addon.variables.unitClass == "DRUID" then
+			local travelIdx = formKeyToIndex.TRAVEL
+			if travelIdx and travelIdx > 0 then clauses[#clauses + 1] = ("[stance:%d] hide"):format(travelIdx) end
+			local stagIdx = formKeyToIndex.STAG
+			if stagIdx and stagIdx > 0 then clauses[#clauses + 1] = ("[stance:%d] hide"):format(stagIdx) end
+		end
 	end
 
-	if hideOOC then
-		local druidExpr = buildDruidVisibilityExpression(cfg) or OOC_VISIBILITY_DRIVER
-		if #clauses == 0 then
-			return druidExpr
-		else
-			clauses[#clauses + 1] = druidExpr
-			return table.concat(clauses, "; ")
-		end
+	if druidExpr then
+		clauses[#clauses + 1] = druidExpr
+	elseif hideOOC then
+		clauses[#clauses + 1] = OOC_VISIBILITY_DRIVER
 	else
 		clauses[#clauses + 1] = "show"
-		return table.concat(clauses, "; ")
 	end
+
+	return table.concat(clauses, "; "), druidExpr ~= nil
 end
 
 local function ensureVisibilityDriverWatcher()
@@ -4017,25 +4044,32 @@ function ResourceBars.ApplyVisibilityPreference(context)
 	if not RegisterStateDriver or not UnregisterStateDriver then return end
 	if not canApplyVisibilityDriver() then return end
 	ResourceBars._pendingVisibilityDriver = nil
-	local hideOutOfCombat = shouldHideResourceBarsOutOfCombat()
-	local hideMounted = shouldHideResourceBarsMounted()
-	local hideVehicle = shouldHideResourceBarsInVehicle()
-	local hasAnyRule = hideOutOfCombat or hideMounted or hideVehicle
-	forEachResourceBarFrame(function(frame, pType)
-		if not hasAnyRule then
+	local enabled = not (addon and addon.db and addon.db.enableResourceFrame == false)
+	local driverWasActive = ResourceBars._visibilityDriverActive == true
+	if not enabled then
+		forEachResourceBarFrame(function(frame)
 			applyVisibilityDriverToFrame(frame, nil)
-			return
-		end
+			if frame then frame._rbDruidFormDriver = nil end
+		end)
+		ResourceBars._visibilityDriverActive = false
+		return
+	end
+	local driverActiveNow = false
+	forEachResourceBarFrame(function(frame, pType)
 		local cfg = resolveBarConfigForFrame(pType, frame)
 		local enabled = cfg and cfg.enabled == true
 		if enabled then
-			local expr = buildVisibilityDriverForBar(cfg)
+			local expr, hasDruidRule = buildVisibilityDriverForBar(cfg)
+			if expr then driverActiveNow = true end
 			applyVisibilityDriverToFrame(frame, expr)
+			frame._rbDruidFormDriver = hasDruidRule or nil
 		else
 			applyVisibilityDriverToFrame(frame, nil)
+			if frame then frame._rbDruidFormDriver = nil end
 		end
 	end)
-	if not hasAnyRule and context ~= "fromSetPowerbars" and frameAnchor then setPowerbars() end
+	ResourceBars._visibilityDriverActive = driverActiveNow
+	if driverWasActive and not driverActiveNow and context ~= "fromSetPowerbars" and frameAnchor then setPowerbars() end
 end
 
 local resourceBarsLoaded = addon.Aura.ResourceBars ~= nil
@@ -4183,17 +4217,30 @@ function ResourceBars.DisableResourceBars()
 		addon.Aura.anchorFrame = nil
 	end
 	if mainFrame then
+		applyVisibilityDriverToFrame(mainFrame, nil)
 		mainFrame:Hide()
 		-- Keep parent to preserve frame and anchors for reuse
 		mainFrame = nil
 	end
 	if healthBar then
+		applyVisibilityDriverToFrame(healthBar, nil)
+		if healthBar.absorbBar then
+			local absorbBar = healthBar.absorbBar
+			absorbBar:SetMinMaxValues(0, 1)
+			absorbBar:SetValue(0)
+			absorbBar._lastVal = 0
+			absorbBar._lastMax = 1
+		end
+		healthBar._lastMax = nil
+		healthBar._lastValue = nil
 		healthBar:Hide()
 		-- Keep parent to preserve frame and anchors for reuse
 		healthBar = nil
 	end
 	for pType, bar in pairs(powerbar) do
 		if bar then
+			applyVisibilityDriverToFrame(bar, nil)
+			bar._rbDruidFormDriver = nil
 			bar:Hide()
 			if pType == "RUNES" then deactivateRuneTicker(bar) end
 		end

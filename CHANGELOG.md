@@ -24,6 +24,8 @@
 
 - Error: attempt to perform indexed assignment on field 'moneyTracker'
 - Guard against ChatIM and Ignore feature in restricted content (Raid/M+) for midnight because of secret values
+- Resource Bars: Druid form-specific visibility now uses a secure state driver (no more tug-of-war with the hide rules), and disabling all visibility rules no longer forces redundant bar rebuilds
+- Resource Bars: The module now fully unregisters its visibility drivers when turned off, and “Hide while mounted” also suppresses bars in Travel/Stag form for Druids
 
 ---
 
