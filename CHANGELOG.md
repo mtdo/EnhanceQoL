@@ -8,6 +8,8 @@
 - PlayerFrame
   - Show when I target something
   - New visibility rule: “Always hide in party/raid” (overrides other rules while grouped; mouseover can still reveal)
+- Quest Tracker
+  - Optional quest counter beneath the tracker header, showing `current/max` with configurable offsets
 - Resource Bars
   - Optional auto-hide while mounted or inside vehicles, reacting instantly to mounting/vehicle events
 - Sync the width of your resource bars with the relative frame

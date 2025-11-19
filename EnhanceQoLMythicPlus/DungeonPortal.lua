@@ -1243,7 +1243,7 @@ local function updateKeystoneInfo()
 	end
 	if parentFrame:IsShown() then
 		local minHightOffset = 0
-		if PVEFrameTab4:IsVisible() then minHightOffset = 0 - PVEFrameTab4:GetHeight() end
+		if PVEFrameTab1 and PVEFrameTab1:IsVisible() then minHightOffset = 0 - PVEFrameTab1:GetHeight() end
 		if not keyStoneFrame then
 			keyStoneFrame = CreateFrame("Frame", nil, parentFrame, "BackdropTemplate")
 			SafeSetSize(keyStoneFrame, 200, 300)

@@ -517,6 +517,24 @@ local function ApplyAlphaToRegion(target, alpha, useFade)
 		return
 	end
 
+	-- TODO disable for midnight for now until a fix is found:
+	--[[
+		6x ...aceBlizzard_UnitFrame/Mainline/UnitFrame.lua:256: attempt to compare local 'myCurrentHealAbsorb' (a secret value)
+		[Blizzard_UnitFrame/Mainline/UnitFrame.lua]:256: in function 'UnitFrameHealPredictionBars_Update'
+		[Blizzard_UnitFrame/Mainline/UnitFrame.lua]:230: in function 'UnitFrameHealPredictionBars_UpdateSize'
+		[Blizzard_UnitFrame/Mainline/PetFrame.lua]:221: in function <...faceBlizzard_UnitFrame/Mainline/PetFrame.lua:220>
+		[C]: in function 'Play'
+		[EnhanceQoL/EnhanceQoL.lua]:581: in function <EnhanceQoL/EnhanceQoL.lua:512>
+		[EnhanceQoL/EnhanceQoL.lua]:814: in function <EnhanceQoL/EnhanceQoL.lua:812>
+		[EnhanceQoL/EnhanceQoL.lua]:895: in function <EnhanceQoL/EnhanceQoL.lua:858>
+		[EnhanceQoL/EnhanceQoL.lua]:907: in function <EnhanceQoL/EnhanceQoL.lua:903>
+	--]]
+	if addon.variables.isMidnight then
+		StopFrameFade(target)
+		target:SetAlpha(alpha)
+		return
+	end
+
 	if issecretvalue and issecretvalue(alpha) then
 		StopFrameFade(target)
 		target:SetAlpha(alpha)
@@ -578,6 +596,8 @@ local function ApplyAlphaToRegion(target, alpha, useFade)
 	anim:SetToAlpha(alpha)
 	anim:SetDuration(FRAME_VISIBILITY_FADE_DURATION)
 	group.targetAlpha = alpha
+
+	print(target:GetName())
 	group:Play()
 end
 
@@ -2905,6 +2925,45 @@ local function addQuestFrame(container, d)
 		groupCore:AddChild(cbautoChooseQuest)
 	end
 
+	local trackerGroup = addon.functions.createContainer("InlineGroup", "List")
+	trackerGroup:SetTitle(L["questTrackerOptions"] or QUESTS_LABEL)
+	wrapper:AddChild(trackerGroup)
+
+	local function refreshTrackerControls()
+		local enabled = addon.db.questTrackerShowQuestCount == true
+		if trackerGroup._sliderX then trackerGroup._sliderX:SetDisabled(not enabled) end
+		if trackerGroup._sliderY then trackerGroup._sliderY:SetDisabled(not enabled) end
+	end
+
+	local questCountCheckbox = addon.functions.createCheckboxAce(L["questTrackerShowQuestCount"] or "Show quest count under tracker", addon.db.questTrackerShowQuestCount, function(self, _, value)
+		addon.db.questTrackerShowQuestCount = value and true or false
+		refreshTrackerControls()
+		addon.functions.UpdateQuestTrackerQuestCount()
+	end, L["questTrackerShowQuestCount_desc"])
+	trackerGroup:AddChild(questCountCheckbox)
+
+	local function sliderLabelX(val) return string.format("%s: %d", L["questTrackerQuestCountOffsetX"] or (L["instanceDifficultyOffsetX"] or "Horizontal offset"), val) end
+	local function sliderLabelY(val) return string.format("%s: %d", L["questTrackerQuestCountOffsetY"] or (L["instanceDifficultyOffsetY"] or "Vertical offset"), val) end
+
+	local sliderX = addon.functions.createSliderAce(sliderLabelX(addon.db.questTrackerQuestCountOffsetX or 0), addon.db.questTrackerQuestCountOffsetX or 0, -200, 200, 1, function(self, _, value)
+		local rounded = math.floor((value or 0) + 0.5)
+		addon.db.questTrackerQuestCountOffsetX = rounded
+		self:SetLabel(sliderLabelX(rounded))
+		addon.functions.UpdateQuestTrackerQuestCountPosition()
+	end)
+	trackerGroup._sliderX = sliderX
+	trackerGroup:AddChild(sliderX)
+
+	local sliderY = addon.functions.createSliderAce(sliderLabelY(addon.db.questTrackerQuestCountOffsetY or 0), addon.db.questTrackerQuestCountOffsetY or 0, -200, 200, 1, function(self, _, value)
+		local rounded = math.floor((value or 0) + 0.5)
+		addon.db.questTrackerQuestCountOffsetY = rounded
+		self:SetLabel(sliderLabelY(rounded))
+		addon.functions.UpdateQuestTrackerQuestCountPosition()
+	end)
+	trackerGroup._sliderY = sliderY
+	trackerGroup:AddChild(sliderY)
+	refreshTrackerControls()
+
 	local groupNPC = addon.functions.createContainer("InlineGroup", "List")
 	groupNPC:SetTitle(L["questAddNPCToExclude"])
 	wrapper:AddChild(groupNPC)
@@ -2962,6 +3021,108 @@ local function addQuestFrame(container, d)
 	groupNPC:AddChild(dropIncludeList)
 	groupNPC:AddChild(btnRemoveNPC)
 	scroll:DoLayout()
+end
+
+local QUEST_TRACKER_QUEST_COUNT_COLOR = { r = 1, g = 210 / 255, b = 0 }
+local questTrackerQuestCountFrame
+local questTrackerQuestCountText
+local questTrackerQuestCountWatcher
+
+local function GetQuestTrackerQuestCountText()
+	if not C_QuestLog or not C_QuestLog.GetNumQuestLogEntries then return "" end
+	local _, numQuests = C_QuestLog.GetNumQuestLogEntries()
+	if not numQuests then numQuests = 0 end
+	local maxQuests = C_QuestLog.GetMaxNumQuestsCanAccept and C_QuestLog.GetMaxNumQuestsCanAccept()
+	if not maxQuests or maxQuests <= 0 then
+		if numQuests <= 0 then return "" end
+		return tostring(numQuests)
+	end
+	return string.format("%d/%d", numQuests, maxQuests)
+end
+
+local function PositionQuestTrackerQuestCount()
+	if not questTrackerQuestCountFrame or not addon or not addon.db then return end
+	local header = _G.QuestObjectiveTracker and _G.QuestObjectiveTracker.Header
+	if not header then return end
+	questTrackerQuestCountFrame:ClearAllPoints()
+	local x = addon.db.questTrackerQuestCountOffsetX or 0
+	local y = addon.db.questTrackerQuestCountOffsetY or 0
+	questTrackerQuestCountFrame:SetPoint("CENTER", header, "CENTER", x, y)
+end
+
+local function EnsureQuestTrackerQuestCountFrame()
+	local header = _G.QuestObjectiveTracker and _G.QuestObjectiveTracker.Header
+	if not header then return nil end
+	if not questTrackerQuestCountFrame then
+		questTrackerQuestCountFrame = CreateFrame("Frame", nil, header)
+		questTrackerQuestCountFrame:SetSize(1, 1)
+	end
+	questTrackerQuestCountFrame:SetParent(header)
+	if not questTrackerQuestCountText then
+		questTrackerQuestCountText = questTrackerQuestCountFrame:CreateFontString(nil, "OVERLAY")
+		questTrackerQuestCountText:SetPoint("TOPLEFT")
+		questTrackerQuestCountText:SetJustifyH("LEFT")
+		questTrackerQuestCountText:SetJustifyV("TOP")
+	end
+	local referenceFont = header.Text and header.Text:GetFontObject()
+	if referenceFont then
+		questTrackerQuestCountText:SetFontObject(referenceFont)
+	else
+		questTrackerQuestCountText:SetFont(addon.variables.defaultFont or "Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
+	end
+	questTrackerQuestCountText:SetTextColor(QUEST_TRACKER_QUEST_COUNT_COLOR.r, QUEST_TRACKER_QUEST_COUNT_COLOR.g, QUEST_TRACKER_QUEST_COUNT_COLOR.b)
+	return questTrackerQuestCountFrame
+end
+
+local function UpdateQuestTrackerQuestCountPosition()
+	if not addon or not addon.db then return end
+	if not questTrackerQuestCountFrame or not questTrackerQuestCountFrame:IsShown() then
+		if addon.db.questTrackerShowQuestCount then addon.functions.UpdateQuestTrackerQuestCount() end
+		return
+	end
+	PositionQuestTrackerQuestCount()
+end
+addon.functions.UpdateQuestTrackerQuestCountPosition = UpdateQuestTrackerQuestCountPosition
+
+local function UpdateQuestTrackerQuestCount()
+	if not addon or not addon.db or not addon.db.questTrackerShowQuestCount then
+		if questTrackerQuestCountFrame then questTrackerQuestCountFrame:Hide() end
+		return
+	end
+	local header = _G.QuestObjectiveTracker and _G.QuestObjectiveTracker.Header
+	if not header then
+		if questTrackerQuestCountFrame then questTrackerQuestCountFrame:Hide() end
+		return
+	end
+	local container = EnsureQuestTrackerQuestCountFrame()
+	if not container or not questTrackerQuestCountText then return end
+	PositionQuestTrackerQuestCount()
+	local textValue = GetQuestTrackerQuestCountText()
+	if textValue == "" then
+		questTrackerQuestCountFrame:Hide()
+		return
+	end
+	questTrackerQuestCountText:SetText(textValue)
+	questTrackerQuestCountFrame:SetSize(math.max(1, questTrackerQuestCountText:GetStringWidth()), math.max(1, questTrackerQuestCountText:GetStringHeight()))
+	questTrackerQuestCountFrame:Show()
+	questTrackerQuestCountText:Show()
+end
+addon.functions.UpdateQuestTrackerQuestCount = UpdateQuestTrackerQuestCount
+
+local function EnsureQuestTrackerQuestCountWatcher()
+	if questTrackerQuestCountWatcher then return end
+	questTrackerQuestCountWatcher = CreateFrame("Frame")
+	local events = { "PLAYER_ENTERING_WORLD", "QUEST_ACCEPTED", "QUEST_REMOVED" }
+	for _, evt in ipairs(events) do
+		questTrackerQuestCountWatcher:RegisterEvent(evt)
+	end
+	questTrackerQuestCountWatcher:SetScript("OnEvent", function(_, event)
+		if event == "PLAYER_ENTERING_WORLD" then
+			C_Timer.After(0.5, UpdateQuestTrackerQuestCount)
+		else
+			UpdateQuestTrackerQuestCount()
+		end
+	end)
 end
 
 local function merchantItemIsKnown(itemIndex)
@@ -3882,6 +4043,9 @@ local function initQuest()
 	addon.functions.InitDBValue("autoChooseQuest", false)
 	addon.functions.InitDBValue("ignoreTrivialQuests", false)
 	addon.functions.InitDBValue("ignoreDailyQuests", false)
+	addon.functions.InitDBValue("questTrackerShowQuestCount", false)
+	addon.functions.InitDBValue("questTrackerQuestCountOffsetX", 0)
+	addon.functions.InitDBValue("questTrackerQuestCountOffsetY", 0)
 	addon.functions.InitDBValue("questWowheadLink", false)
 	addon.functions.InitDBValue("ignoredQuestNPC", {})
 	addon.functions.InitDBValue("autogossipID", {})
@@ -3961,6 +4125,9 @@ local function initQuest()
 		Menu.ModifyMenu("MENU_QUEST_MAP_LOG_TITLE", EQOL_AddQuestWowheadEntry)
 		Menu.ModifyMenu("MENU_QUEST_OBJECTIVE_TRACKER", EQOL_AddQuestWowheadEntry)
 	end
+
+	EnsureQuestTrackerQuestCountWatcher()
+	UpdateQuestTrackerQuestCount()
 end
 
 local function initMisc()
