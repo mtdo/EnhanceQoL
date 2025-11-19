@@ -4,6 +4,8 @@
 
 ### ✨ Added
 
+- Shortening per _Currency_ in _Currency Stream_ added
+
 ### 🔄 Changed
 
 - _Show leader icon on raid style party frames_ now also shows leader and assist in raids
