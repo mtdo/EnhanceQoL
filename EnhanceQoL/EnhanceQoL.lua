@@ -597,7 +597,6 @@ local function ApplyAlphaToRegion(target, alpha, useFade)
 	anim:SetDuration(FRAME_VISIBILITY_FADE_DURATION)
 	group.targetAlpha = alpha
 
-	print(target:GetName())
 	group:Play()
 end
 
