@@ -4,6 +4,17 @@ local addonName, addon = ...
 
 local L = LibStub("AceLocale-3.0"):GetLocale(addonName)
 
+local LFGListFrame = _G.LFGListFrame
+local GetContainerItemInfo = C_Container.GetContainerItemInfo
+local StaticPopup_Visible = StaticPopup_Visible
+local IsShiftKeyDown = IsShiftKeyDown
+local IsControlKeyDown = IsControlKeyDown
+local IsAltKeyDown = IsAltKeyDown
+local IsInGroup = IsInGroup
+local math = math
+local TooltipUtil = _G.TooltipUtil
+local GetTime = GetTime
+
 ---- REGION Functions
 
 local doneHook = false
