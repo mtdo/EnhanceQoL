@@ -2108,64 +2108,6 @@ local function EnsureQuestTrackerQuestCountWatcher()
 	end)
 end
 
-local function merchantItemIsKnown(itemIndex)
-	if not itemIndex or itemIndex <= 0 then return false end
-	if not C_TooltipInfo or (not C_TooltipInfo.GetMerchantItem and not C_TooltipInfo.GetHyperlink) then return false end
-
-	local tooltipData
-	if C_TooltipInfo.GetMerchantItem then tooltipData = C_TooltipInfo.GetMerchantItem(itemIndex) end
-
-	if not tooltipData and C_TooltipInfo.GetHyperlink and GetMerchantItemLink then
-		local itemLink = GetMerchantItemLink(itemIndex)
-		if itemLink then tooltipData = C_TooltipInfo.GetHyperlink(itemLink) end
-	end
-
-	if not tooltipData then return false end
-	if TooltipUtil and TooltipUtil.SurfaceArgs then TooltipUtil.SurfaceArgs(tooltipData) end
-	if not tooltipData.lines then return false end
-	for _, line in ipairs(tooltipData.lines) do
-		if TooltipUtil and TooltipUtil.SurfaceArgs then TooltipUtil.SurfaceArgs(line) end
-		local text = line.leftText or line.rightText
-		if text and text:find(ITEM_SPELL_KNOWN, 1, true) then return true end
-	end
-	return false
-end
-
-local petCollectedCache = {}
-
-local function clearPetCollectedCache() wipe(petCollectedCache) end
-
-local function getPetCollectedCount(speciesID)
-	if not speciesID then return 0 end
-	local cached = petCollectedCache[speciesID]
-	if cached ~= nil then return cached end
-	if not C_PetJournal or not C_PetJournal.GetNumCollectedInfo then return 0 end
-	local numCollected = C_PetJournal.GetNumCollectedInfo(speciesID) or 0
-	petCollectedCache[speciesID] = numCollected
-	return numCollected
-end
-
-local function IsPetAlreadyCollectedFromItem(itemID)
-	if not C_PetJournal or not C_PetJournal.GetNumCollectedInfo then return false end
-	if not itemID then return false end
-
-	if not C_PetJournal.GetPetInfoByItemID then return false end
-
-	local speciesID = select(13, C_PetJournal.GetPetInfoByItemID(itemID))
-	if not speciesID then return false end
-
-	local count = getPetCollectedCount(speciesID)
-	return count > 0
-end
-
-if C_PetJournal then
-	local petJournalWatcher = CreateFrame("Frame")
-	petJournalWatcher:RegisterEvent("PET_JOURNAL_LIST_UPDATE")
-	petJournalWatcher:RegisterEvent("PET_JOURNAL_PET_DELETED")
-	petJournalWatcher:RegisterEvent("PET_JOURNAL_PET_RESTORED")
-	petJournalWatcher:RegisterEvent("NEW_PET_ADDED")
-	petJournalWatcher:SetScript("OnEvent", clearPetCollectedCache)
-end
 
 local function initActionBars()
 	addon.functions.InitDBValue("actionBarAnchorEnabled", false)

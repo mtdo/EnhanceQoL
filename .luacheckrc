@@ -458,6 +458,7 @@ globals = {
 	"BNConnected",
 	"BNDeclineFriendInvite",
 	"BNFeaturesEnabled",
+	"CreateSettingsButtonInitializer",
 	"BNFeaturesEnabledAndConnected",
 	"BNGetBlockedInfo",
 	"BNGetFOFInfo",
