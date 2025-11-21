@@ -8,8 +8,10 @@ Starting to change stuff to blizzard options, for now only a small part is there
 
 - Options menus transformed
   - Combat & Dungeons
-  - Container Action
   - Items & Inventory
+    - Container Action
+    - Gear & Upgrade
+    - Vendors & Economy
   
 ### ✨ Added
 

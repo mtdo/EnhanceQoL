@@ -153,13 +153,13 @@ function addon.functions.initDungeonFrame()
 			if type(name) ~= "string" or name == "" then return end
 
 			local targetName = name
-			if not targetName:find("-", 1, true) then targetName = targetName .. "-" .. (GetRealmName() or ""):gsub("%s", "") end
+			if not targetName:find(" -", 1, true) then targetName = targetName .. " -" .. (GetRealmName() or ""):gsub("%s", "") end
 
 			local char, realm = targetName:match("^([^%-]+)%-(.+)$")
 			if not char or not realm then return end
 
 			local regionKey = regionTable[GetCurrentRegion()] or "EU"
-			local realmSlug = string.lower((realm or ""):gsub("%s+", "-"))
+			local realmSlug = string.lower((realm or ""):gsub("%s+", " -"))
 			local riolink = "https://raider.io/characters/" .. string.lower(regionKey) .. "/" .. realmSlug .. "/" .. char
 
 			root:CreateDivider()
@@ -293,7 +293,7 @@ addon.functions.SettingsCreateHeadline(cChar, L["timeoutReleaseHeadline"])
 local timeoutReleaseGroups = {
 	{
 		var = "timeoutRelease_raidNormal",
-		text = RAID .. "- " .. PLAYER_DIFFICULTY1 .. " / " .. PLAYER_DIFFICULTY3 .. " / " .. PLAYER_DIFFICULTY_TIMEWALKER,
+		text = RAID .. " - " .. PLAYER_DIFFICULTY1 .. " / " .. PLAYER_DIFFICULTY3 .. " / " .. PLAYER_DIFFICULTY_TIMEWALKER,
 		func = function(value) addon.db["timeoutReleaseDifficulties"]["raidNormal"] = value and true or false end,
 		get = function() return addon.db["timeoutReleaseDifficulties"]["raidNormal"] end,
 		parentCheck = function() return rData.setting and rData.setting:GetValue() == true end,
@@ -303,7 +303,7 @@ local timeoutReleaseGroups = {
 	},
 	{
 		var = "timeoutRelease_raidHeroic",
-		text = RAID .. "- " .. PLAYER_DIFFICULTY2,
+		text = RAID .. " - " .. PLAYER_DIFFICULTY2,
 		func = function(value) addon.db["timeoutReleaseDifficulties"]["raidHeroic"] = value and true or false end,
 		get = function() return addon.db["timeoutReleaseDifficulties"]["raidHeroic"] end,
 		parentCheck = function() return rData.setting and rData.setting:GetValue() == true end,
@@ -313,7 +313,7 @@ local timeoutReleaseGroups = {
 	},
 	{
 		var = "timeoutRelease_raidMythic",
-		text = RAID .. "- " .. PLAYER_DIFFICULTY6,
+		text = RAID .. " - " .. PLAYER_DIFFICULTY6,
 		func = function(value) addon.db["timeoutReleaseDifficulties"]["raidMythic"] = value and true or false end,
 		get = function() return addon.db["timeoutReleaseDifficulties"]["raidMythic"] end,
 		parentCheck = function() return rData.setting and rData.setting:GetValue() == true end,
@@ -323,7 +323,7 @@ local timeoutReleaseGroups = {
 	},
 	{
 		var = "timeoutRelease_dungeonNormal",
-		text = DUNGEONS .. "- " .. PLAYER_DIFFICULTY1 .. " / " .. PLAYER_DIFFICULTY_TIMEWALKER,
+		text = DUNGEONS .. " - " .. PLAYER_DIFFICULTY1 .. " / " .. PLAYER_DIFFICULTY_TIMEWALKER,
 		func = function(value) addon.db["timeoutReleaseDifficulties"]["dungeonNormal"] = value and true or false end,
 		get = function() return addon.db["timeoutReleaseDifficulties"]["dungeonNormal"] end,
 		parentCheck = function() return rData.setting and rData.setting:GetValue() == true end,
@@ -333,7 +333,7 @@ local timeoutReleaseGroups = {
 	},
 	{
 		var = "timeoutRelease_dungeonHeroic",
-		text = DUNGEONS .. "- " .. PLAYER_DIFFICULTY2,
+		text = DUNGEONS .. " - " .. PLAYER_DIFFICULTY2,
 		func = function(value) addon.db["timeoutReleaseDifficulties"]["dungeonHeroic"] = value and true or false end,
 		get = function() return addon.db["timeoutReleaseDifficulties"]["dungeonHeroic"] end,
 		parentCheck = function() return rData.setting and rData.setting:GetValue() == true end,
@@ -343,7 +343,7 @@ local timeoutReleaseGroups = {
 	},
 	{
 		var = "timeoutRelease_dungeonMythic",
-		text = DUNGEONS .. "- " .. PLAYER_DIFFICULTY6,
+		text = DUNGEONS .. " - " .. PLAYER_DIFFICULTY6,
 		func = function(value) addon.db["timeoutReleaseDifficulties"]["dungeonMythic"] = value and true or false end,
 		get = function() return addon.db["timeoutReleaseDifficulties"]["dungeonMythic"] end,
 		parentCheck = function() return rData.setting and rData.setting:GetValue() == true end,
@@ -353,7 +353,7 @@ local timeoutReleaseGroups = {
 	},
 	{
 		var = "timeoutRelease_dungeonMythicPlus",
-		text = DUNGEONS .. "- " .. PLAYER_DIFFICULTY_MYTHIC_PLUS,
+		text = DUNGEONS .. " - " .. PLAYER_DIFFICULTY_MYTHIC_PLUS,
 		func = function(value) addon.db["timeoutReleaseDifficulties"]["dungeonMythicPlus"] = value and true or false end,
 		get = function() return addon.db["timeoutReleaseDifficulties"]["dungeonMythicPlus"] end,
 		parentCheck = function() return rData.setting and rData.setting:GetValue() == true end,
@@ -363,7 +363,7 @@ local timeoutReleaseGroups = {
 	},
 	{
 		var = "timeoutRelease_dungeonFollower",
-		text = GUILD_CHALLENGE_TYPE4 .. "- " .. L["timeoutReleasePrefixScenario"],
+		text = GUILD_CHALLENGE_TYPE4 .. " - " .. L["timeoutReleasePrefixScenario"],
 		func = function(value) addon.db["timeoutReleaseDifficulties"]["dungeonFollower"] = value and true or false end,
 		get = function() return addon.db["timeoutReleaseDifficulties"]["dungeonFollower"] end,
 		parentCheck = function() return rData.setting and rData.setting:GetValue() == true end,

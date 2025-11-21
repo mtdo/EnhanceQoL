@@ -51,7 +51,11 @@ function addon.functions.SettingsCreateCheckbox(cat, cbData)
 	if cbData.children then
 		for _, v in pairs(cbData.children) do
 			v.element = element
-			if v.sType == "dropdown" then addon.functions.SettingsCreateDropdown(cat, v) end
+			if v.sType == "dropdown" then
+				addon.functions.SettingsCreateDropdown(cat, v)
+			elseif v.sType == "checkbox" then
+				addon.functions.SettingsCreateCheckbox(cat, v)
+			end
 		end
 	end
 	return addon.SettingsLayout.elements[cbData.var]
@@ -88,8 +92,17 @@ function addon.functions.SettingsCreateDropdown(cat, cbData, searchtags)
 		local container = Settings.CreateControlTextContainer()
 		local list = cbData.list
 		if cbData.listFunc then list = cbData.listFunc() end
-		for key, value in pairs(list or {}) do
-			container:Add(key, value)
+		if type(list) == "table" then
+			local order = rawget(list, "_order")
+			if type(order) == "table" and #order > 0 then
+				for _, key in ipairs(order) do
+					container:Add(key, list[key])
+				end
+			else
+				for key, value in pairs(list) do
+					if key ~= "_order" then container:Add(key, value) end
+				end
+			end
 		end
 		return container:GetData()
 	end
