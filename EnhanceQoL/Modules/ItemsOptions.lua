@@ -15,10 +15,6 @@ local function refreshLootToast()
 	if addon.functions and addon.functions.initLootToast then addon.functions.initLootToast() end
 end
 
-local function showBagIgnoreWarning()
-	if addon.functions and addon.functions.checkBagIgnoreJunk then addon.functions.checkBagIgnoreJunk() end
-end
-
 local onInspect = addon.functions and addon.functions.onInspect
 
 local function addVendorMainFrame2(container)
@@ -55,67 +51,67 @@ local function addVendorMainFrame2(container)
 	end
 
 	local function buildAHCore()
-		local g, known = ensureGroup("ahcore", BUTTON_LAG_AUCTIONHOUSE)
-		local items = {
-			{
-				text = L["persistAuctionHouseFilter"],
-				var = "persistAuctionHouseFilter",
-				func = function(_, _, v) addon.db["persistAuctionHouseFilter"] = v end,
-			},
-			{
-				text = (function()
-					local label = _G["AUCTION_HOUSE_FILTER_CURRENTEXPANSION_ONLY"] or "Current Expansion Only"
-					return L["alwaysUserCurExpAuctionHouse"]:format(label)
-				end)(),
-				var = "alwaysUserCurExpAuctionHouse",
-				func = function(_, _, v) addon.db["alwaysUserCurExpAuctionHouse"] = v end,
-			},
-		}
-		table.sort(items, function(a, b) return a.text < b.text end)
-		for _, it in ipairs(items) do
-			local w = addon.functions.createCheckboxAce(it.text, addon.db[it.var], it.func, it.desc)
-			g:AddChild(w)
-		end
-		if known then
-			g:ResumeLayout()
-			doLayout()
-		end
+		-- 	local g, known = ensureGroup("ahcore", BUTTON_LAG_AUCTIONHOUSE)
+		-- 	local items = {
+		-- 		{
+		-- 			text = L["persistAuctionHouseFilter"],
+		-- 			var = "persistAuctionHouseFilter",
+		-- 			func = function(_, _, v) addon.db["persistAuctionHouseFilter"] = v end,
+		-- 		},
+		-- 		{
+		-- 			text = (function()
+		-- 				local label = _G["AUCTION_HOUSE_FILTER_CURRENTEXPANSION_ONLY"] or "Current Expansion Only"
+		-- 				return L["alwaysUserCurExpAuctionHouse"]:format(label)
+		-- 			end)(),
+		-- 			var = "alwaysUserCurExpAuctionHouse",
+		-- 			func = function(_, _, v) addon.db["alwaysUserCurExpAuctionHouse"] = v end,
+		-- 		},
+		-- 	}
+		-- 	table.sort(items, function(a, b) return a.text < b.text end)
+		-- 	for _, it in ipairs(items) do
+		-- 		local w = addon.functions.createCheckboxAce(it.text, addon.db[it.var], it.func, it.desc)
+		-- 		g:AddChild(w)
+		-- 	end
+		-- 	if known then
+		-- 		g:ResumeLayout()
+		-- 		doLayout()
+		-- 	end
 	end
 
 	local function buildConvenience()
 		local g, known = ensureGroup("conv", L["Convenience"])
 		local checkboxes = {}
 		local items = {
-			{
-				var = "autoRepair",
-				text = L["autoRepair"],
-				func = function(_, _, v)
-					addon.db["autoRepair"] = v
-					if checkboxes["autoRepairGuildBank"] then
-						checkboxes["autoRepairGuildBank"]:SetDisabled(not v)
-						if not v and addon.db["autoRepairGuildBank"] then
-							addon.db["autoRepairGuildBank"] = false
-							checkboxes["autoRepairGuildBank"]:SetValue(false)
-						end
-					end
-				end,
-				desc = L["autoRepairDesc"],
-			},
-			{
-				var = "autoRepairGuildBank",
-				text = L["autoRepairGuildBank"],
-				func = function(_, _, v) addon.db["autoRepairGuildBank"] = v end,
-				desc = L["autoRepairGuildBankDesc"],
-			},
-			{
-				var = "sellAllJunk",
-				text = L["sellAllJunk"],
-				func = function(_, _, v)
-					addon.db["sellAllJunk"] = v
-					if v then showBagIgnoreWarning() end
-				end,
-				desc = L["sellAllJunkDesc"],
-			},
+			-- {
+			-- 	var = "autoRepair",
+			-- 	text = L["autoRepair"],
+			-- 	func = function(_, _, v)
+			-- 		addon.db["autoRepair"] = v
+			-- 		if checkboxes["autoRepairGuildBank"] then
+			-- 			checkboxes["autoRepairGuildBank"]:SetDisabled(not v)
+			-- 			if not v and addon.db["autoRepairGuildBank"] then
+			-- 				addon.db["autoRepairGuildBank"] = false
+			-- 				checkboxes["autoRepairGuildBank"]:SetValue(false)
+			-- 			end
+			-- 		end
+			-- 	end,
+			-- 	desc = L["autoRepairDesc"],
+			-- },
+			-- {
+			-- 	var = "autoRepairGuildBank",
+			-- 	text = L["autoRepairGuildBank"],
+			-- 	func = function(_, _, v) addon.db["autoRepairGuildBank"] = v end,
+			-- 	desc = L["autoRepairGuildBankDesc"],
+			-- },
+			-- {
+			-- 	var = "sellAllJunk",
+			-- 	text = L["sellAllJunk"],
+			-- 	func = function(_, _, v)
+			-- 		addon.db["sellAllJunk"] = v
+			-- 		if v then showBagIgnoreWarning() end
+			-- 	end,
+			-- 	desc = L["sellAllJunkDesc"],
+			-- },
 		}
 		for _, it in ipairs(items) do
 			local w = addon.functions.createCheckboxAce(it.text, addon.db[it.var], it.func, it.desc)
@@ -131,49 +127,49 @@ local function addVendorMainFrame2(container)
 	end
 
 	local function buildMerchant()
-		local g, known = ensureGroup("merchant", MERCHANT)
-		local w = addon.functions.createCheckboxAce(L["enableExtendedMerchant"], addon.db["enableExtendedMerchant"], function(_, _, value)
-			addon.db["enableExtendedMerchant"] = value
-			if addon.Merchant then
-				if value and addon.Merchant.Enable then
-					addon.Merchant:Enable()
-				elseif not value and addon.Merchant.Disable then
-					addon.Merchant:Disable()
-					addon.variables.requireReload = true
-					addon.functions.checkReloadFrame()
-				end
-			end
-		end, L["enableExtendedMerchantDesc"])
-		g:AddChild(w)
+		-- local g, known = ensureGroup("merchant", MERCHANT)
+		-- local w = addon.functions.createCheckboxAce(L["enableExtendedMerchant"], addon.db["enableExtendedMerchant"], function(_, _, value)
+		-- 	addon.db["enableExtendedMerchant"] = value
+		-- 	if addon.Merchant then
+		-- 		if value and addon.Merchant.Enable then
+		-- 			addon.Merchant:Enable()
+		-- 		elseif not value and addon.Merchant.Disable then
+		-- 			addon.Merchant:Disable()
+		-- 			addon.variables.requireReload = true
+		-- 			addon.functions.checkReloadFrame()
+		-- 		end
+		-- 	end
+		-- end, L["enableExtendedMerchantDesc"])
+		-- g:AddChild(w)
 
-		local highlightKnownCheckbox = addon.functions.createCheckboxAce(L["markKnownOnMerchant"], addon.db["markKnownOnMerchant"], function(_, _, value)
-			addon.db["markKnownOnMerchant"] = value
-			if MerchantFrame and MerchantFrame:IsShown() then
-				if MerchantFrame.selectedTab == 2 then
-					if MerchantFrame_UpdateBuybackInfo then MerchantFrame_UpdateBuybackInfo() end
-				else
-					if MerchantFrame_UpdateMerchantInfo then MerchantFrame_UpdateMerchantInfo() end
-				end
-			end
-		end, L["markKnownOnMerchantDesc"])
-		g:AddChild(highlightKnownCheckbox)
+		-- local highlightKnownCheckbox = addon.functions.createCheckboxAce(L["markKnownOnMerchant"], addon.db["markKnownOnMerchant"], function(_, _, value)
+		-- 	addon.db["markKnownOnMerchant"] = value
+		-- 	if MerchantFrame and MerchantFrame:IsShown() then
+		-- 		if MerchantFrame.selectedTab == 2 then
+		-- 			if MerchantFrame_UpdateBuybackInfo then MerchantFrame_UpdateBuybackInfo() end
+		-- 		else
+		-- 			if MerchantFrame_UpdateMerchantInfo then MerchantFrame_UpdateMerchantInfo() end
+		-- 		end
+		-- 	end
+		-- end, L["markKnownOnMerchantDesc"])
+		-- g:AddChild(highlightKnownCheckbox)
 
-		local highlightCollectedPetsCheckbox = addon.functions.createCheckboxAce(L["markCollectedPetsOnMerchant"], addon.db["markCollectedPetsOnMerchant"], function(_, _, value)
-			addon.db["markCollectedPetsOnMerchant"] = value
-			if MerchantFrame and MerchantFrame:IsShown() then
-				if MerchantFrame.selectedTab == 2 then
-					if MerchantFrame_UpdateBuybackInfo then MerchantFrame_UpdateBuybackInfo() end
-				else
-					if MerchantFrame_UpdateMerchantInfo then MerchantFrame_UpdateMerchantInfo() end
-				end
-			end
-		end, L["markCollectedPetsOnMerchantDesc"])
-		g:AddChild(highlightCollectedPetsCheckbox)
+		-- local highlightCollectedPetsCheckbox = addon.functions.createCheckboxAce(L["markCollectedPetsOnMerchant"], addon.db["markCollectedPetsOnMerchant"], function(_, _, value)
+		-- 	addon.db["markCollectedPetsOnMerchant"] = value
+		-- 	if MerchantFrame and MerchantFrame:IsShown() then
+		-- 		if MerchantFrame.selectedTab == 2 then
+		-- 			if MerchantFrame_UpdateBuybackInfo then MerchantFrame_UpdateBuybackInfo() end
+		-- 		else
+		-- 			if MerchantFrame_UpdateMerchantInfo then MerchantFrame_UpdateMerchantInfo() end
+		-- 		end
+		-- 	end
+		-- end, L["markCollectedPetsOnMerchantDesc"])
+		-- g:AddChild(highlightCollectedPetsCheckbox)
 
-		if known then
-			g:ResumeLayout()
-			doLayout()
-		end
+		-- if known then
+		-- 	g:ResumeLayout()
+		-- 	doLayout()
+		-- end
 	end
 
 	local function buildMailbox()

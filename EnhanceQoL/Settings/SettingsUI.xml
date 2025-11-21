@@ -5,4 +5,5 @@
 	<Script file='ContainerAction.lua'/>
 	<Script file='GearUpgrade.lua'/>
 	<Script file='UIInput.lua'/>
+	<Script file='VendorEconomy.lua'/>
 </Ui>

@@ -51,7 +51,11 @@ function addon.functions.SettingsCreateCheckbox(cat, cbData)
 	if cbData.children then
 		for _, v in pairs(cbData.children) do
 			v.element = element
-			if v.sType == "dropdown" then addon.functions.SettingsCreateDropdown(cat, v) end
+			if v.sType == "dropdown" then
+				addon.functions.SettingsCreateDropdown(cat, v)
+			elseif v.sType == "checkbox" then
+				addon.functions.SettingsCreateCheckbox(cat, v)
+			end
 		end
 	end
 	return addon.SettingsLayout.elements[cbData.var]
