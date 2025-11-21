@@ -299,6 +299,7 @@ L["enableMailboxAddressBookDesc"] = "Adds a searchable list of your characters n
 L["MailboxWindowTitle"] = "Address Book"
 L["mailboxRemoveHeader"] = "Remove character"
 L["mailboxRemoveSelect"] = "Select character"
+L["mailboxRemoveConfirm"] = "Remove %s from the mailbox address book? Press Accept to delete this entry."
 
 L["headerClassInfo"] = "These settings only apply to %s"
 

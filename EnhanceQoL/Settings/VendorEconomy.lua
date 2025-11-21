@@ -152,7 +152,28 @@ data = {
 				text = L["mailboxRemoveHeader"],
 				get = function() return "" end,
 				set = function(key)
-					
+					if not key or key == "" then return end
+					if not addon.db or not addon.db["mailboxContacts"] or not addon.db["mailboxContacts"][key] then return end
+
+					local dialogKey = "EQOL_MAILBOX_CONTACT_REMOVE"
+					StaticPopupDialogs[dialogKey] = StaticPopupDialogs[dialogKey]
+						or {
+							text = L["mailboxRemoveConfirm"],
+							button1 = ACCEPT,
+							button2 = CANCEL,
+							timeout = 0,
+							whileDead = true,
+							hideOnEscape = true,
+							preferredIndex = 3,
+						}
+
+					StaticPopupDialogs[dialogKey].OnAccept = function(_, contactKey)
+						if not contactKey or not addon.db or not addon.db["mailboxContacts"] then return end
+						addon.db["mailboxContacts"][contactKey] = nil
+						if addon.Mailbox and addon.Mailbox.RefreshList then addon.Mailbox:RefreshList() end
+					end
+
+					StaticPopup_Show(dialogKey, key, nil, key)
 				end,
 				parentCheck = function()
 					return addon.SettingsLayout.elements["enableMailboxAddressBook"]
