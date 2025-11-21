@@ -52,12 +52,48 @@ local data = {
 	desc = L["containerActionsFeatureDesc2"],
 }
 
-addon.functions.SettingsCreateCheckbox(cContainer, data)
-
 addon.functions.SettingsCreateText(cContainer, L["containerActionsFeatureDesc2"])
+addon.functions.SettingsCreateCheckbox(cContainer, data)
+addon.functions.SettingsCreateText(cContainer, L["containerActionsEditModeHint"] .. "\n" .. "|cff99e599" .. L["containerActionsBlacklistHint"] .. "|r")
+
+data = {
+	listFunc = function()
+		if not addon.ContainerActions then return end
+		local entries = addon.ContainerActions:GetBlacklistEntries()
+		local list = {}
+		list[""] = ""
+		local entryFormat = L["containerActionsBlacklistEntry"] or "%s - %d"
+		for _, data in ipairs(entries) do
+			local displayName = data.name or ("item:" .. data.itemID)
+			local ok, line = pcall(string.format, entryFormat, displayName, data.itemID)
+			if not ok then line = ("%s - %d"):format(displayName, data.itemID) end
+			local key = tostring(data.itemID)
+			list[key] = line
+		end
+		return list
+	end,
+	text = L["containerActionsBlacklistLabel"],
+	parentCheck = function() return addon.SettingsLayout.elements["automaticallyOpenContainer"].setting and addon.SettingsLayout.elements["automaticallyOpenContainer"].setting:GetValue() == true end,
+	element = addon.SettingsLayout.elements["automaticallyOpenContainer"].element,
+	get = function() return "" end,
+	set = function(value)
+
+		if not selectedBlacklistID or not addon.ContainerActions then return end
+		local ok, reason = addon.ContainerActions:RemoveItemFromBlacklist(value)
+		if not ok then
+			addon.ContainerActions:HandleBlacklistError(reason, value)
+		else
+			refreshBlacklistDropdown()
+		end
+	end,
+	parent = true,
+	default = "",
+	var = "containerActionsBlacklistLabel",
+}
+
+addon.functions.SettingsCreateDropdown(cContainer, data)
 
 local eventHandlers = {
-
 	["BAG_UPDATE"] = function(bag)
 		addon._bagsDirty = addon._bagsDirty or {}
 		if type(bag) == "number" then addon._bagsDirty[bag] = true end

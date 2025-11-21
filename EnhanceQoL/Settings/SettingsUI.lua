@@ -86,7 +86,9 @@ end
 function addon.functions.SettingsCreateDropdown(cat, cbData, searchtags)
 	local options = function()
 		local container = Settings.CreateControlTextContainer()
-		for key, value in pairs(cbData.list or {}) do
+		local list = cbData.list
+		if cbData.listFunc then list = cbData.listFunc() end
+		for key, value in pairs(list or {}) do
 			container:Add(key, value)
 		end
 		return container:GetData()
@@ -96,6 +98,12 @@ function addon.functions.SettingsCreateDropdown(cat, cbData, searchtags)
 
 	local dropdown = Settings.CreateDropdown(cat, setting, options, cbData.desc)
 	if cbData.parent then dropdown:SetParentInitializer(cbData.element, cbData.parentCheck) end
+end
+
+function addon.functions.SettingsCreateButton(layout, text, func, tooltip, searchtags)
+	local btn = CreateSettingsButtonInitializer("", text, func, tooltip, searchtags)
+	layout:AddInitializer(btn)
+	addon.SettingsLayout.elements[text] = { element = btn }
 end
 
 local cat, layout = Settings.RegisterVerticalLayoutCategory(addonName)
