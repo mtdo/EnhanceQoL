@@ -3983,6 +3983,8 @@ local function CreateUI()
 			Settings.OpenToCategory(addon.SettingsLayout.gearUpgradeCategory:GetID())
 		elseif group == "items\001economy" then
 			Settings.OpenToCategory(addon.SettingsLayout.vendorEconomyCategory:GetID())
+		elseif group == "items\001loot" then
+			Settings.OpenToCategory(addon.SettingsLayout.vendorEconomyCalootCategorytegory:GetID())
 		-- Forward Combat subtree for modules (Mythic+, Aura, Drink, CombatMeter)
 		elseif string.sub(group, 1, string.len("combat\001")) == "combat\001" then
 			-- Normalize and dispatch for known combat modules

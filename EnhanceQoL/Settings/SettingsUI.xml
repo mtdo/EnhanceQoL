@@ -7,4 +7,5 @@
 	<Script file='UIInput.lua'/>
 	<Script file='VendorEconomy.lua'/>
 	<Script file='Loot.lua'/>
+	<Script file='MapNavigation.lua'/>
 </Ui>
