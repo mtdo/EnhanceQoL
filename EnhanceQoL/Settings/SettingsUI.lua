@@ -151,6 +151,44 @@ function addon.functions.SettingsCreateButton(layout, text, func, tooltip, searc
 	addon.SettingsLayout.elements[text] = { element = btn }
 end
 
+function addon.functions.SettingsCreateMultiDropdown(cat, cbData)
+	print(cbData)
+	addon.db = addon.db or {}
+	addon.db[cbData.var] = addon.db[cbData.var] or {}
+
+	-- Setting nur als „Träger“ im Settings-System (kannst du auch weglassen)
+	local setting = Settings.RegisterProxySetting(cat, "EQOL_" .. cbData.var, Settings.VarType.String, cbData.text, "", function()
+		-- Summary-String (für Settings-System, wenn du willst)
+		local t = addon.db[cbData.var] or {}
+		local keys = {}
+		for k in pairs(t) do
+			table.insert(keys, k)
+		end
+		table.sort(keys)
+		return table.concat(keys, ",")
+	end, function(_, _, value)
+		-- optionaler Setter, wenn Settings was zurückschreibt
+		-- (z.B. wenn du per API was änderst)
+	end)
+
+	local initializer = Settings.CreateElementInitializer("EQOL_MultiDropdownTemplate", {
+		var = cbData.var,
+		label = cbData.text,
+		options = cbData.options,
+		db = addon.db,
+	})
+	initializer:SetSetting(setting)
+
+	local layout = SettingsPanel:GetLayout(cat)
+	layout:AddInitializer(initializer)
+
+	addon.SettingsLayout = addon.SettingsLayout or {}
+	addon.SettingsLayout.elements = addon.SettingsLayout.elements or {}
+	addon.SettingsLayout.elements[cbData.var] = { setting = setting, initializer = initializer }
+
+	return setting, initializer
+end
+
 local cat, layout = Settings.RegisterVerticalLayoutCategory(addonName)
 cat:SetShouldSortAlphabetically(true)
 

@@ -22,4 +22,22 @@
         <OnLoad method="OnLoad"/>
         </Scripts>
     </Frame>
+
+     <Button name="EQOL_MultiDropdownTemplate"
+        virtual="true"
+        inherits="SettingsDropdownControlTemplate"
+        mixin="EQOL_MultiDropdownMixin">
+    <Layers>
+        <Layer level="ARTWORK">
+            <!-- Kleiner Summary-Text unterhalb vom Label -->
+            <FontString parentKey="Summary" inherits="GameFontHighlightSmall" justifyH="LEFT" maxLines="1">
+                <Anchors>
+                    <Anchor point="TOPLEFT" relativeKey="$parent.Text" relativePoint="BOTTOMLEFT" x="0" y="-2"/>
+                    <Anchor point="RIGHT" x="-4" y="0"/>
+                </Anchors>
+            </FontString>
+        </Layer>
+    </Layers>
+</Button>
+
 </Ui>

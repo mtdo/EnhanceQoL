@@ -411,6 +411,15 @@ end
 
 addon.functions.SettingsCreateCheckboxes(cChar, timeoutReleaseGroups)
 
+addon.functions.SettingsCreateMultiDropdown(cChar, {
+	var = "timeoutReleaseDifficulties",
+	text = "TestDropdown",
+	options = {
+		{ value = "pvp", text = PVP },
+		{ value = "world", text = WORLD },
+	},
+})
+
 ---- REGION END
 
 local eventHandlers = {

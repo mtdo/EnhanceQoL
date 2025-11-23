@@ -1353,9 +1353,34 @@ local function EnsureSkyridingStateDriver()
 		RefreshAllActionBarVisibilityAlpha()
 	end)
 	local expr = "[advflyable, mounted] show; [advflyable, stance:3] show; hide"
-	RegisterStateDriver(driver, "visibility", expr)
+	local function registerDriver()
+		if addon.variables.skyridingDriverRegistered then return end
+		if RegisterStateDriver then
+			RegisterStateDriver(driver, "visibility", expr)
+			addon.variables.skyridingDriverRegistered = true
+			addon.variables.isPlayerSkyriding = driver:IsShown()
+		end
+	end
+	if InCombatLockdown and InCombatLockdown() then
+		addon.variables.pendingSkyridingDriverRegister = registerDriver
+		local watcher = addon.variables.skyridingDriverWatcher
+		if not watcher then
+			watcher = CreateFrame("Frame")
+			watcher:RegisterEvent("PLAYER_REGEN_ENABLED")
+			watcher:SetScript("OnEvent", function(self)
+				if InCombatLockdown and InCombatLockdown() then return end
+				local cb = addon.variables and addon.variables.pendingSkyridingDriverRegister
+				addon.variables.pendingSkyridingDriverRegister = nil
+				if cb then cb() end
+				self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+				addon.variables.skyridingDriverWatcher = nil
+			end)
+			addon.variables.skyridingDriverWatcher = watcher
+		end
+	else
+		registerDriver()
+	end
 	addon.variables.skyridingDriver = driver
-	addon.variables.isPlayerSkyriding = driver:IsShown()
 end
 
 local function EnsureActionBarVisibilityWatcher()
