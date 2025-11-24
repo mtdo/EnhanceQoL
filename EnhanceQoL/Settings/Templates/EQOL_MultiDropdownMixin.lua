@@ -172,6 +172,7 @@ end
 function EQOL_MultiDropdownMixin:SerializeSelection(tbl)
 	local keys = {}
 	for k in pairs(tbl) do
+		print(k, type(k))
 		table.insert(keys, k)
 	end
 	table.sort(keys)

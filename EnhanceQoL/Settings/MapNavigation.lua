@@ -340,6 +340,23 @@ table.sort(data, function(a, b) return a.text < b.text end)
 addon.functions.SettingsCreateCheckboxes(cMapNav, data)
 
 addon.functions.SettingsCreateText(cMapNav, "|cff99e599" .. L["landingPageHide"] .. "|r")
+
+local function getIgnoreStateLandingPage(value)
+	if not value then return false end
+	return (addon.db["hiddenLandingPages"] and addon.db["hiddenLandingPages"][value]) and true or false
+end
+
+local function setIgnoreStateLandingPage(value, shouldSelect)
+	if not value then return end
+	if shouldSelect then
+		addon.db["hiddenLandingPages"][value] = true
+	else
+		addon.db["hiddenLandingPages"][value] = nil
+	end
+	local page = addon.variables.landingPageType[value]
+	addon.functions.toggleLandingPageButton(page.title, shouldSelect)
+end
+
 addon.functions.SettingsCreateMultiDropdown(cMapNav, {
 	var = "hiddenLandingPages",
 	text = HIDE,
@@ -347,11 +364,13 @@ addon.functions.SettingsCreateMultiDropdown(cMapNav, {
 		local buttons = (addon.variables and addon.variables.landingPageType) or {}
 		local list = {}
 		for id in pairs(buttons) do
-			table.insert(list, { value = buttons[id].checkbox, text = buttons[id].text })
+			table.insert(list, { value = id, text = buttons[id].title })
 		end
 		table.sort(list, function(a, b) return tostring(a.text) < tostring(b.text) end)
 		return list
 	end,
+	isSelectedFunc = getIgnoreStateLandingPage,
+	setSelectedFunc = setIgnoreStateLandingPage,
 })
 ----- REGION END
 
