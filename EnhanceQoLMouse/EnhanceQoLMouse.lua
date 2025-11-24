@@ -207,6 +207,7 @@ local function createMouseRing()
 		addon.mousePointer.dot = texture2
 	end
 end
+addon.Mouse.functions.createMouseRing = createMouseRing
 
 local function removeMouseRing()
 	if addon.mousePointer then
@@ -215,6 +216,7 @@ local function removeMouseRing()
 		addon.mousePointer = nil
 	end
 end
+addon.Mouse.functions.removeMouseRing = removeMouseRing
 
 local function addGeneralFrame(container)
 	local scroll = addon.functions.createContainer("ScrollFrame", "List")

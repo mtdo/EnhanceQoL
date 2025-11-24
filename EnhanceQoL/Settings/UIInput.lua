@@ -30,7 +30,6 @@ local function EQOL_UpdateStatusBars(container, height, width, scale)
 			child:SetPoint(point, relTo, relPoint, -1 * scale * (width / 500) * 2, (3 / 20) * height)
 		end
 	end
-
 	container:SetScale(scale)
 end
 

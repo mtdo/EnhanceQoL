@@ -60,6 +60,8 @@ function addon.functions.SettingsCreateCheckbox(cat, cbData)
 				addon.functions.SettingsCreateSlider(cat, v)
 			elseif v.sType == "hint" then
 				addon.functions.SettingsCreateText(cat, v.text)
+			elseif v.sType == "colorpicker" then
+				addon.functions.SettingsCreateColorPicker(cat, v)
 			end
 		end
 	end
@@ -187,6 +189,30 @@ function addon.functions.SettingsCreateMultiDropdown(cat, cbData)
 	addon.SettingsLayout.elements[cbData.var] = { setting = setting, initializer = initializer }
 
 	return setting, initializer
+end
+
+function addon.functions.SettingsCreateColorPicker(cat, cbData)
+	local colorPicker = Settings.CreatePanelInitializer("EQOL_ColorOverridesPanelNoHead", {
+		categoryID = cat:GetID(),
+		entries = {
+			{ key = cbData.var, label = cbData.text, tooltip = cbData.tooltip },
+		},
+		getColor = function()
+			local col = addon.db[cbData.var] or { r = 0, g = 0, b = 0 }
+			return col.r or 0, col.g or 0, col.b or 0
+		end,
+		setColor = function(_, r, g, b)
+			addon.db[cbData.var] = { r = r, g = g, b = b }
+			if cbData.callback then cbData.callback(r, g, b, 1) end
+		end,
+		getDefaultColor = function() return 1, 1, 1 end,
+	})
+	Settings.RegisterInitializer(cat, colorPicker)
+	-- if cbData.parent then colorPicker:SetParentInitializer(cbData.element, cbData.parentCheck) end
+
+	addon.SettingsLayout = addon.SettingsLayout or {}
+	addon.SettingsLayout.elements = addon.SettingsLayout.elements or {}
+	addon.SettingsLayout.elements[cbData.var] = { element = colorPicker }
 end
 
 local cat, layout = Settings.RegisterVerticalLayoutCategory(addonName)

@@ -67,7 +67,6 @@ function EQOL_ColorOverridesMixin:RefreshRows()
 	end
 
 	if self.container and self.container.MarkDirty then self.container:MarkDirty() end
-	self:UpdatePanelHeight()
 	self:RefreshAll()
 end
 
@@ -81,7 +80,6 @@ function EQOL_ColorOverridesMixin:RefreshRow(frame)
 	if not (self.getColor and frame.ColorSwatch and frame.ColorSwatch.Color) then return end
 	local r, g, b = self.getColor(frame.data.key)
 	r, g, b = r or 1, g or 1, b or 1
-	if frame.Text then frame.Text:SetTextColor(r, g, b) end
 	frame.ColorSwatch.Color:SetVertexColor(r, g, b)
 end
 

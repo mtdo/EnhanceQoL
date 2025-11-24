@@ -73,7 +73,7 @@
 	</Frame>
 
 	<Frame name="EQOL_ColorOverridesPanelNoHead" mixin="EQOL_ColorOverridesMixin" virtual="true">
-		<Size x="200" y="60"/>
+		<Size x="200" y="25"/>
 		<Layers>
 			<Layer level="ARTWORK">
 				<FontString parentKey="Header" inherits="GameFontNormal" justifyH="LEFT">
