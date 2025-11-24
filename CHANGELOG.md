@@ -12,6 +12,7 @@ Starting to change stuff to blizzard options, for now only a small part is there
     - Container Action
     - Gear & Upgrade
     - Vendors & Economy
+    - Map & Navigation
   - Mouse Module
   
 ### ✨ Added
