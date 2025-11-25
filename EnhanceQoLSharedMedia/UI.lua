@@ -42,9 +42,7 @@ addon.functions.SettingsCreateButton(cSharedMedia, {
 	func = function() SetAllSounds(false) end,
 })
 
-local function SanitizeVar(key)
-	return (tostring(key):gsub("[^%w_]", "_"))
-end
+local function SanitizeVar(key) return (tostring(key):gsub("[^%w_]", "_")) end
 
 for _, sound in ipairs(addon.SharedMedia.sounds or {}) do
 	local entry = addon.functions.SettingsCreateCheckbox(cSharedMedia, {
@@ -55,12 +53,4 @@ for _, sound in ipairs(addon.SharedMedia.sounds or {}) do
 		default = false,
 	})
 	if entry and entry.setting then soundSettings[sound.key] = entry.setting end
-end
-
-addon.functions.addToTree("media", { value = "sharedmedia", text = L["SharedMedia"] }, true)
-
-function addon.SharedMedia.functions.treeCallback()
-	if addon.SettingsLayout and addon.SettingsLayout.sharedMediaCategory then
-		Settings.OpenToCategory(addon.SettingsLayout.sharedMediaCategory:GetID())
-	end
 end
