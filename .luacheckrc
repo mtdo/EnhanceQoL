@@ -501,7 +501,7 @@ globals = {
 	"SettingsPanel",
 	"MainStatusTrackingBarContainer",
 	"SecondaryStatusTrackingBarContainer",
-	
+
 	"SettingsSliderControlMixin",
 	"EQOL_ColorOverridesMixin",
 	"SettingsListElementMixin",
@@ -769,6 +769,9 @@ globals = {
 	"C_Garrison.AllowMissionStartAboveSoftCap",
 	"C_Garrison.AreMissionFollowerRequirementsMet",
 	"C_Garrison.AssignFollowerToBuilding",
+	"GROUPMANAGER_UNIT_MARKER",
+	"LOOT_JOURNAL_LEGENDARIES_SOURCE_QUEST",
+	"AUCTION_HOUSE_HEADER_ITEM",
 	"C_Garrison.CanGenerateRecruits",
 	"C_Garrison.CanOpenMissionChest",
 	"C_Garrison.CanSetRecruitmentPreference",
