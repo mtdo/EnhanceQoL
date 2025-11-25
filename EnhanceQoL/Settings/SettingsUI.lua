@@ -31,13 +31,6 @@ hooksecurefunc(SettingsSliderControlMixin, "Init", function(self)
 	if self.NewFeature then self.NewFeature:SetShown(true) end
 end)
 
-hooksecurefunc(SettingsListSectionHeaderMixin, "Init", function(self)
-	if not self.GetData then return end
-	local data = self:GetData()
-	if not data.data or not data.data._eqol or not addon.variables.NewVersionTableEQOL[data.data._eqol] then return end
-	if self.NewFeature then self.NewFeature:SetShown(true) end
-end)
-
 function addon.functions.SettingsCreateCategory(parent, treeName, sort, newTagID)
 	if nil == parent then parent = addon.SettingsLayout.rootCategory end
 	local cat, layout = Settings.RegisterVerticalLayoutSubcategory(parent, treeName)
@@ -158,7 +151,7 @@ function addon.functions.SettingsCreateDropdown(cat, cbData, searchtags)
 
 	local setting = Settings.RegisterProxySetting(cat, "EQOL_" .. cbData.var, cbData.type or Settings.VarType.String, cbData.text, cbData.default, cbData.get, cbData.set)
 	local dropdown = Settings.CreateDropdown(cat, setting, options, cbData.desc)
-	
+
 	addon.SettingsLayout.elements[cbData.var] = { setting = setting, element = dropdown }
 	if cbData.parent then dropdown:SetParentInitializer(cbData.element, cbData.parentCheck) end
 	if cbData.notify then addon.functions.SettingsCreateNotify(setting, cbData.notify) end
