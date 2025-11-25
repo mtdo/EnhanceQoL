@@ -32,7 +32,7 @@ addon.functions.SettingsCreateCheckboxes(cUnitFrame, data)
 
 addon.functions.SettingsCreateHeadline(cUnitFrame, L["Health Text"])
 
-addon.functions.SettingsCreateText(cUnitFrame, "|cff99e599" .. string.format(L["HealthTextExplain"], VIDEO_OPTIONS_DISABLED) .. "|r")
+addon.functions.SettingsCreateText(cUnitFrame, "|cff99e599" .. string.format(L["HealthTextExplain2"], VIDEO_OPTIONS_DISABLED) .. "|r")
 
 addon.functions.SettingsCreateDropdown(cUnitFrame, {
 	list = { OFF = VIDEO_OPTIONS_DISABLED, PERCENT = STATUS_TEXT_PERCENT, ABS = STATUS_TEXT_VALUE, BOTH = STATUS_TEXT_BOTH, _order = { "OFF", "PERCENT", "ABS", "BOTH" } },
@@ -73,6 +73,114 @@ addon.functions.SettingsCreateDropdown(cUnitFrame, {
 	type = Settings.VarType.String,
 	sType = "dropdown",
 })
+
+addon.functions.SettingsCreateHeadline(cUnitFrame, (L["UnitFrameUFExplain"]:format(_G.RAID or "RAID", _G.PARTY or "Party", _G.PLAYER or "Player")))
+
+data = {
+	{
+		var = "showLeaderIconRaidFrame",
+		text = L["showLeaderIconRaidFrame"],
+		func = function(v)
+			addon.db["showLeaderIconRaidFrame"] = v
+			if v then
+				addon.functions.setLeaderIcon()
+			else
+				addon.functions.removeLeaderIcon()
+			end
+		end,
+	},
+	{
+		var = "hidePartyFrameTitle",
+		text = L["hidePartyFrameTitle"],
+		func = function(v)
+			addon.db["hidePartyFrameTitle"] = v
+			addon.functions.togglePartyFrameTitle(v)
+		end,
+	},
+	{
+		var = "hideRestingGlow",
+		text = L["hideRestingGlow"],
+		func = function(v)
+			addon.db["hideRestingGlow"] = v
+			if addon.functions.ApplyRestingVisuals then addon.functions.ApplyRestingVisuals() end
+		end,
+	},
+	{
+		var = "unitFrameTruncateNames",
+		text = L["unitFrameTruncateNames"],
+		func = function(v)
+			addon.db["unitFrameTruncateNames"] = v
+			addon.functions.updateUnitFrameNames()
+		end,
+		children = {
+			{
+				var = "unitFrameMaxNameLength",
+				text = L["unitFrameMaxNameLength"],
+				get = function() return addon.db and addon.db.unitFrameMaxNameLength or 6 end,
+				set = function(val)
+					addon.db["unitFrameMaxNameLength"] = val
+					addon.functions.updateUnitFrameNames()
+				end,
+				min = 1,
+				max = 20,
+				step = 1,
+				default = 6,
+				sType = "slider",
+				parent = true,
+				parentCheck = function()
+					return addon.SettingsLayout.elements["unitFrameTruncateNames"]
+						and addon.SettingsLayout.elements["unitFrameTruncateNames"].setting
+						and addon.SettingsLayout.elements["unitFrameTruncateNames"].setting:GetValue() == true
+				end,
+			},
+		},
+	},
+	{
+		var = "unitFrameScaleEnabled",
+		text = L["unitFrameScaleEnable"],
+		func = function(v)
+			addon.db["unitFrameScaleEnabled"] = v
+			addon.functions.updatePartyFrameScale()
+		end,
+		children = {
+			{
+				var = "unitFrameScale",
+				text = L["unitFrameScale"],
+				get = function() return addon.db and addon.db.unitFrameScale or 1 end,
+				set = function(val)
+					addon.db["unitFrameScale"] = val
+					addon.functions.updatePartyFrameScale()
+				end,
+				min = 0.5,
+				max = 3,
+				step = 0.05,
+				default = 1,
+				sType = "slider",
+				parent = true,
+				parentCheck = function()
+					return addon.SettingsLayout.elements["unitFrameScaleEnabled"]
+						and addon.SettingsLayout.elements["unitFrameScaleEnabled"].setting
+						and addon.SettingsLayout.elements["unitFrameScaleEnabled"].setting:GetValue() == true
+				end,
+			},
+		},
+	},
+}
+if not addon.variables.isMidnight then
+	table.insert(data, {
+		var = "showPartyFrameInSoloContent",
+		text = L["showPartyFrameInSoloContent"],
+		func = function(v)
+			addon.db["showPartyFrameInSoloContent"] = v
+			addon.variables.requireReload = true
+			addon.functions.checkReloadFrame()
+			addon.functions.ApplyUnitFrameSettingByVar("unitframeSettingPlayerFrame")
+			addon.functions.togglePartyFrameTitle(addon.db["hidePartyFrameTitle"])
+		end,
+	})
+end
+table.sort(data, function(a, b) return a.text < b.text end)
+addon.functions.SettingsCreateCheckboxes(cUnitFrame, data)
 
 ----- REGION END
 

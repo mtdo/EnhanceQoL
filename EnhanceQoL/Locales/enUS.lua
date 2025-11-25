@@ -406,7 +406,7 @@ L["hideRestingGlowDesc"] = "Removes the 'ZZZ' status texture and the resting glo
 L["Health Text"] = "Health Text"
 L["PlayerHealthText"] = "Player health text"
 L["TargetHealthText"] = "Target health text"
-L["HealthTextExplain"] = "%s follows Blizzard 'Status Text'. Any other mode shows your chosen format for Player, Target, and Boss frames."
+L["HealthTextExplain2"] = "%s follows Blizzard 'Status Text'.\nAny other mode shows your chosen format for Player, Target, and Boss frames."
 
 L["ActionbarVisibilityExplain"] = 'Set the action bar to "%s" in %s to use the options below. You can combine mouseover, in-combat, and out-of-combat visibility.'
 L["VisibilityHubName"] = "Visibility Hub"
