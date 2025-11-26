@@ -27,11 +27,29 @@ local data = {
 
 addon.functions.SettingsCreateDropdown(cProfiles, data)
 
-addon.functions.SettingsCreateText(cProfiles, "")
+local data = {
+	listFunc = function()
+		local list = {}
+		for i in pairs(EnhanceQoLDB.profiles) do
+			list[i] = i
+		end
+		table.sort(list)
+		return list
+	end,
+	text = L["ProfileUseGlobal"],
+	get = function() return EnhanceQoLDB.profileGlobal end,
+	set = function(value) EnhanceQoLDB.profileGlobal = value end,
+	default = "",
+	var = "profilefirststart",
+}
+
+addon.functions.SettingsCreateDropdown(cProfiles, data)
+addon.functions.SettingsCreateText(cProfiles, L["ProfileUseGlobalDesc"])
 
 local data = {
 	listFunc = function()
 		local list = {}
+		list[""] = ""
 		for i in pairs(EnhanceQoLDB.profiles) do
 			if i ~= EnhanceQoLDB.profileKeys[UnitGUID("player")] then list[i] = i end
 		end
@@ -44,7 +62,7 @@ local data = {
 		if value ~= "" then
 			StaticPopupDialogs["EQOL_COPY_PROFILE"] = StaticPopupDialogs["EQOL_COPY_PROFILE"]
 				or {
-					text = L["ProfileCopyDesc"],
+					text = L["ProfileCopyDesc"]:format(value),
 					button1 = YES,
 					button2 = CANCEL,
 					timeout = 0,
@@ -65,26 +83,40 @@ local data = {
 
 addon.functions.SettingsCreateDropdown(cProfiles, data)
 
-addon.functions.SettingsCreateText(cProfiles, "")
-
 local data = {
 	listFunc = function()
 		local list = {}
+		list[""] = ""
 		for i in pairs(EnhanceQoLDB.profiles) do
-			list[i] = i
+			if i ~= EnhanceQoLDB.profileKeys[UnitGUID("player")] and i ~= EnhanceQoLDB.profileGlobal then list[i] = i end
 		end
 		table.sort(list)
 		return list
 	end,
-	text = L["ProfileUseGlobal"],
-	get = function() return EnhanceQoLDB.profileGlobal end,
-	set = function(value) EnhanceQoLDB.profileGlobal = value end,
+	text = L["ProfileDelete"],
+	get = function() return "" end,
+	set = function(value)
+		if value ~= "" then
+			StaticPopupDialogs["EQOL_DELETE_PROFILE"] = StaticPopupDialogs["EQOL_DELETE_PROFILE"]
+				or {
+					text = L["ProfileDeleteDesc"]:format(value),
+					button1 = YES,
+					button2 = CANCEL,
+					timeout = 0,
+					whileDead = true,
+					hideOnEscape = true,
+					preferredIndex = 3,
+					OnAccept = function(self) EnhanceQoLDB.profiles[value] = nil end,
+				}
+			StaticPopup_Show("EQOL_DELETE_PROFILE")
+		end
+	end,
+	desc = L["ProfileDeleteDesc2"],
 	default = "",
-	var = "profilefirststart",
+	var = "profiledelete",
 }
 
 addon.functions.SettingsCreateDropdown(cProfiles, data)
-addon.functions.SettingsCreateText(cProfiles, L["ProfileUseGlobalDesc"])
 
 data = {
 	var = "AddProfile",
