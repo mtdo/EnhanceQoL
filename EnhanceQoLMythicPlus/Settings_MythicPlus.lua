@@ -372,6 +372,7 @@ end
 
 -- Auto Marker (Combat & Dungeon)
 if addon.SettingsLayout.characterInspectCategory and not addon.variables.isMidnight then
+	-- TODO remove in midnight
 	local cAuto = addon.SettingsLayout.characterInspectCategory
 	addon.functions.SettingsCreateHeadline(cAuto, L["AutoMark"])
 	if L["autoMarkMidnightWarning"] then addon.functions.SettingsCreateText(cAuto, L["autoMarkMidnightWarning"]) end
