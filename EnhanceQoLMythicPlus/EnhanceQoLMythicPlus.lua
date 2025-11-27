@@ -1269,8 +1269,6 @@ function addon.MythicPlus.functions.treeCallback(container, group)
 		if group == "combat\001mythicplus" then group = "mythicplus" end
 		local ppos = group:find("party\001groupfilter", 1, true)
 		if ppos then group = "mythicplus\001groupfilter" end
-		local ppos2 = group:find("party\001potiontracker", 1, true)
-		if ppos2 then group = "mythicplus\001potiontracker" end
 
 		local dpos = group:find("dungeon\001", 1, true)
 		if dpos then
@@ -1292,9 +1290,6 @@ function addon.MythicPlus.functions.treeCallback(container, group)
 	then
 		addMythicPlusRootFrame(container)
 		return
-	elseif group == "mythicplus\001potiontracker" then
-		addPotionTrackerFrame(container)
-		-- TODO rename automark to Dungeon and put brtracker into that frame, each in his own group in the container
 	elseif group == "mythicplus\001automark" then
 		addAutoMarkFrame(container)
 	elseif group == "mythicplus\001talents" then
