@@ -61,6 +61,7 @@ end
 lib.SettingType = CopyTable(Enum.EditModeSettingDisplayType)
 lib.SettingType.Color = "Color"
 lib.SettingType.CheckboxColor = "CheckboxColor"
+lib.SettingType.DropdownColor = "DropdownColor"
 
 -- Widgets ---------------------------------------------------------------------
 local checkboxMixin = {}
@@ -404,6 +405,152 @@ function checkboxColorMixin:SetEnabled(enabled)
 	end
 end
 
+local dropdownColorMixin = {}
+function dropdownColorMixin:Setup(data)
+	self.setting = data
+	self.Label:SetText(data.name)
+	self.ignoreInLayout = nil
+
+	local function createEntries(rootDescription)
+		if data.height then
+			rootDescription:SetScrollMode(data.height)
+		end
+
+		local function getCurrent()
+			return data.get(lib.activeLayoutName)
+		end
+
+		local function makeSetter(value)
+			return function()
+				data.set(lib.activeLayoutName, value)
+				internal:RefreshSettings()
+			end
+		end
+
+		if data.values then
+			for _, value in next, data.values do
+				if value.isRadio then
+					rootDescription:CreateRadio(value.text, function()
+						return getCurrent() == value.text
+					end, makeSetter(value.text))
+				else
+					rootDescription:CreateCheckbox(value.text, function()
+						return getCurrent() == value.text
+					end, makeSetter(value.text))
+				end
+			end
+		end
+	end
+
+	if data.generator then
+		self.Dropdown:SetupMenu(function(owner, rootDescription)
+			pcall(data.generator, owner, rootDescription, data)
+		end)
+	elseif data.values then
+		self.Dropdown:SetupMenu(function(_, rootDescription)
+			createEntries(rootDescription)
+		end)
+	end
+
+	local colorVal
+	if data.colorGet then colorVal = data.colorGet(lib.activeLayoutName) end
+	if not colorVal then colorVal = data.colorDefault or { 1, 1, 1, 1 } end
+	local r, g, b, a = normalizeColor(colorVal)
+	self.hasOpacity = not not (data.hasOpacity or a)
+	self:SetColor(r, g, b, a)
+end
+
+function dropdownColorMixin:SetColor(r, g, b, a)
+	self.r, self.g, self.b, self.a = r, g, b, a
+	self.Swatch:SetColorTexture(r, g, b, 1)
+end
+
+function dropdownColorMixin:OnColorClick()
+	local prev = { r = self.r or 1, g = self.g or 1, b = self.b or 1, a = self.a }
+	local apply = self.setting.colorSet or self.setting.setColor
+	if not apply then return end
+
+	ColorPickerFrame:SetupColorPickerAndShow({
+		r = prev.r,
+		g = prev.g,
+		b = prev.b,
+		opacity = prev.a,
+		hasOpacity = self.hasOpacity,
+		swatchFunc = function()
+			local r, g, b = ColorPickerFrame:GetColorRGB()
+			local a = self.hasOpacity and (ColorPickerFrame.GetColorAlpha and ColorPickerFrame:GetColorAlpha() or prev.a)
+			self:SetColor(r, g, b, a)
+			apply(lib.activeLayoutName, { r = r, g = g, b = b, a = a })
+			internal:RefreshSettings()
+		end,
+		opacityFunc = function()
+			if not self.hasOpacity then return end
+			local r, g, b = ColorPickerFrame:GetColorRGB()
+			local a = ColorPickerFrame.GetColorAlpha and ColorPickerFrame:GetColorAlpha() or prev.a
+			self:SetColor(r, g, b, a)
+			apply(lib.activeLayoutName, { r = r, g = g, b = b, a = a })
+			internal:RefreshSettings()
+		end,
+		cancelFunc = function()
+			self:SetColor(prev.r, prev.g, prev.b, prev.a)
+			apply(lib.activeLayoutName, { r = prev.r, g = prev.g, b = prev.b, a = prev.a })
+			internal:RefreshSettings()
+		end,
+	})
+end
+
+function dropdownColorMixin:SetEnabled(enabled)
+	self.Dropdown:SetEnabled(enabled)
+	if enabled then
+		self.Button:Enable()
+		self.Swatch:SetVertexColor(1, 1, 1, 1)
+		self.Label:SetFontObject("GameFontHighlightMedium")
+	else
+		self.Button:Disable()
+		self.Swatch:SetVertexColor(0.4, 0.4, 0.4, 1)
+		self.Label:SetFontObject("GameFontDisable")
+	end
+end
+
+internal:CreatePool(lib.SettingType.DropdownColor, function()
+	local frame = CreateFrame("Frame", nil, UIParent, "ResizeLayoutFrame")
+	frame.fixedHeight = 32
+	Mixin(frame, dropdownColorMixin)
+
+	local label = frame:CreateFontString(nil, nil, "GameFontHighlightMedium")
+	label:SetPoint("LEFT")
+	label:SetWidth(100)
+	label:SetJustifyH("LEFT")
+	frame.Label = label
+
+	local dropdown = CreateFrame("DropdownButton", nil, frame, "WowStyle1DropdownTemplate")
+	dropdown:SetPoint("LEFT", label, "RIGHT", 5, 0)
+	dropdown:SetSize(200, 30)
+	frame.Dropdown = dropdown
+
+	local button = CreateFrame("Button", nil, frame)
+	button:SetSize(36, 22)
+	button:SetPoint("LEFT", dropdown, "RIGHT", 6, 0)
+
+	local border = button:CreateTexture(nil, "BACKGROUND")
+	border:SetColorTexture(0, 0, 0, 1)
+	border:SetAllPoints()
+
+	local swatch = button:CreateTexture(nil, "ARTWORK")
+	swatch:SetPoint("TOPLEFT", 2, -2)
+	swatch:SetPoint("BOTTOMRIGHT", -2, 2)
+	swatch:SetColorTexture(1, 1, 1, 1)
+	frame.Swatch = swatch
+
+	button:SetScript("OnClick", function() frame:OnColorClick() end)
+	frame.Button = button
+
+	return frame
+end, function(_, frame)
+	frame:Hide()
+	frame.layoutIndex = nil
+end)
+
 internal:CreatePool(lib.SettingType.CheckboxColor, function()
 	local frame = CreateFrame("Frame", "EQOLCPTest", UIParent, "ResizeLayoutFrame")
 	frame.fixedHeight = 32
@@ -514,11 +661,17 @@ function dialogMixin:UpdateButtons()
 		end
 	end
 
-	local resetPosition = internal:GetPool("button"):Acquire(self.Buttons)
-	resetPosition.layoutIndex = num + 1
-	resetPosition:SetText(HUD_EDIT_MODE_RESET_POSITION)
-	resetPosition:SetOnClickHandler(GenerateClosure(self.ResetPosition, self))
-	resetPosition:Show()
+	local showReset = true
+	if lib.frameResetVisible and lib.frameResetVisible[self.selection.parent] == false then
+		showReset = false
+	end
+	if showReset then
+		local resetPosition = internal:GetPool("button"):Acquire(self.Buttons)
+		resetPosition.layoutIndex = num + 1
+		resetPosition:SetText(HUD_EDIT_MODE_RESET_POSITION)
+		resetPosition:SetOnClickHandler(GenerateClosure(self.ResetPosition, self))
+		resetPosition:Show()
+	end
 end
 
 function dialogMixin:ResetSettings()
@@ -824,6 +977,11 @@ function lib:AddFrameSettingsButton(frame, data)
 	if not lib.frameButtons[frame] then lib.frameButtons[frame] = {} end
 
 	table.insert(lib.frameButtons[frame], data)
+end
+
+function lib:SetFrameResetVisible(frame, showReset)
+	lib.frameResetVisible = lib.frameResetVisible or {}
+	lib.frameResetVisible[frame] = not not showReset
 end
 
 function lib:RegisterCallback(event, callback)
