@@ -103,11 +103,11 @@ local function registerEditModeBars()
 		end
 		local settingType = EditMode.lib and EditMode.lib.SettingType
 		local settingsList
-		if settingType then
-			settingsList = {
-				{
-					name = HUD_EDIT_MODE_SETTING_CHAT_FRAME_WIDTH,
-					kind = settingType.Slider,
+			if settingType then
+				settingsList = {
+					{
+						name = HUD_EDIT_MODE_SETTING_CHAT_FRAME_WIDTH,
+						kind = settingType.Slider,
 					field = "width",
 					minValue = 50,
 					maxValue = 600,
@@ -304,6 +304,7 @@ local function registerEditModeBars()
 						c.fontFace = value
 						queueRefresh()
 					end,
+					default = cfg and cfg.fontFace or addon.variables.defaultFont,
 				}
 
 				local outlineOptions = {
@@ -464,6 +465,40 @@ local function registerEditModeBars()
 						queueRefresh()
 					end,
 					hasOpacity = true,
+				}
+
+				local listTex, orderTex = getStatusbarDropdownLists and getStatusbarDropdownLists(true)
+				settingsList[#settingsList + 1] = {
+					name = L["Bar Texture"] or "Bar Texture",
+					kind = settingType.Dropdown,
+					field = "barTexture",
+					generator = function(_, root)
+						if not listTex or not orderTex then return end
+						for _, key in ipairs(orderTex) do
+							local label = listTex[key] or key
+							root:CreateRadio(label, function()
+								local c = curSpecCfg()
+								local cur = c and c.barTexture or cfg.barTexture or "DEFAULT"
+								return cur == key
+							end, function()
+								local c = curSpecCfg()
+								if not c then return end
+								c.barTexture = key
+								queueRefresh()
+							end)
+						end
+					end,
+					get = function()
+						local c = curSpecCfg()
+						return (c and c.barTexture) or cfg.barTexture or "DEFAULT"
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.barTexture = value
+						queueRefresh()
+					end,
+					default = cfg and cfg.barTexture or "DEFAULT",
 				}
 			end
 		end
