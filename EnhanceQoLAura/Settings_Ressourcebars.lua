@@ -137,16 +137,16 @@ local function registerEditModeBars()
 					if barType == "MANA" then return "PERCENT" end
 					return "CURMAX"
 				end
+				local textOptions = {
+					{ key = "PERCENT", label = STATUS_TEXT_PERCENT },
+					{ key = "CURMAX", label = L["Current/Max"] or "Current/Max" },
+					{ key = "CURRENT", label = L["Current"] or "Current" },
+					{ key = "NONE", label = NONE },
+				}
 				settingsList[#settingsList + 1] = {
 					name = L["Text"] or STATUS_TEXT,
 					kind = settingType.Dropdown,
 					field = "textStyle",
-					values = {
-						{ value = "PERCENT", label = STATUS_TEXT_PERCENT },
-						{ value = "CURMAX", label = L["Current/Max"] },
-						{ value = "CURRENT", label = L["Current"] },
-						{ value = "NONE", label = NONE },
-					},
 					get = function()
 						local c = curSpecCfg()
 						return (c and c.textStyle) or defaultStyle()
@@ -156,6 +156,19 @@ local function registerEditModeBars()
 						if not c then return end
 						c.textStyle = value
 						queueRefresh()
+					end,
+					generator = function(_, root)
+						for _, entry in ipairs(textOptions) do
+							root:CreateRadio(entry.label, function()
+								local c = curSpecCfg()
+								return ((c and c.textStyle) or defaultStyle()) == entry.key
+							end, function()
+								local c = curSpecCfg()
+								if not c then return end
+								c.textStyle = entry.key
+								queueRefresh()
+							end)
+						end
 					end,
 					default = cfg and cfg.textStyle or defaultStyle(),
 				}
