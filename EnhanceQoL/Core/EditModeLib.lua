@@ -60,6 +60,7 @@ end
 
 lib.SettingType = CopyTable(Enum.EditModeSettingDisplayType)
 lib.SettingType.Color = "Color"
+lib.SettingType.CheckboxColor = "CheckboxColor"
 
 -- Widgets ---------------------------------------------------------------------
 local checkboxMixin = {}
@@ -267,6 +268,119 @@ end, function(_, frame)
 	frame.layoutIndex = nil
 end)
 
+local checkboxColorMixin = {}
+function checkboxColorMixin:Setup(data)
+	self.setting = data
+	self.Label:SetText(data.name)
+
+	local value = data.get and data.get(lib.activeLayoutName)
+	if value == nil then value = data.default end
+	self.checked = not not value
+	self.Check:SetChecked(self.checked)
+
+	local colorVal
+	if data.colorGet then colorVal = data.colorGet(lib.activeLayoutName) end
+	if not colorVal then colorVal = data.colorDefault or { 1, 1, 1, 1 } end
+	local r, g, b, a = normalizeColor(colorVal)
+	self.hasOpacity = not not (data.hasOpacity or a)
+	self:SetColor(r, g, b, a)
+	self:UpdateColorEnabled()
+end
+
+function checkboxColorMixin:UpdateColorEnabled()
+	local enabled = self.checked
+	if enabled then
+		self.Button:Enable()
+		self.Swatch:SetVertexColor(1, 1, 1, 1)
+	else
+		self.Button:Disable()
+		self.Swatch:SetVertexColor(0.4, 0.4, 0.4, 1)
+	end
+end
+
+function checkboxColorMixin:SetColor(r, g, b, a)
+	self.r, self.g, self.b, self.a = r, g, b, a
+	self.Swatch:SetColorTexture(r, g, b, 1)
+end
+
+function checkboxColorMixin:OnCheckboxClick()
+	PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+	self.checked = not self.checked
+	if self.setting.set then self.setting.set(lib.activeLayoutName, self.checked) end
+	self:UpdateColorEnabled()
+end
+
+function checkboxColorMixin:OnColorClick()
+	local prev = { r = self.r or 1, g = self.g or 1, b = self.b or 1, a = self.a }
+	local apply = self.setting.colorSet or self.setting.setColor
+	if not apply then return end
+
+	ColorPickerFrame:SetupColorPickerAndShow({
+		r = prev.r,
+		g = prev.g,
+		b = prev.b,
+		opacity = prev.a,
+		hasOpacity = self.hasOpacity,
+		swatchFunc = function()
+			local r, g, b = ColorPickerFrame:GetColorRGB()
+			local a = self.hasOpacity and (ColorPickerFrame.GetColorAlpha and ColorPickerFrame:GetColorAlpha() or prev.a)
+			self:SetColor(r, g, b, a)
+			apply(lib.activeLayoutName, { r = r, g = g, b = b, a = a })
+		end,
+		opacityFunc = function()
+			if not self.hasOpacity then return end
+			local r, g, b = ColorPickerFrame:GetColorRGB()
+			local a = ColorPickerFrame.GetColorAlpha and ColorPickerFrame:GetColorAlpha() or prev.a
+			self:SetColor(r, g, b, a)
+			apply(lib.activeLayoutName, { r = r, g = g, b = b, a = a })
+		end,
+		cancelFunc = function()
+			self:SetColor(prev.r, prev.g, prev.b, prev.a)
+			apply(lib.activeLayoutName, { r = prev.r, g = prev.g, b = prev.b, a = prev.a })
+		end,
+	})
+end
+
+internal:CreatePool(lib.SettingType.CheckboxColor, function()
+	local frame = CreateFrame("Frame", "EQOLCPTest", UIParent, "ResizeLayoutFrame")
+	frame.fixedHeight = 32
+	Mixin(frame, checkboxColorMixin)
+
+	local check = CreateFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
+	check:SetPoint("LEFT")
+	check:SetScript("OnClick", function(btn) btn:GetParent():OnCheckboxClick() end)
+	frame.Check = check
+
+	local label = frame:CreateFontString(nil, nil, "GameFontHighlightMedium")
+	label:SetPoint("LEFT", check, "RIGHT", 4, 0)
+	label:SetWidth(180)
+	-- label:SetPoint("RIGHT", -60, 0) -- leave space for swatch; adjusted by layout
+	label:SetJustifyH("LEFT")
+	frame.Label = label
+
+	local button = CreateFrame("Button", nil, frame)
+	button:SetSize(36, 22)
+	button:SetPoint("LEFT", label, "RIGHT", 6, 0)
+
+	local border = button:CreateTexture(nil, "BACKGROUND")
+	border:SetColorTexture(0, 0, 0, 1)
+	border:SetAllPoints()
+
+	local swatch = button:CreateTexture(nil, "ARTWORK")
+	swatch:SetPoint("TOPLEFT", 2, -2)
+	swatch:SetPoint("BOTTOMRIGHT", -2, 2)
+	swatch:SetColorTexture(1, 1, 1, 1)
+	frame.Swatch = swatch
+
+	button:SetScript("OnClick", function() frame:OnColorClick() end)
+	frame.Button = button
+
+	return frame
+end, function(_, frame)
+	frame:Hide()
+	frame.layoutIndex = nil
+end)
+
 internal:CreatePool("button", function() return CreateFrame("Button", nil, UIParent, "EditModeSystemSettingsDialogExtraButtonTemplate") end, function(_, frame)
 	frame:Hide()
 	frame.layoutIndex = nil
@@ -335,6 +449,12 @@ function dialogMixin:ResetSettings()
 	if num > 0 then
 		for _, data in next, settings do
 			data.set(lib.activeLayoutName, data.default)
+			if data.kind == lib.SettingType.CheckboxColor then
+				local apply = data.colorSet or data.setColor
+				if apply then
+					apply(lib.activeLayoutName, data.colorDefault or { 1, 1, 1, 1 })
+				end
+			end
 		end
 
 		self:Update(self.selection)
