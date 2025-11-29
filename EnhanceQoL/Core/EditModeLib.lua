@@ -295,7 +295,7 @@ internal:CreatePool(lib.SettingType.Color, function()
 	button:SetPoint("LEFT", label, "RIGHT", 8, 0)
 
 	local border = button:CreateTexture(nil, "BACKGROUND")
-	border:SetColorTexture(0, 0, 0, 1)
+	border:SetColorTexture(0.7, 0.7, 0.7, 1)
 	border:SetAllPoints()
 
 	local swatch = button:CreateTexture(nil, "ARTWORK")
@@ -533,7 +533,7 @@ internal:CreatePool(lib.SettingType.DropdownColor, function()
 	button:SetPoint("LEFT", dropdown, "RIGHT", 6, 0)
 
 	local border = button:CreateTexture(nil, "BACKGROUND")
-	border:SetColorTexture(0, 0, 0, 1)
+	border:SetColorTexture(0.7, 0.7, 0.7, 1)
 	border:SetAllPoints()
 
 	local swatch = button:CreateTexture(nil, "ARTWORK")
@@ -572,7 +572,7 @@ internal:CreatePool(lib.SettingType.CheckboxColor, function()
 	button:SetPoint("LEFT", label, "RIGHT", 4, 0)
 
 	local border = button:CreateTexture(nil, "BACKGROUND")
-	border:SetColorTexture(0, 0, 0, 1)
+	border:SetColorTexture(0.7, 0.7, 0.7, 1)
 	border:SetAllPoints()
 
 	local swatch = button:CreateTexture(nil, "ARTWORK")
