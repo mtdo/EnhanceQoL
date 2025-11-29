@@ -312,11 +312,11 @@ local function registerEditModeBars()
 					{ key = "THICKOUTLINE", label = "Thick Outline" },
 					{ key = "MONOCHROMEOUTLINE", label = "Mono Outline" },
 				}
-					settingsList[#settingsList + 1] = {
-						name = L["Outline"],
-						kind = settingType.Dropdown,
-						field = "fontOutline",
-						generator = function(_, root)
+				settingsList[#settingsList + 1] = {
+					name = L["Outline"],
+					kind = settingType.Dropdown,
+					field = "fontOutline",
+					generator = function(_, root)
 						for _, entry in ipairs(outlineOptions) do
 							root:CreateRadio(entry.label, function()
 								local c = curSpecCfg()
@@ -329,32 +329,44 @@ local function registerEditModeBars()
 								queueRefresh()
 							end)
 						end
-						end,
-						get = function()
-							local c = curSpecCfg()
-							return (c and c.fontOutline) or cfg.fontOutline or "OUTLINE"
-						end,
-						set = function(_, value)
-							local c = curSpecCfg()
-							if not c then return end
-							c.fontOutline = value
-							queueRefresh()
-						end,
-						default = (cfg and cfg.fontOutline) or "OUTLINE",
+					end,
+					get = function()
+						local c = curSpecCfg()
+						return (c and c.fontOutline) or cfg.fontOutline or "OUTLINE"
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.fontOutline = value
+						queueRefresh()
+					end,
+					default = (cfg and cfg.fontOutline) or "OUTLINE",
 				}
 
 				settingsList[#settingsList + 1] = {
 					name = L["Font color"] or FONT_COLOR,
-					kind = settingType.Color,
+					kind = settingType.CheckboxColor,
 					field = "fontColor",
 					default = cfg and cfg.fontColor or { r = 1, g = 1, b = 1, a = 1 },
 					get = function()
 						local c = curSpecCfg()
+						return c and c.fontColorEnabled ~= false
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.fontColorEnabled = value and true or false
+						queueRefresh()
+					end,
+					colorDefault = { r = 1, g = 1, b = 1, a = 1 },
+					colorGet = function()
+						local c = curSpecCfg()
+						if c and c.fontColorEnabled == false then return { r = 1, g = 1, b = 1, a = 1 } end
 						local col = (c and c.fontColor) or (cfg and cfg.fontColor) or { 1, 1, 1, 1 }
 						local r, g, b, a = toColorComponents(col, { 1, 1, 1, 1 })
 						return { r = r, g = g, b = b, a = a }
 					end,
-					set = function(_, value)
+					colorSet = function(_, value)
 						local c = curSpecCfg()
 						if not c then return end
 						c.fontColor = toColorArray(value, { 1, 1, 1, 1 })
@@ -366,8 +378,8 @@ local function registerEditModeBars()
 				settingsList[#settingsList + 1] = {
 					name = L["Custom bar color"] or "Custom bar color",
 					kind = settingType.CheckboxColor,
-					field = "barColor",
-					default = toUIColor(cfg and cfg.barColor, { 1, 1, 1, 1 }),
+					field = "useBarColor",
+					default = cfg and cfg.useBarColor or false,
 					get = function()
 						local c = curSpecCfg()
 						return c and c.useBarColor == true
@@ -378,6 +390,7 @@ local function registerEditModeBars()
 						c.useBarColor = value and true or false
 						if c.useBarColor and c.useClassColor then c.useClassColor = false end
 						queueRefresh()
+						addon.EditModeLib.internal:RefreshSettings()
 					end,
 					colorDefault = toUIColor(cfg and cfg.barColor, { 1, 1, 1, 1 }),
 					colorGet = function()
@@ -391,6 +404,10 @@ local function registerEditModeBars()
 						if not c then return end
 						c.barColor = toColorArray(value, { 1, 1, 1, 1 })
 						queueRefresh()
+					end,
+					isEnabled = function()
+						local c = curSpecCfg()
+						return c and c.useClassColor == false
 					end,
 					hasOpacity = true,
 				}
@@ -409,6 +426,11 @@ local function registerEditModeBars()
 						c.useClassColor = value and true or false
 						if c.useClassColor and c.useBarColor then c.useBarColor = false end
 						queueRefresh()
+						addon.EditModeLib.internal:RefreshSettings()
+					end,
+					isEnabled = function()
+						local c = curSpecCfg()
+						return c and c.useBarColor == false
 					end,
 					default = cfg and cfg.useClassColor or false,
 				}

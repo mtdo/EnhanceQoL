@@ -391,7 +391,12 @@ function EditMode:RegisterSettings(id, settings)
 
 	local prepared = {}
 	for index = 1, #settings do
-		prepared[index] = self:_prepareSetting(id, settings[index])
+		local s = self:_prepareSetting(id, settings[index])
+		prepared[index] = s
+		if s.field then
+			entry.settingsByField = entry.settingsByField or {}
+			entry.settingsByField[s.field] = s
+		end
 	end
 
 	self.lib:AddFrameSettings(entry.frame, prepared)

@@ -79,6 +79,12 @@ function checkboxMixin:OnCheckButtonClick()
 	PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
 	self.checked = not self.checked
 	self.setting.set(lib.activeLayoutName, not not self.checked)
+	internal:RefreshSettings()
+end
+
+function checkboxMixin:SetEnabled(enabled)
+	self.Button:SetEnabled(enabled)
+	self.Label:SetFontObject(enabled and "GameFontHighlightMedium" or "GameFontDisable")
 end
 
 internal:CreatePool(lib.SettingType.Checkbox, function()
@@ -87,16 +93,21 @@ internal:CreatePool(lib.SettingType.Checkbox, function()
 end, function(_, frame)
 	frame:Hide()
 	frame.layoutIndex = nil
+	-- frame.setting = nil
 end)
 
 local function dropdownGet(data) return data.get(lib.activeLayoutName) == data.value end
 
-local function dropdownSet(data) data.set(lib.activeLayoutName, data.value) end
+local function dropdownSet(data)
+	data.set(lib.activeLayoutName, data.value)
+	internal:RefreshSettings()
+end
 
 local dropdownMixin = {}
 function dropdownMixin:Setup(data)
 	self.setting = data
 	self.Label:SetText(data.name)
+	self.ignoreInLayout = nil
 
 	if data.generator then
 		self.Dropdown:SetupMenu(function(owner, rootDescription) pcall(data.generator, owner, rootDescription, data) end)
@@ -123,6 +134,11 @@ function dropdownMixin:Setup(data)
 	end
 end
 
+function dropdownMixin:SetEnabled(enabled)
+	self.Dropdown:SetEnabled(enabled)
+	self.Label:SetFontObject(enabled and "GameFontHighlightMedium" or "GameFontDisable")
+end
+
 internal:CreatePool(lib.SettingType.Dropdown, function()
 	local frame = CreateFrame("Frame", nil, UIParent, "ResizeLayoutFrame")
 	frame.fixedHeight = 32
@@ -143,6 +159,8 @@ internal:CreatePool(lib.SettingType.Dropdown, function()
 end, function(_, frame)
 	frame:Hide()
 	frame.layoutIndex = nil
+	-- frame.setting = nil
+	-- frame.ignoreInLayout = true
 end)
 
 local sliderMixin = {}
@@ -161,7 +179,15 @@ function sliderMixin:Setup(data)
 end
 
 function sliderMixin:OnSliderValueChanged(value)
-	if not self.initInProgress then self.setting.set(lib.activeLayoutName, value) end
+	if not self.initInProgress then
+		self.setting.set(lib.activeLayoutName, value)
+		internal:RefreshSettings()
+	end
+end
+
+function sliderMixin:SetEnabled(enabled)
+	self.Slider:SetEnabled(enabled)
+	self.Label:SetFontObject(enabled and "GameFontHighlight" or "GameFontDisable")
 end
 
 internal:CreatePool(lib.SettingType.Slider, function()
@@ -179,6 +205,8 @@ internal:CreatePool(lib.SettingType.Slider, function()
 end, function(_, frame)
 	frame:Hide()
 	frame.layoutIndex = nil
+	-- frame.setting = nil
+	-- frame.ignoreInLayout = true
 end)
 
 local function normalizeColor(value)
@@ -194,6 +222,7 @@ local colorMixin = {}
 function colorMixin:Setup(data)
 	self.setting = data
 	self.Label:SetText(data.name)
+	self.ignoreInLayout = nil
 
 	local r, g, b, a = normalizeColor(data.get(lib.activeLayoutName) or data.default)
 	self.hasOpacity = not not (data.hasOpacity or a)
@@ -219,6 +248,7 @@ function colorMixin:OnClick()
 			local a = self.hasOpacity and (ColorPickerFrame.GetColorAlpha and ColorPickerFrame:GetColorAlpha() or prev.a)
 			self:SetColor(r, g, b, a)
 			self.setting.set(lib.activeLayoutName, { r = r, g = g, b = b, a = a })
+			internal:RefreshSettings()
 		end,
 		opacityFunc = function()
 			if not self.hasOpacity then return end
@@ -226,12 +256,26 @@ function colorMixin:OnClick()
 			local a = ColorPickerFrame.GetColorAlpha and ColorPickerFrame:GetColorAlpha() or prev.a
 			self:SetColor(r, g, b, a)
 			self.setting.set(lib.activeLayoutName, { r = r, g = g, b = b, a = a })
+			internal:RefreshSettings()
 		end,
 		cancelFunc = function()
 			self:SetColor(prev.r, prev.g, prev.b, prev.a)
 			self.setting.set(lib.activeLayoutName, { r = prev.r, g = prev.g, b = prev.b, a = prev.a })
+			internal:RefreshSettings()
 		end,
 	})
+end
+
+function colorMixin:SetEnabled(enabled)
+	if enabled then
+		self.Button:Enable()
+		self.Swatch:SetVertexColor(1, 1, 1, 1)
+		self.Label:SetFontObject("GameFontHighlightMedium")
+	else
+		self.Button:Disable()
+		self.Swatch:SetVertexColor(0.4, 0.4, 0.4, 1)
+		self.Label:SetFontObject("GameFontDisable")
+	end
 end
 
 internal:CreatePool(lib.SettingType.Color, function()
@@ -266,12 +310,15 @@ internal:CreatePool(lib.SettingType.Color, function()
 end, function(_, frame)
 	frame:Hide()
 	frame.layoutIndex = nil
+	-- frame.setting = nil
+	-- frame.ignoreInLayout = true
 end)
 
 local checkboxColorMixin = {}
 function checkboxColorMixin:Setup(data)
 	self.setting = data
 	self.Label:SetText(data.name)
+	self.ignoreInLayout = nil
 
 	local value = data.get and data.get(lib.activeLayoutName)
 	if value == nil then value = data.default end
@@ -308,6 +355,7 @@ function checkboxColorMixin:OnCheckboxClick()
 	self.checked = not self.checked
 	if self.setting.set then self.setting.set(lib.activeLayoutName, self.checked) end
 	self:UpdateColorEnabled()
+	internal:RefreshSettings()
 end
 
 function checkboxColorMixin:OnColorClick()
@@ -326,6 +374,7 @@ function checkboxColorMixin:OnColorClick()
 			local a = self.hasOpacity and (ColorPickerFrame.GetColorAlpha and ColorPickerFrame:GetColorAlpha() or prev.a)
 			self:SetColor(r, g, b, a)
 			apply(lib.activeLayoutName, { r = r, g = g, b = b, a = a })
+			internal:RefreshSettings()
 		end,
 		opacityFunc = function()
 			if not self.hasOpacity then return end
@@ -333,12 +382,26 @@ function checkboxColorMixin:OnColorClick()
 			local a = ColorPickerFrame.GetColorAlpha and ColorPickerFrame:GetColorAlpha() or prev.a
 			self:SetColor(r, g, b, a)
 			apply(lib.activeLayoutName, { r = r, g = g, b = b, a = a })
+			internal:RefreshSettings()
 		end,
 		cancelFunc = function()
 			self:SetColor(prev.r, prev.g, prev.b, prev.a)
 			apply(lib.activeLayoutName, { r = prev.r, g = prev.g, b = prev.b, a = prev.a })
+			internal:RefreshSettings()
 		end,
 	})
+end
+
+function checkboxColorMixin:SetEnabled(enabled)
+	self.Check:SetEnabled(enabled)
+	if not enabled then
+		self.Button:Disable()
+		self.Swatch:SetVertexColor(0.2, 0.2, 0.2, 1)
+		self.Label:SetFontObject("GameFontDisable")
+	else
+		self:UpdateColorEnabled()
+		self.Label:SetFontObject("GameFontHighlightMedium")
+	end
 end
 
 internal:CreatePool(lib.SettingType.CheckboxColor, function()
@@ -378,11 +441,15 @@ internal:CreatePool(lib.SettingType.CheckboxColor, function()
 end, function(_, frame)
 	frame:Hide()
 	frame.layoutIndex = nil
+	-- frame.setting = nil
+	-- frame.ignoreInLayout = true
 end)
 
 internal:CreatePool("button", function() return CreateFrame("Button", nil, UIParent, "EditModeSystemSettingsDialogExtraButtonTemplate") end, function(_, frame)
 	frame:Hide()
 	frame.layoutIndex = nil
+	-- frame.ignoreInLayout = true
+	-- frame.setting = nil
 end)
 
 -- Dialog ----------------------------------------------------------------------
@@ -414,6 +481,17 @@ function dialogMixin:UpdateSettings()
 				local setting = pool:Acquire(self.Settings)
 				setting.layoutIndex = index
 				setting:Setup(data)
+				if setting.SetEnabled then
+					local enabled = true
+					if data.isEnabled then
+						local ok, result = pcall(data.isEnabled, lib.activeLayoutName)
+						enabled = ok and result ~= false
+					elseif data.disabled then
+						local ok, result = pcall(data.disabled, lib.activeLayoutName)
+						enabled = not (ok and result == true)
+					end
+					setting:SetEnabled(enabled)
+				end
 				setting:Show()
 			end
 		end
@@ -786,5 +864,26 @@ function internal:GetFrameButtons(frame)
 		return lib.frameButtons[frame], #lib.frameButtons[frame]
 	else
 		return nil, 0
+	end
+end
+
+function internal:RefreshSettings()
+	if not (internal.dialog and internal.dialog:IsShown()) then return end
+	local parent = internal.dialog.Settings
+	if not parent then return end
+
+	for _, child in ipairs({ parent:GetChildren() }) do
+		if child.SetEnabled and child.setting then
+			local data = child.setting
+			local enabled = true
+			if data.isEnabled then
+				local ok, result = pcall(data.isEnabled, lib.activeLayoutName)
+				enabled = ok and result ~= false
+			elseif data.disabled then
+				local ok, result = pcall(data.disabled, lib.activeLayoutName)
+				enabled = not (ok and result == true)
+			end
+			child:SetEnabled(enabled)
+		end
 	end
 end
