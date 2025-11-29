@@ -168,6 +168,7 @@ local sliderMixin = {}
 function sliderMixin:Setup(data)
 	self.setting = data
 	self.Label:SetText(data.name)
+	self.ignoreInLayout = nil
 
 	self.initInProgress = true
 	self.formatters = {}
@@ -175,13 +176,32 @@ function sliderMixin:Setup(data)
 
 	local stepSize = data.valueStep or 1
 	local steps = (data.maxValue - data.minValue) / stepSize
-	self.Slider:Init(data.get(lib.activeLayoutName) or data.default, data.minValue or 0, data.maxValue or 1, steps, self.formatters)
+	local current = data.get(lib.activeLayoutName) or data.default
+	self.currentValue = current
+	self.Slider:Init(current, data.minValue or 0, data.maxValue or 1, steps, self.formatters)
+
+	if self.Input then
+		if data.allowInput then
+			self.Input:Show()
+			self.Input:SetNumeric(false)
+			self.Input:SetText(tostring(current or ""))
+			if self.Slider.RightText then self.Slider.RightText:Hide() end
+		else
+			self.Input:Hide()
+			if self.Slider.RightText then self.Slider.RightText:Show() end
+		end
+	end
+
 	self.initInProgress = false
 end
 
 function sliderMixin:OnSliderValueChanged(value)
 	if not self.initInProgress then
 		self.setting.set(lib.activeLayoutName, value)
+		self.currentValue = value
+		if self.Input and self.Input:IsShown() then
+			self.Input:SetText(tostring(value))
+		end
 		internal:RefreshSettings()
 	end
 end
@@ -189,6 +209,13 @@ end
 function sliderMixin:SetEnabled(enabled)
 	self.Slider:SetEnabled(enabled)
 	self.Label:SetFontObject(enabled and "GameFontHighlight" or "GameFontDisable")
+	if self.Input then
+		if enabled then
+			self.Input:Enable()
+		else
+			self.Input:Disable()
+		end
+	end
 end
 
 internal:CreatePool(lib.SettingType.Slider, function()
@@ -200,6 +227,54 @@ internal:CreatePool(lib.SettingType.Slider, function()
 	frame.Slider.MinText:Hide()
 	frame.Slider.MaxText:Hide()
 	frame.Label:SetPoint("LEFT")
+
+	local input = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
+	input:SetAutoFocus(false)
+	input:SetSize(34, 20)
+	input:SetJustifyH("CENTER")
+	input:SetPoint("LEFT", frame.Slider, "RIGHT", 10, 0)
+	input:Hide()
+	frame.Input = input
+
+	local function commitInput(box)
+		if not box:IsEnabled() then return end
+		local owner = box:GetParent()
+		local data = owner.setting
+		if not data then return end
+		local minV = data.minValue or 0
+		local maxV = data.maxValue or 1
+		local step = data.valueStep or 0
+		local val = tonumber(box:GetText())
+		if not val then
+			box:SetText(tostring(owner.currentValue or ""))
+			return
+		end
+		if val < minV then val = minV end
+		if val > maxV then val = maxV end
+		if step and step > 0 then
+			val = minV + math.floor((val - minV) / step + 0.5) * step
+			if val < minV then val = minV end
+			if val > maxV then val = maxV end
+		end
+		owner.Input:SetText(val)
+		owner.currentValue = val
+		owner.Slider:SetValue(val)
+		owner.setting.set(lib.activeLayoutName, val)
+		internal:RefreshSettings()
+		box:ClearFocus()
+	end
+
+	input:SetScript("OnEnterPressed", commitInput)
+	input:SetScript("OnEscapePressed", function(box)
+		if box:GetParent() and box:GetParent().currentValue then
+			box:SetText(tostring(box:GetParent().currentValue))
+		end
+		box:ClearFocus()
+	end)
+	input:SetScript("OnEditFocusLost", function(box)
+		if box:HasFocus() then return end
+		if box:GetText() ~= "" then commitInput(box) end
+	end)
 
 	frame:OnLoad()
 	return frame
