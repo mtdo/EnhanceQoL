@@ -85,6 +85,19 @@ local examples = {
 				field = "checkbox",
 				default = true,
 				get = function() return nil end,
+				tooltip = "Always shown",
+			},
+			{
+				name = "Checkbox2",
+				kind = SettingType.Checkbox,
+				field = "checkbox2",
+				default = true,
+				get = function() return nil end,
+				isShown = function()
+					local val = EditMode:GetValue("EQOL_EditModeExample_Checkbox", "checkbox", EditMode:GetActiveLayoutName())
+					return val ~= false
+				end,
+				tooltip = "Hidden when Checkbox is off",
 			},
 		},
 	},
@@ -103,6 +116,35 @@ local examples = {
 					{ text = "Option A", isRadio = true },
 					{ text = "Option B", isRadio = true },
 					{ text = "Option C", isRadio = true },
+				},
+			},
+		},
+	},
+	{
+		key = "MultiDropdown",
+		title = "Multi Dropdown",
+		color = { 0.3, 0.65, 0.95 },
+		defaults = {
+			point = "CENTER",
+			x = 260,
+			y = 20,
+			roles = { TANK = true, HEALER = true },
+		},
+		settings = {
+			{
+				name = "Roles",
+				kind = SettingType.MultiDropdown,
+				field = "roles",
+				default = { TANK = true, HEALER = true },
+				values = {
+					{ text = "Tank", value = "TANK" },
+					{ text = "Healer", value = "HEALER" },
+					{ text = "DPS", value = "DPS" },
+					{ text = "DPS2", value = "DPS2" },
+					{ text = "DPS3", value = "DPS3" },
+					{ text = "DPS4", value = "DPS4" },
+					{ text = "DPS5", value = "DPS5" },
+					{ text = "DPS6", value = "DPS6" },
 				},
 			},
 		},
