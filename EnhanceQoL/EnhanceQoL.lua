@@ -105,6 +105,38 @@ addon.constants.ACTION_BAR_ANCHOR_CONFIG = ACTION_BAR_ANCHOR_CONFIG
 
 local DEFAULT_BUTTON_SINK_COLUMNS = 4
 
+local DEFAULT_ACTION_BUTTON_COUNT = _G.NUM_ACTIONBAR_BUTTONS or 12
+local PET_ACTION_BUTTON_COUNT = _G.NUM_PET_ACTION_SLOTS or 10
+local STANCE_ACTION_BUTTON_COUNT = _G.NUM_STANCE_SLOTS or _G.NUM_SHAPESHIFT_SLOTS or 10
+
+local function GetActionBarButtonPrefix(barName)
+	if not barName then return nil, 0 end
+	if barName == "MainMenuBar" or barName == "MainActionBar" then return "ActionButton", DEFAULT_ACTION_BUTTON_COUNT end
+	if barName == "PetActionBar" then return "PetActionButton", PET_ACTION_BUTTON_COUNT end
+	if barName == "StanceBar" then return "StanceButton", STANCE_ACTION_BUTTON_COUNT end
+	return barName .. "Button", DEFAULT_ACTION_BUTTON_COUNT
+end
+
+local function ForEachActionButton(callback)
+	if type(callback) ~= "function" then return end
+	local list = addon.variables and addon.variables.actionBarNames
+	if not list then return end
+	local seen = {}
+	for _, info in ipairs(list) do
+		local prefix, count = GetActionBarButtonPrefix(info.name)
+		if prefix and count then
+			for i = 1, count do
+				local button = _G[prefix .. i]
+				if button and not seen[button] then
+					seen[button] = true
+					if not button.EQOL_ActionBarName then button.EQOL_ActionBarName = info.name end
+					callback(button, info, i)
+				end
+			end
+		end
+	end
+end
+
 local function GetActionBarFrame(index)
 	local name = ACTION_BAR_FRAME_NAMES[index]
 	if not name then return nil, nil end
@@ -1312,6 +1344,43 @@ local function UpdateActionBarMouseover(barName, config, variable)
 end
 addon.functions.UpdateActionBarMouseover = UpdateActionBarMouseover
 
+local function EnsureAssistedCombatFrameHidden(button)
+	if not addon.db then return end
+	local frame = button and button.AssistedCombatRotationFrame
+	if not frame then return end
+
+	if not frame.EQOL_AssistedHideHooked then
+		frame.EQOL_AssistedHideHooked = true
+		frame:HookScript("OnShow", function(self)
+			if addon.db and addon.db.actionBarHideAssistedRotation then self:Hide() end
+		end)
+	end
+
+	if addon.db.actionBarHideAssistedRotation then frame:Hide() end
+end
+
+local function UpdateAssistedCombatFrameHiding()
+	addon.variables = addon.variables or {}
+	local enabled = addon.db and addon.db.actionBarHideAssistedRotation
+
+	if enabled then
+		if not addon.variables.assistedCombatCallbackOwner then
+			addon.variables.assistedCombatCallbackOwner = {}
+			EventRegistry:RegisterCallback("ActionButton.OnAssistedCombatRotationFrameChanged", function(_, button, added)
+				if not addon.db or not addon.db.actionBarHideAssistedRotation then return end
+				if added then EnsureAssistedCombatFrameHidden(button) end
+			end, addon.variables.assistedCombatCallbackOwner)
+		end
+		ForEachActionButton(function(button) EnsureAssistedCombatFrameHidden(button) end)
+	else
+		if addon.variables.assistedCombatCallbackOwner then
+			EventRegistry:UnregisterCallback("ActionButton.OnAssistedCombatRotationFrameChanged", addon.variables.assistedCombatCallbackOwner)
+			addon.variables.assistedCombatCallbackOwner = nil
+		end
+	end
+end
+addon.functions.UpdateAssistedCombatFrameHiding = UpdateAssistedCombatFrameHiding
+
 local function RefreshAllActionBarVisibilityAlpha(_, event)
 	local combatOverride
 	if event == "PLAYER_REGEN_DISABLED" then
@@ -1502,6 +1571,7 @@ local function initActionBars()
 	addon.functions.InitDBValue("actionBarFullRangeColor", { r = 1, g = 0.1, b = 0.1 })
 	addon.functions.InitDBValue("actionBarFullRangeAlpha", 0.35)
 	addon.functions.InitDBValue("actionBarHideBorders", false)
+	addon.functions.InitDBValue("actionBarHideAssistedRotation", false)
 	addon.functions.InitDBValue("hideMacroNames", false)
 	addon.functions.InitDBValue("actionBarMacroFontOverride", false)
 	addon.functions.InitDBValue("actionBarHotkeyFontOverride", false)
@@ -1549,6 +1619,7 @@ local function initActionBars()
 	end
 	RefreshAllActionBarAnchors()
 	if ActionBarLabels and ActionBarLabels.RefreshAllHotkeyStyles then ActionBarLabels.RefreshAllHotkeyStyles() end
+	UpdateAssistedCombatFrameHiding()
 	if ActionBarLabels and ActionBarLabels.RefreshActionButtonBorders then ActionBarLabels.RefreshActionButtonBorders() end
 end
 

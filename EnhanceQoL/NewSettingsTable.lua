@@ -10,4 +10,7 @@ addon.variables.NewVersionTableEQOL = {
 	["EQOL_modifyXPRepBarHeight"] = true,
 	["EQOL_modifyXPRepBarScale"] = true,
 	["EQOL_autoCancelDruidFlightForm"] = true,
+
+	["ActionBar"] = true,
+	["EQOL_actionBarHideAssistedRotation"] = true,
 }

@@ -164,6 +164,17 @@ local function createButtonAppearanceControls(category)
 			if ActionBarLabels and ActionBarLabels.RefreshActionButtonBorders then ActionBarLabels.RefreshActionButtonBorders() end
 		end,
 	})
+
+	addon.functions.SettingsCreateCheckbox(category, {
+		var = "actionBarHideAssistedRotation",
+		text = L["actionBarHideAssistedRotation"] or "Hide assisted rotation overlay",
+		desc = L["actionBarHideAssistedRotationDesc"]
+			or "Hide the Assisted Combat Rotation glow/overlay that Blizzard adds to the action button.",
+		func = function(value)
+			addon.db.actionBarHideAssistedRotation = value and true or false
+			if addon.functions.UpdateAssistedCombatFrameHiding then addon.functions.UpdateAssistedCombatFrameHiding() end
+		end,
+	})
 end
 
 local function createLabelControls(category)
