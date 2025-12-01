@@ -45,6 +45,7 @@ local InCombatLockdown = InCombatLockdown
 local IsMounted = IsMounted
 local UnitInVehicle = UnitInVehicle
 local applyVisibilityDriverToFrame
+local registerEditModeCallbacks
 
 local frameAnchor
 local mainFrame
@@ -928,7 +929,28 @@ local function applyBehaviorSelection(cfg, selection, pType, specIndex)
 	return dimensionsChanged
 end
 
+local editModeCallbacksRegistered
+registerEditModeCallbacks = function()
+	if editModeCallbacksRegistered then return end
+	local editMode = addon and addon.EditMode
+	local lib = editMode and editMode.lib
+	if not lib or not lib.RegisterCallback then return end
+	lib:RegisterCallback("enter", function()
+		if addon.Aura.functions.setPowerBars then addon.Aura.functions.setPowerBars() end
+		if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.ReanchorAll then addon.Aura.ResourceBars.ReanchorAll() end
+		if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.UpdateRuneEventRegistration then addon.Aura.ResourceBars.UpdateRuneEventRegistration() end
+	end)
+	lib:RegisterCallback("exit", function()
+		-- Re-evaluate active bars (e.g., druid forms) when leaving Edit Mode
+		if addon.Aura.functions.setPowerBars then addon.Aura.functions.setPowerBars() end
+		if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.ReanchorAll then addon.Aura.ResourceBars.ReanchorAll() end
+		if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.UpdateRuneEventRegistration then addon.Aura.ResourceBars.UpdateRuneEventRegistration() end
+	end)
+	editModeCallbacksRegistered = true
+end
+
 ensureEditModeRegistration = function()
+	if registerEditModeCallbacks then registerEditModeCallbacks() end
 	if ResourceBars and ResourceBars.RegisterEditModeFrames then ResourceBars.RegisterEditModeFrames() end
 end
 
@@ -3791,10 +3813,13 @@ local eventsToRegister = {
 	"UPDATE_SHAPESHIFT_FORM",
 }
 
-local function setPowerbars()
+local function setPowerbars(opts)
 	local _, powerToken = UnitPowerType("player")
 	powerfrequent = {}
 	local isDruid = addon.variables.unitClass == "DRUID"
+	local editModeActive = addon.EditMode and addon.EditMode.IsInEditMode and addon.EditMode:IsInEditMode()
+	opts = opts or {}
+	local forceAllDruidBars = isDruid and ((opts.forceAllDruidBars == true) or editModeActive)
 	local function currentDruidForm()
 		if not isDruid then return nil end
 		local idx = GetShapeshiftForm() or 0
@@ -3861,9 +3886,16 @@ local function setPowerbars()
 				local allowed = barCfg.showForms
 				if druidForm and allowed[druidForm] == false then formAllowed = false end
 			end
+			if forceAllDruidBars then formAllowed = true end
 			if formAllowed and addon.variables.unitClass == "DRUID" then
 				if FREQUENT[pType] then powerfrequent[pType] = true end
-				if pType == mainPowerBar then
+				if forceAllDruidBars then
+					if mainPowerBar ~= pType then
+						createPowerBar(pType, powerbar[lastBar] or ((specCfg and specCfg.HEALTH and specCfg.HEALTH.enabled == true) and EQOLHealthBar or nil))
+						lastBar = pType
+					end
+					showBar = true
+				elseif pType == mainPowerBar then
 					showBar = true
 				elseif pType == "MANA" then
 					createPowerBar(pType, powerbar[lastBar] or ((specCfg and specCfg.HEALTH and specCfg.HEALTH.enabled == true) and EQOLHealthBar or nil))
@@ -3915,6 +3947,7 @@ local function setPowerbars()
 	if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.ApplyVisibilityPreference then addon.Aura.ResourceBars.ApplyVisibilityPreference("fromSetPowerbars") end
 	if ResourceBars and ResourceBars.SyncRelativeFrameWidths then ResourceBars.SyncRelativeFrameWidths() end
 end
+addon.Aura.functions.setPowerBars = setPowerbars
 
 local function shouldHideResourceBarsOutOfCombat() return addon and addon.db and addon.db.resourceBarsHideOutOfCombat == true end
 local function shouldHideResourceBarsMounted() return addon and addon.db and addon.db.resourceBarsHideMounted == true end
@@ -4091,6 +4124,7 @@ function ResourceBars.ApplyVisibilityPreference(context)
 	if not canApplyVisibilityDriver() then return end
 	ResourceBars._pendingVisibilityDriver = nil
 	local enabled = not (addon and addon.db and addon.db.enableResourceFrame == false)
+	local editModeActive = addon.EditMode and addon.EditMode.IsInEditMode and addon.EditMode:IsInEditMode()
 	local driverWasActive = ResourceBars._visibilityDriverActive == true
 	if not enabled then
 		forEachResourceBarFrame(function(frame)
@@ -4105,10 +4139,15 @@ function ResourceBars.ApplyVisibilityPreference(context)
 		local cfg = resolveBarConfigForFrame(pType, frame)
 		local enabled = cfg and cfg.enabled == true
 		if enabled then
-			local expr, hasDruidRule = buildVisibilityDriverForBar(cfg)
-			if expr then driverActiveNow = true end
-			applyVisibilityDriverToFrame(frame, expr)
-			frame._rbDruidFormDriver = hasDruidRule or nil
+			if editModeActive and addon.variables.unitClass == "DRUID" then
+				applyVisibilityDriverToFrame(frame, "show")
+				frame._rbDruidFormDriver = nil
+			else
+				local expr, hasDruidRule = buildVisibilityDriverForBar(cfg)
+				if expr then driverActiveNow = true end
+				applyVisibilityDriverToFrame(frame, expr)
+				frame._rbDruidFormDriver = hasDruidRule or nil
+			end
 		else
 			applyVisibilityDriverToFrame(frame, nil)
 			if frame then frame._rbDruidFormDriver = nil end
@@ -4250,6 +4289,10 @@ function ResourceBars.EnableResourceBars()
 	else
 		if setPowerbars then setPowerbars() end
 		if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.ReanchorAll then addon.Aura.ResourceBars.ReanchorAll() end
+	end
+	if addon.variables and addon.variables.unitClass == "DRUID" and setPowerbars then
+		setPowerbars({ forceAllDruidBars = true })
+		setPowerbars()
 	end
 	if ResourceBars and ResourceBars.SyncRelativeFrameWidths then ResourceBars.SyncRelativeFrameWidths() end
 	if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.UpdateRuneEventRegistration then addon.Aura.ResourceBars.UpdateRuneEventRegistration() end
