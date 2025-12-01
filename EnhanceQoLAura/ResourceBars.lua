@@ -88,6 +88,7 @@ local requestActiveRefresh
 local getStatusbarDropdownLists
 local ensureRelativeFrameHooks
 local scheduleRelativeFrameWidthSync
+local ensureSpecCfg
 local COSMETIC_BAR_KEYS = {
 	"barTexture",
 	"width",
@@ -305,6 +306,37 @@ local function copyCosmeticBarSettings(source, dest)
 	end
 end
 
+local function ensureGlobalStore()
+	addon.db.globalResourceBarSettings = addon.db.globalResourceBarSettings or {}
+	return addon.db.globalResourceBarSettings
+end
+
+local function saveGlobalProfile(barType, specIndex)
+	if not barType then return false, "NO_BAR" end
+	local specCfg = ensureSpecCfg(specIndex or addon.variables.unitSpec)
+	if not specCfg then return false, "NO_SPEC" end
+	local cfg = specCfg[barType]
+	if not cfg then return false, "NO_CFG" end
+	local store = ensureGlobalStore()
+	store[barType] = CopyTable(cfg)
+	return true
+end
+
+local function applyGlobalProfile(barType, specIndex, cosmeticOnly)
+	if not barType then return false, "NO_BAR" end
+	local globalCfg = addon.db.globalResourceBarSettings and addon.db.globalResourceBarSettings[barType]
+	if not globalCfg then return false, "NO_GLOBAL" end
+	local specCfg = ensureSpecCfg(specIndex or addon.variables.unitSpec)
+	if not specCfg then return false, "NO_SPEC" end
+	specCfg[barType] = specCfg[barType] or {}
+	if cosmeticOnly then
+		copyCosmeticBarSettings(globalCfg, specCfg[barType])
+	else
+		specCfg[barType] = CopyTable(globalCfg)
+	end
+	return true
+end
+
 local function trim(str)
 	if type(str) ~= "string" then return str end
 	return str:match("^%s*(.-)%s*$")
@@ -313,6 +345,16 @@ end
 local function notifyUser(msg)
 	if not msg or msg == "" then return end
 	print("|cff00ff98Enhance QoL|r: " .. tostring(msg))
+end
+
+ensureSpecCfg = function(specIndex)
+	local class = addon.variables.unitClass
+	local spec = specIndex or addon.variables.unitSpec
+	if not class or not spec then return nil end
+	addon.db.personalResourceBarSettings = addon.db.personalResourceBarSettings or {}
+	addon.db.personalResourceBarSettings[class] = addon.db.personalResourceBarSettings[class] or {}
+	addon.db.personalResourceBarSettings[class][spec] = addon.db.personalResourceBarSettings[class][spec] or {}
+	return addon.db.personalResourceBarSettings[class][spec]
 end
 
 local function specNameByIndex(specIndex)
@@ -2964,7 +3006,15 @@ function getBarSettings(pType)
 	local class = addon.variables.unitClass
 	local spec = addon.variables.unitSpec
 	if addon.db.personalResourceBarSettings and addon.db.personalResourceBarSettings[class] and addon.db.personalResourceBarSettings[class][spec] then
-		return addon.db.personalResourceBarSettings[class][spec][pType]
+		local cfg = addon.db.personalResourceBarSettings[class][spec][pType]
+		if cfg then return cfg end
+	end
+	if class and spec then
+		local specCfg = ensureSpecCfg(spec)
+		if specCfg and not specCfg[pType] and addon.db.globalResourceBarSettings and addon.db.globalResourceBarSettings[pType] then
+			specCfg[pType] = CopyTable(addon.db.globalResourceBarSettings[pType])
+			return specCfg[pType]
+		end
 	end
 	return nil
 end
@@ -4873,5 +4923,7 @@ ResourceBars.ImportProfile = importResourceProfile
 ResourceBars.ExportErrorMessage = exportErrorMessage
 ResourceBars.ImportErrorMessage = importErrorMessage
 ResourceBars.SpecNameByIndex = specNameByIndex
+ResourceBars.SaveGlobalProfile = saveGlobalProfile
+ResourceBars.ApplyGlobalProfile = applyGlobalProfile
 
 return ResourceBars

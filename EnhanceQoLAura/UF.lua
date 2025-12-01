@@ -695,18 +695,10 @@ local function updatePower(cfg, unit)
 		end
 	end
 	local cr, cg, cb, ca
-	if pcfg.useClassColor then
-		local class = select(2, UnitClass(unit))
-		local cc = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[class]) or (RAID_CLASS_COLORS and RAID_CLASS_COLORS[class])
-		if cc then
-			cr, cg, cb, ca = getPowerColor(powerToken)
-		end
-	end
-	if not cr then
+	if pcfg.useCustomColor and pcfg.color and pcfg.color[1] then
+		cr, cg, cb, ca = pcfg.color[1], pcfg.color[2], pcfg.color[3], pcfg.color[4] or 1
+	else
 		cr, cg, cb, ca = getPowerColor(powerToken)
-		if pcfg.color and pcfg.color[1] then
-			cr, cg, cb, ca = pcfg.color[1], pcfg.color[2], pcfg.color[3], pcfg.color[4] or 1
-		end
 	end
 	bar:SetStatusBarColor(cr or 0.1, cg or 0.45, cb or 1, ca or 1)
 	if st.powerTextLeft then
@@ -1852,4 +1844,9 @@ if not addon.Aura.UFInitialized then
 end
 
 UF.targetAuras = targetAuras
+UF.defaults = defaults
+UF.GetDefaults = function(unit) return defaults[unit] or defaults.player end
+UF.EnsureDB = ensureDB
+UF.GetConfig = ensureDB
+UF.EnsureFrames = ensureFrames
 return UF

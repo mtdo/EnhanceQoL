@@ -185,6 +185,35 @@ local function registerEditModeBars()
 			local a = ensureAnchorTable()
 			return not a or (a.relativeFrame or "UIParent") == "UIParent"
 		end
+		local function notify(msg)
+			if not msg or msg == "" then return end
+			print("|cff00ff98Enhance QoL|r: " .. tostring(msg))
+		end
+		local function hasGlobalProfile()
+			return addon.db and addon.db.globalResourceBarSettings and addon.db.globalResourceBarSettings[barType]
+		end
+		local function confirmSaveGlobal(doSave)
+			if hasGlobalProfile() then
+				local key = "EQOL_SAVE_GLOBAL_RB_" .. tostring(barType)
+				StaticPopupDialogs[key] = StaticPopupDialogs[key]
+					or {
+						text = (L["OverwriteGlobalProfile"] or "Overwrite global profile for %s?"):format(titleLabel),
+						button1 = OKAY,
+						button2 = CANCEL,
+						timeout = 0,
+						whileDead = true,
+						hideOnEscape = true,
+						preferredIndex = 3,
+						OnAccept = function()
+							if doSave then doSave() end
+						end,
+					}
+				StaticPopup_Show(key)
+			else
+				if doSave then doSave() end
+			end
+		end
+		local buttons = {}
 		local function forceUIParentAnchor()
 			local a = ensureAnchorTable()
 			if not a then return end
@@ -1032,6 +1061,45 @@ local function registerEditModeBars()
 				end
 			end
 
+			do -- Global profile helpers
+				local function saveGlobal()
+					if ResourceBars.SaveGlobalProfile then
+						local ok = ResourceBars.SaveGlobalProfile(barType, addon.variables.unitSpec)
+						if ok then
+							notify((L["SavedGlobalProfile"] or "Saved global profile for %s"):format(titleLabel))
+						else
+							notify(L["GlobalProfileSaveFailed"] or "Could not save global profile.")
+						end
+					end
+				end
+
+				local function applyGlobal()
+					if not hasGlobalProfile() then
+						notify(L["GlobalProfileMissing"] or "No global profile saved for this bar.")
+						return
+					end
+					if ResourceBars.ApplyGlobalProfile then
+						local ok = ResourceBars.ApplyGlobalProfile(barType, addon.variables.unitSpec)
+						if ok then
+							queueRefresh()
+							refreshSettingsUI()
+							notify((L["AppliedGlobalProfile"] or "Applied global profile for %s"):format(titleLabel))
+						else
+							notify(L["GlobalProfileApplyFailed"] or "Could not apply global profile.")
+						end
+					end
+				end
+
+				buttons[#buttons + 1] = {
+					text = (L["UseAsGlobalProfile"] or "Use as global %s profile"):format(titleLabel),
+					click = function() confirmSaveGlobal(saveGlobal) end,
+				}
+				buttons[#buttons + 1] = {
+					text = (L["ApplyGlobalProfile"] or "Apply global %s profile"):format(titleLabel),
+					click = applyGlobal,
+				}
+			end
+
 			settingsList[#settingsList + 1] = {
 				name = COLOR,
 				kind = settingType.Collapsible,
@@ -1403,6 +1471,7 @@ local function registerEditModeBars()
 				return c and c.enabled == true
 			end,
 			settings = settingsList,
+			buttons = buttons,
 			showOutsideEditMode = true,
 		})
 		if addon.EditModeLib and addon.EditModeLib.SetFrameResetVisible then addon.EditModeLib:SetFrameResetVisible(frame, false) end

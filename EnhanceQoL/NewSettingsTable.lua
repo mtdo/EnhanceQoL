@@ -12,5 +12,6 @@ addon.variables.NewVersionTableEQOL = {
 	["EQOL_autoCancelDruidFlightForm"] = true,
 
 	["ActionBar"] = true,
+	["EQOL_actionBarHideBorders"] = true,
 	["EQOL_actionBarHideAssistedRotation"] = true,
 }
