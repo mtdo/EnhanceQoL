@@ -455,8 +455,6 @@ function EditMode:RegisterFrame(id, opts)
 	if self:IsAvailable() then
 		self:_registerCallbacks()
 
-		local sReset = true
-		if opts.showReset == false then sReset = false end
 		local defaultPosition = {
 			point = self:GetValue(id, "point") or defaults.point,
 			x = self:GetValue(id, "x") or defaults.x,

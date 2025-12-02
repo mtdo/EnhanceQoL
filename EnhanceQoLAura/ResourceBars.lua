@@ -75,6 +75,10 @@ local SEPARATOR_THICKNESS = 1
 local SEP_DEFAULT = { 1, 1, 1, 0.5 }
 local WHITE = { 1, 1, 1, 1 }
 local DEFAULT_RB_TEX = "Interface\\Buttons\\WHITE8x8" -- historical default (Solid)
+local DEFAULT_HEALTH_WIDTH
+local DEFAULT_HEALTH_HEIGHT
+local DEFAULT_POWER_WIDTH
+local DEFAULT_POWER_HEIGHT
 BLIZZARD_TEX = "Interface\\TargetingFrame\\UI-StatusBar"
 local SMOOTH_SPEED = 12
 local DEFAULT_SMOOTH_DEADZONE = 0.75
@@ -685,10 +689,10 @@ local function isEQOLFrameName(name)
 	return type(name) == "string" and name:match("^EQOL.+Bar$")
 end
 -- Fixed, non-DB defaults
-local DEFAULT_HEALTH_WIDTH = 200
-local DEFAULT_HEALTH_HEIGHT = 20
-local DEFAULT_POWER_WIDTH = 200
-local DEFAULT_POWER_HEIGHT = 20
+DEFAULT_HEALTH_WIDTH = 200
+DEFAULT_HEALTH_HEIGHT = 20
+DEFAULT_POWER_WIDTH = 200
+DEFAULT_POWER_HEIGHT = 20
 
 local function defaultFontPath()
 	return (addon.variables and addon.variables.defaultFont)
