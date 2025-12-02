@@ -133,7 +133,7 @@ end
 
 local function hideFrameReset(frame)
 	local lib = addon.EditModeLib
-	if frame and lib and lib.SetFrameResetVisible then lib:SetFrameResetVisible(frame, false) end
+	if frame and lib and lib.SetFrameSettingsResetVisible then lib:SetFrameSettingsResetVisible(frame, false) end
 end
 
 local function fontOptions()
@@ -907,6 +907,7 @@ local function registerUnitFrame(unit, info)
 		settings = settingsList,
 		showOutsideEditMode = true,
 		collapseExclusive = true,
+		showReset = false,
 	})
 	hideFrameReset(frame)
 end
