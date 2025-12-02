@@ -111,6 +111,10 @@ local function registerEditModeBars()
 		local cfg = ResourceBars and ResourceBars.getBarSettings and ResourceBars.getBarSettings(barType) or ResourceBars and ResourceBars.GetBarSettings and ResourceBars.GetBarSettings(barType)
 		local anchor = ResourceBars and ResourceBars.getAnchor and ResourceBars.getAnchor(barType, addon.variables.unitSpec)
 		local titleLabel = (barType == "HEALTH") and (HEALTH or "Health") or (_G["POWER_TYPE_" .. barType] or _G[barType] or barType)
+		local specInfo = ResourceBars
+			and ResourceBars.powertypeClasses
+			and ResourceBars.powertypeClasses[addon.variables.unitClass]
+			and ResourceBars.powertypeClasses[addon.variables.unitClass][addon.variables.unitSpec]
 
 		-- Ensure backdrop defaults for current spec view
 		cfg = cfg or {}
@@ -195,9 +199,15 @@ local function registerEditModeBars()
 		local function confirmSaveGlobal(doSave)
 			if hasGlobalProfile() then
 				local key = "EQOL_SAVE_GLOBAL_RB_" .. tostring(barType)
+				local popupText
+				if specInfo and specInfo.MAIN == barType then
+					popupText = L["OverwriteGlobalMainProfile"] or "Overwrite global main profile?"
+				else
+					popupText = (L["OverwriteGlobalProfile"] or "Overwrite global profile for %s?"):format(titleLabel)
+				end
 				StaticPopupDialogs[key] = StaticPopupDialogs[key]
 					or {
-						text = (L["OverwriteGlobalProfile"] or "Overwrite global profile for %s?"):format(titleLabel),
+						text = popupText,
 						button1 = OKAY,
 						button2 = CANCEL,
 						timeout = 0,
@@ -1019,13 +1029,33 @@ local function registerEditModeBars()
 						if sf.TREANT == nil then sf.TREANT = false end
 						if sf.STAG == nil then sf.STAG = false end
 					else
-						if sf.HUMANOID == nil then sf.HUMANOID = true end
-						if sf.BEAR == nil then sf.BEAR = true end
-						if sf.CAT == nil then sf.CAT = true end
-						if sf.TRAVEL == nil then sf.TRAVEL = true end
-						if sf.MOONKIN == nil then sf.MOONKIN = true end
-						if sf.TREANT == nil then sf.TREANT = true end
-						if sf.STAG == nil then sf.STAG = true end
+						local isSecondaryMana = barType == "MANA" and specInfo and specInfo.MAIN ~= "MANA"
+						local isSecondaryEnergy = barType == "ENERGY" and specInfo and specInfo.MAIN ~= "ENERGY"
+						if isSecondaryMana then
+							if sf.HUMANOID == nil then sf.HUMANOID = true end
+							if sf.BEAR == nil then sf.BEAR = false end
+							if sf.CAT == nil then sf.CAT = false end
+							if sf.TRAVEL == nil then sf.TRAVEL = false end
+							if sf.MOONKIN == nil then sf.MOONKIN = false end
+							if sf.TREANT == nil then sf.TREANT = false end
+							if sf.STAG == nil then sf.STAG = false end
+						elseif isSecondaryEnergy then
+							if sf.HUMANOID == nil then sf.HUMANOID = false end
+							if sf.BEAR == nil then sf.BEAR = false end
+							if sf.CAT == nil then sf.CAT = true end
+							if sf.TRAVEL == nil then sf.TRAVEL = false end
+							if sf.MOONKIN == nil then sf.MOONKIN = false end
+							if sf.TREANT == nil then sf.TREANT = false end
+							if sf.STAG == nil then sf.STAG = false end
+						else
+							if sf.HUMANOID == nil then sf.HUMANOID = true end
+							if sf.BEAR == nil then sf.BEAR = true end
+							if sf.CAT == nil then sf.CAT = true end
+							if sf.TRAVEL == nil then sf.TRAVEL = true end
+							if sf.MOONKIN == nil then sf.MOONKIN = true end
+							if sf.TREANT == nil then sf.TREANT = true end
+							if sf.STAG == nil then sf.STAG = true end
+						end
 					end
 					return sf
 				end
@@ -1083,7 +1113,11 @@ local function registerEditModeBars()
 						if ok then
 							queueRefresh()
 							refreshSettingsUI()
-							notify((L["AppliedGlobalProfile"] or "Applied global profile for %s"):format(titleLabel))
+							if specInfo and specInfo.MAIN == barType then
+								notify(L["AppliedGlobalMainProfile"] or "Applied global main profile")
+							else
+								notify((L["AppliedGlobalProfile"] or "Applied global profile for %s"):format(titleLabel))
+							end
 						else
 							notify(L["GlobalProfileApplyFailed"] or "Could not apply global profile.")
 						end
@@ -1091,11 +1125,15 @@ local function registerEditModeBars()
 				end
 
 				buttons[#buttons + 1] = {
-					text = (L["UseAsGlobalProfile"] or "Use as global %s profile"):format(titleLabel),
+					text = (barType == (specInfo and specInfo.MAIN))
+							and (L["UseAsGlobalMainProfile"] or "Use as global main profile")
+						or (L["UseAsGlobalProfile"] or "Use as global %s profile"):format(titleLabel),
 					click = function() confirmSaveGlobal(saveGlobal) end,
 				}
 				buttons[#buttons + 1] = {
-					text = (L["ApplyGlobalProfile"] or "Apply global %s profile"):format(titleLabel),
+					text = (specInfo and specInfo.MAIN == barType)
+							and (L["ApplyGlobalMainProfile"] or "Apply global main profile")
+						or (L["ApplyGlobalProfile"] or "Apply global %s profile"):format(titleLabel),
 					click = applyGlobal,
 				}
 			end
