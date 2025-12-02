@@ -138,11 +138,15 @@ end
 
 local function fontOptions()
 	local list = {}
+	local defaultPath = defaultFontPath()
 	if not LSM then return list end
 	local hash = LSM:HashTable("font") or {}
+	local hasDefault = false
 	for name, path in pairs(hash) do
 		if type(path) == "string" and path ~= "" then list[#list + 1] = { value = path, label = tostring(name) } end
+		if path == defaultPath then hasDefault = true end
 	end
+	if defaultPath and not hasDefault then list[#list + 1] = { value = defaultPath, label = L["Default"] or "Default" } end
 	table.sort(list, function(a, b) return tostring(a.label) < tostring(b.label) end)
 	return list
 end

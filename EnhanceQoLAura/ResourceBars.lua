@@ -89,6 +89,8 @@ local getStatusbarDropdownLists
 local ensureRelativeFrameHooks
 local scheduleRelativeFrameWidthSync
 local ensureSpecCfg
+local classPowerTypes
+local powertypeClasses
 local COSMETIC_BAR_KEYS = {
 	"barTexture",
 	"width",
@@ -311,6 +313,60 @@ local function ensureGlobalStore()
 	return addon.db.globalResourceBarSettings
 end
 
+local function getSpecInfo(specIndex)
+	local class = addon.variables.unitClass
+	local spec = specIndex or addon.variables.unitSpec
+	if not class or not spec then return nil end
+	return powertypeClasses[class] and powertypeClasses[class][spec]
+end
+
+local function specSecondaries(specInfo)
+	local list = {}
+	if not specInfo then return list end
+	for _, pType in ipairs(classPowerTypes) do
+		if pType ~= specInfo.MAIN and specInfo[pType] then list[#list + 1] = pType end
+	end
+	return list
+end
+
+local function secondaryIndex(specInfo, pType)
+	if not specInfo then return nil end
+	for idx, val in ipairs(specSecondaries(specInfo)) do
+		if val == pType then return idx end
+	end
+	return nil
+end
+
+local function maybeChainSecondaryAnchor(cfg, prevType)
+	if not cfg or cfg.anchor then return end
+	if not prevType then return end
+	cfg.anchor = {
+		point = "TOP",
+		relativePoint = "BOTTOM",
+		relativeFrame = "EQOL" .. prevType .. "Bar",
+		x = 0,
+		y = -2,
+	}
+end
+
+local function resolveGlobalTemplate(barType, specIndex)
+	if not barType then return nil end
+	local store = addon.db.globalResourceBarSettings
+	if store and store[barType] then return store[barType] end
+
+	local specInfo = getSpecInfo(specIndex)
+	if not specInfo then return nil end
+
+	-- MAIN fallback
+	if specInfo.MAIN == barType and store and store.MAIN then return store.MAIN end
+
+	-- Secondary fallback
+	local idx = secondaryIndex(specInfo, barType)
+	if idx and store and store.SECONDARY then return store.SECONDARY, idx end
+
+	return nil
+end
+
 local function saveGlobalProfile(barType, specIndex)
 	if not barType then return false, "NO_BAR" end
 	local specCfg = ensureSpecCfg(specIndex or addon.variables.unitSpec)
@@ -319,12 +375,20 @@ local function saveGlobalProfile(barType, specIndex)
 	if not cfg then return false, "NO_CFG" end
 	local store = ensureGlobalStore()
 	store[barType] = CopyTable(cfg)
+
+	-- Also keep generic MAIN/SECONDARY templates for cross-bar reuse
+	local specInfo = getSpecInfo(specIndex)
+	if specInfo then
+		if specInfo.MAIN == barType then store.MAIN = CopyTable(cfg) end
+		local secondaries = specSecondaries(specInfo)
+		if secondaries[1] == barType then store.SECONDARY = CopyTable(cfg) end
+	end
 	return true
 end
 
 local function applyGlobalProfile(barType, specIndex, cosmeticOnly)
 	if not barType then return false, "NO_BAR" end
-	local globalCfg = addon.db.globalResourceBarSettings and addon.db.globalResourceBarSettings[barType]
+	local globalCfg, secondaryIdx = resolveGlobalTemplate(barType, specIndex)
 	if not globalCfg then return false, "NO_GLOBAL" end
 	local specCfg = ensureSpecCfg(specIndex or addon.variables.unitSpec)
 	if not specCfg then return false, "NO_SPEC" end
@@ -333,6 +397,11 @@ local function applyGlobalProfile(barType, specIndex, cosmeticOnly)
 		copyCosmeticBarSettings(globalCfg, specCfg[barType])
 	else
 		specCfg[barType] = CopyTable(globalCfg)
+		-- Chain secondary anchors if we are applying to second or later secondary
+		if secondaryIdx and secondaryIdx > 1 then
+			local prevType = specSecondaries(getSpecInfo(specIndex))[secondaryIdx - 1]
+			if prevType then maybeChainSecondaryAnchor(specCfg[barType], prevType) end
+		end
 	end
 	return true
 end
@@ -594,9 +663,15 @@ local DEFAULT_HEALTH_HEIGHT = 20
 local DEFAULT_POWER_WIDTH = 200
 local DEFAULT_POWER_HEIGHT = 20
 
+local function defaultFontPath()
+	return (addon.variables and addon.variables.defaultFont)
+		or (LSM and LSM.DefaultMedia and LSM:Fetch("font", LSM.DefaultMedia.font))
+		or STANDARD_TEXT_FONT
+end
+
 local function resolveFontFace(cfg)
 	if cfg and cfg.fontFace and cfg.fontFace ~= "" then return cfg.fontFace end
-	return addon.variables.defaultFont
+	return defaultFontPath()
 end
 
 local function resolveFontOutline(cfg)
@@ -616,7 +691,7 @@ local function setFontWithFallback(fs, face, size, outline)
 	if outline == "" then outline = nil end
 	if not fs:SetFont(face, size, outline) then
 		local fallbackOutline = outline or "OUTLINE"
-		fs:SetFont(addon.variables.defaultFont, size, fallbackOutline)
+		fs:SetFont(defaultFontPath(), size, fallbackOutline)
 	end
 end
 
@@ -1050,1512 +1125,6 @@ local DK_SPEC_COLOR = {
 	[3] = { 0.0, 0.9, 0.3 },
 }
 
-function addon.Aura.functions.addResourceFrame(container)
-	local scroll = addon.functions.createContainer("ScrollFrame", "Flow")
-	scroll:SetFullWidth(true)
-	scroll:SetFullHeight(true)
-	container:AddChild(scroll)
-
-	local wrapper = addon.functions.createContainer("SimpleGroup", "Flow")
-	scroll:AddChild(wrapper)
-
-	local groupCore = addon.functions.createContainer("InlineGroup", "List")
-	groupCore:SetTitle(L["Resource Bars"])
-	wrapper:AddChild(groupCore)
-
-	local data = {
-		{
-			text = L["Enable Resource frame"],
-			var = "enableResourceFrame",
-			func = function(self, _, value)
-				addon.db["enableResourceFrame"] = value
-				if value then
-					addon.Aura.ResourceBars.EnableResourceBars()
-				elseif addon.Aura.ResourceBars and addon.Aura.ResourceBars.DisableResourceBars then
-					addon.Aura.ResourceBars.DisableResourceBars()
-				end
-				-- Rebuild the options UI to reflect enabled/disabled state
-				if container and container.ReleaseChildren then
-					container:ReleaseChildren()
-					-- Defer rebuild slightly to ensure enable/disable side effects settle
-					if After then
-						After(0, function()
-							if addon and addon.Aura and addon.Aura.functions and addon.Aura.functions.addResourceFrame then addon.Aura.functions.addResourceFrame(container) end
-						end)
-					else
-						if addon and addon.Aura and addon.Aura.functions and addon.Aura.functions.addResourceFrame then addon.Aura.functions.addResourceFrame(container) end
-					end
-				end
-			end,
-		},
-		{
-			text = L["Hide out of combat"] or "Hide resource bars out of combat",
-			var = "resourceBarsHideOutOfCombat",
-			func = function(self, _, value)
-				addon.db["resourceBarsHideOutOfCombat"] = value and true or false
-				if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.ApplyVisibilityPreference then addon.Aura.ResourceBars.ApplyVisibilityPreference() end
-			end,
-		},
-		{
-			text = L["Hide when mounted"] or "Hide resource bars while mounted",
-			var = "resourceBarsHideMounted",
-			func = function(self, _, value)
-				addon.db["resourceBarsHideMounted"] = value and true or false
-				if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.ApplyVisibilityPreference then addon.Aura.ResourceBars.ApplyVisibilityPreference() end
-			end,
-		},
-		{
-			text = L["Hide in vehicles"] or "Hide resource bars in vehicles",
-			var = "resourceBarsHideVehicle",
-			func = function(self, _, value)
-				addon.db["resourceBarsHideVehicle"] = value and true or false
-				if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.ApplyVisibilityPreference then addon.Aura.ResourceBars.ApplyVisibilityPreference() end
-			end,
-		},
-	}
-
-	tsort(data, function(a, b) return a.text < b.text end)
-
-	for _, cbData in ipairs(data) do
-		local uFunc = function(self, _, value) addon.db[cbData.var] = value end
-		if cbData.func then uFunc = cbData.func end
-		local cbElement = addon.functions.createCheckboxAce(cbData.text, addon.db[cbData.var], uFunc)
-		groupCore:AddChild(cbElement)
-	end
-
-	local specTabs = {}
-	if addon.variables.unitClassID and GetNumSpecializationsForClassID then
-		for i = 1, (GetNumSpecializationsForClassID(addon.variables.unitClassID) or 0) do
-			local _, specName = GetSpecializationInfoForClassID(addon.variables.unitClassID, i)
-			tinsert(specTabs, { text = specName, value = i })
-		end
-	end
-
-	if #specTabs > 0 then
-		local classKey = addon.variables.unitClass or "UNKNOWN"
-		lastProfileShareScope[classKey] = lastProfileShareScope[classKey] or "ALL"
-
-		local scopeList, scopeOrder = {}, {}
-		scopeList.ALL = L["All specs"] or "All specs"
-		scopeOrder[1] = "ALL"
-		for _, tab in ipairs(specTabs) do
-			local key = tostring(tab.value)
-			scopeList[key] = tab.text
-			scopeOrder[#scopeOrder + 1] = key
-		end
-		if not scopeList[lastProfileShareScope[classKey]] then lastProfileShareScope[classKey] = "ALL" end
-
-		local shareRow = addon.functions.createContainer("SimpleGroup", "Flow")
-		shareRow:SetFullWidth(true)
-		groupCore:AddChild(shareRow)
-
-		local scopeDropdown = addon.functions.createDropdownAce(L["ProfileScope"] or "Apply to", scopeList, scopeOrder, function(_, _, key) lastProfileShareScope[classKey] = key end)
-		scopeDropdown:SetFullWidth(false)
-		scopeDropdown:SetRelativeWidth(0.5)
-		scopeDropdown:SetValue(lastProfileShareScope[classKey])
-		shareRow:AddChild(scopeDropdown)
-
-		local exportBtn = addon.functions.createButtonAce(L["Export"] or "Export", 120, function()
-			local scopeKey = lastProfileShareScope[classKey] or "ALL"
-			local code, reason = exportResourceProfile(scopeKey)
-			if not code then
-				notifyUser(exportErrorMessage(reason))
-				return
-			end
-			StaticPopupDialogs["EQOL_RESOURCEBAR_EXPORT"] = StaticPopupDialogs["EQOL_RESOURCEBAR_EXPORT"]
-				or {
-					text = L["ExportProfileTitle"] or "Export Resource Bars",
-					button1 = CLOSE,
-					hasEditBox = true,
-					editBoxWidth = 320,
-					timeout = 0,
-					whileDead = true,
-					hideOnEscape = true,
-					preferredIndex = 3,
-				}
-			StaticPopupDialogs["EQOL_RESOURCEBAR_EXPORT"].OnShow = function(self)
-				self:SetFrameStrata("TOOLTIP")
-				local editBox = self.editBox or self:GetEditBox()
-				editBox:SetText(code)
-				editBox:HighlightText()
-				editBox:SetFocus()
-			end
-			StaticPopup_Show("EQOL_RESOURCEBAR_EXPORT")
-		end)
-		exportBtn:SetFullWidth(false)
-		exportBtn:SetRelativeWidth(0.25)
-		shareRow:AddChild(exportBtn)
-
-		local importBtn = addon.functions.createButtonAce(L["Import"] or "Import", 120, function()
-			StaticPopupDialogs["EQOL_RESOURCEBAR_IMPORT"] = StaticPopupDialogs["EQOL_RESOURCEBAR_IMPORT"]
-				or {
-					text = L["ImportProfileTitle"] or "Import Resource Bars",
-					button1 = OKAY,
-					button2 = CANCEL,
-					hasEditBox = true,
-					editBoxWidth = 320,
-					timeout = 0,
-					whileDead = true,
-					hideOnEscape = true,
-					preferredIndex = 3,
-				}
-			StaticPopupDialogs["EQOL_RESOURCEBAR_IMPORT"].OnShow = function(self)
-				self:SetFrameStrata("TOOLTIP")
-				local editBox = self.editBox or self:GetEditBox()
-				editBox:SetText("")
-				editBox:SetFocus()
-			end
-			StaticPopupDialogs["EQOL_RESOURCEBAR_IMPORT"].EditBoxOnEnterPressed = function(editBox)
-				local parent = editBox:GetParent()
-				if parent and parent.button1 then parent.button1:Click() end
-			end
-			StaticPopupDialogs["EQOL_RESOURCEBAR_IMPORT"].OnAccept = function(self)
-				local editBox = self.editBox or self:GetEditBox()
-				local input = editBox:GetText() or ""
-				local scopeKey = lastProfileShareScope[classKey] or "ALL"
-				local ok, applied, enableState = importResourceProfile(input, scopeKey)
-				if not ok then
-					notifyUser(importErrorMessage(applied, enableState))
-					return
-				end
-				if enableState ~= nil and scopeKey == "ALL" then
-					local prev = addon.db["enableResourceFrame"]
-					addon.db["enableResourceFrame"] = enableState and true or false
-					if enableState and prev ~= true and addon.Aura.ResourceBars and addon.Aura.ResourceBars.EnableResourceBars then
-						addon.Aura.ResourceBars.EnableResourceBars()
-					elseif not enableState and prev ~= false and addon.Aura.ResourceBars and addon.Aura.ResourceBars.DisableResourceBars then
-						addon.Aura.ResourceBars.DisableResourceBars()
-					end
-				end
-				if applied then
-					for _, specIndex in ipairs(applied) do
-						requestActiveRefresh(specIndex)
-					end
-				end
-				container:ReleaseChildren()
-				addon.Aura.functions.addResourceFrame(container)
-				if applied and #applied > 0 then
-					local specNames = {}
-					for _, specIndex in ipairs(applied) do
-						specNames[#specNames + 1] = specNameByIndex(specIndex) or tostring(specIndex)
-					end
-					notifyUser((L["ImportProfileSuccess"] or "Resource Bars updated for: %s"):format(tconcat(specNames, ", ")))
-				else
-					notifyUser(L["ImportProfileSuccessGeneric"] or "Resource Bars profile imported.")
-				end
-			end
-			StaticPopup_Show("EQOL_RESOURCEBAR_IMPORT")
-		end)
-		importBtn:SetFullWidth(false)
-		importBtn:SetRelativeWidth(0.25)
-		shareRow:AddChild(importBtn)
-	end
-
-	if addon.db["enableResourceFrame"] then
-		-- No global defaults; everything is per-spec and per-bar below
-
-		local anchorPoints = {
-			TOPLEFT = "TOPLEFT",
-			TOP = "TOP",
-			TOPRIGHT = "TOPRIGHT",
-			LEFT = "LEFT",
-			CENTER = "CENTER",
-			RIGHT = "RIGHT",
-			BOTTOMLEFT = "BOTTOMLEFT",
-			BOTTOM = "BOTTOM",
-			BOTTOMRIGHT = "BOTTOMRIGHT",
-		}
-		local anchorOrder = {
-			"TOPLEFT",
-			"TOP",
-			"TOPRIGHT",
-			"LEFT",
-			"CENTER",
-			"RIGHT",
-			"BOTTOMLEFT",
-			"BOTTOM",
-			"BOTTOMRIGHT",
-		}
-
-		local baseFrameList = {
-			UIParent = "UIParent",
-			PlayerFrame = "PlayerFrame",
-			TargetFrame = "TargetFrame",
-		}
-		local extraAnchorFrames = {
-			[COOLDOWN_VIEWER_FRAME_NAME] = COOLDOWN_VIEWER_FRAME_NAME,
-			UtilityCooldownViewer = "UtilityCooldownViewer",
-			BuffBarCooldownViewer = "BuffBarCooldownViewer",
-			BuffIconCooldownViewer = "BuffIconCooldownViewer",
-		}
-		for name, label in pairs(extraAnchorFrames) do
-			baseFrameList[name] = label
-		end
-		if addon.variables and addon.variables.actionBarNames then
-			for _, info in ipairs(addon.variables.actionBarNames) do
-				if info.name then baseFrameList[info.name] = info.text or info.name end
-			end
-		end
-
-		local function displayNameForBarType(pType)
-			if pType == "HEALTH" then return HEALTH end
-			local s = _G["POWER_TYPE_" .. pType] or _G[pType]
-			if type(s) == "string" and s ~= "" then return s end
-			return pType
-		end
-
-		local buildSpec
-
-		local function enforceMinWidthForSpec(barType, specIndex)
-			if not barType then return nil end
-			local class = addon.variables.unitClass
-			local spec = specIndex or addon.variables.unitSpec
-			if not class or not spec then return nil end
-			addon.db.personalResourceBarSettings = addon.db.personalResourceBarSettings or {}
-			addon.db.personalResourceBarSettings[class] = addon.db.personalResourceBarSettings[class] or {}
-			addon.db.personalResourceBarSettings[class][spec] = addon.db.personalResourceBarSettings[class][spec] or {}
-			addon.db.personalResourceBarSettings[class][spec][barType] = addon.db.personalResourceBarSettings[class][spec][barType] or {}
-			local cfg = addon.db.personalResourceBarSettings[class][spec][barType]
-			cfg.width = MIN_RESOURCE_BAR_WIDTH
-			return cfg
-		end
-
-		local function addAnchorOptions(barType, parent, info, frameList, specIndex)
-			info = info or {}
-			frameList = frameList or baseFrameList
-
-			local header = addon.functions.createLabelAce(format("%s %s", displayNameForBarType(barType), L["Anchor"]))
-			parent:AddChild(header)
-
-			-- Filter choices to avoid creating loops
-			local function frameNameToBarType(fname)
-				if fname == "EQOLHealthBar" then return "HEALTH" end
-				return type(fname) == "string" and fname:match("^EQOL(.+)Bar$") or nil
-			end
-			local function wouldCauseLoop(fromType, candidateName)
-				-- Always safe: UIParent and non-EQOL frames
-				if candidateName == "UIParent" then return false end
-				local candType = frameNameToBarType(candidateName)
-				if not candType then return false end
-				-- Direct self-reference
-				if candType == fromType then return true end
-				-- Follow anchors from candidate; if we reach fromType's frame, it would loop
-				local seen = {}
-				local name = candidateName
-				local limit = 10
-				local targetFrameName = (fromType == "HEALTH") and "EQOLHealthBar" or ("EQOL" .. fromType .. "Bar")
-				while name and name ~= "UIParent" and limit > 0 do
-					if seen[name] then break end
-					seen[name] = true
-					if name == targetFrameName then return true end
-					local bt = frameNameToBarType(name)
-					if not bt then break end
-					local anch = getAnchor(bt, specIndex)
-					name = anch and anch.relativeFrame or "UIParent"
-					limit = limit - 1
-				end
-				return false
-			end
-
-			local filtered = {}
-			for k, v in pairs(frameList) do
-				if not wouldCauseLoop(barType, k) then filtered[k] = v end
-			end
-			-- Ensure UIParent is always present
-			filtered.UIParent = frameList.UIParent or "UIParent"
-
-			-- Sub-group we can rebuild when relative frame changes
-			local anchorSub = addon.functions.createContainer("SimpleGroup", "Flow")
-			parent:AddChild(anchorSub)
-
-			local function buildAnchorSub()
-				anchorSub:ReleaseChildren()
-				info.point = info.point or "TOPLEFT"
-				info.relativePoint = info.relativePoint or info.point or "TOPLEFT"
-				info.x = info.x or 0
-				info.y = info.y or 0
-				if (info.relativeFrame or "UIParent") == "UIParent" then info.autoSpacing = nil end
-
-				local stackSpacing = DEFAULT_STACK_SPACING
-				if info.autoSpacing and (info.relativeFrame or "UIParent") ~= "UIParent" then
-					info.x = 0
-					info.y = stackSpacing
-				end
-
-				-- Row for Relative Frame, Point, Relative Point (each 33%)
-				local row = addon.functions.createContainer("SimpleGroup", "Flow")
-				row:SetFullWidth(true)
-
-				local initial = info.relativeFrame or "UIParent"
-				if not filtered[initial] then initial = "UIParent" end
-				-- Ensure DB reflects a valid selection
-				info.relativeFrame = initial
-				if (info.relativeFrame or "UIParent") == "UIParent" then info.matchRelativeWidth = nil end
-				local dropFrame = addon.functions.createDropdownAce(L["Relative Frame"], filtered, nil, nil)
-				dropFrame:SetValue(initial)
-				dropFrame:SetFullWidth(false)
-				dropFrame:SetRelativeWidth(0.333)
-				row:AddChild(dropFrame)
-
-				local relName = info.relativeFrame or "UIParent"
-				local dropPoint = addon.functions.createDropdownAce(RESAMPLE_QUALITY_POINT, anchorPoints, anchorOrder, nil)
-				dropPoint:SetValue(info.point or "TOPLEFT")
-				dropPoint:SetFullWidth(false)
-				dropPoint:SetRelativeWidth(0.333)
-				row:AddChild(dropPoint)
-
-				local dropRelPoint = addon.functions.createDropdownAce(L["Relative Point"], anchorPoints, anchorOrder, nil)
-				dropRelPoint:SetValue(info.relativePoint or info.point or "TOPLEFT")
-				dropRelPoint:SetFullWidth(false)
-				dropRelPoint:SetRelativeWidth(0.333)
-				row:AddChild(dropRelPoint)
-
-				anchorSub:AddChild(row)
-
-				-- Offset sliders (X/Y)
-				local offsetRow = addon.functions.createContainer("SimpleGroup", "Flow")
-				offsetRow:SetFullWidth(true)
-				info.x = info.x or 0
-				info.y = info.y or 0
-
-				local sliderX = addon.functions.createSliderAce(L["X"] or "X", info.x, -1000, 1000, 1, function(_, _, val)
-					info.autoSpacing = false
-					info.x = val
-					requestActiveRefresh(specIndex, REANCHOR_REFRESH)
-				end)
-				sliderX:SetFullWidth(false)
-				sliderX:SetRelativeWidth(0.5)
-				sliderX:SetValue(info.x)
-				offsetRow:AddChild(sliderX)
-
-				local sliderY = addon.functions.createSliderAce(L["Y"] or "Y", info.y, -1000, 1000, 1, function(_, _, val)
-					info.autoSpacing = false
-					info.y = val
-					requestActiveRefresh(specIndex, REANCHOR_REFRESH)
-				end)
-				sliderY:SetFullWidth(false)
-				sliderY:SetRelativeWidth(0.5)
-				sliderY:SetValue(info.y)
-				offsetRow:AddChild(sliderY)
-				anchorSub:AddChild(offsetRow)
-
-				if (info.relativeFrame or "UIParent") ~= "UIParent" then
-					local cbMatch = addon.functions.createCheckboxAce(L["MatchRelativeFrameWidth"] or "Match Relative Frame width", info.matchRelativeWidth == true, function(_, _, val)
-						info.matchRelativeWidth = val and true or nil
-						if info.matchRelativeWidth then ensureRelativeFrameHooks(info.relativeFrame) end
-						if val then
-							local cfg = enforceMinWidthForSpec(barType, specIndex)
-							if specIndex == addon.variables.unitSpec then
-								local defH = (barType == "HEALTH") and (cfg and cfg.height or DEFAULT_HEALTH_HEIGHT) or (cfg and cfg.height or DEFAULT_POWER_HEIGHT)
-								if barType == "HEALTH" then
-									if addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.SetHealthBarSize then
-										addon.Aura.ResourceBars.SetHealthBarSize(MIN_RESOURCE_BAR_WIDTH, defH)
-									end
-								else
-									if addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.SetPowerBarSize then
-										addon.Aura.ResourceBars.SetPowerBarSize(MIN_RESOURCE_BAR_WIDTH, defH, barType)
-									end
-								end
-							end
-						end
-						if
-							ResourceBars
-							and ResourceBars.ui
-							and ResourceBars.ui.barWidthSliders
-							and ResourceBars.ui.barWidthSliders[specIndex]
-							and ResourceBars.ui.barWidthSliders[specIndex][barType]
-						then
-							local slider = ResourceBars.ui.barWidthSliders[specIndex][barType]
-							slider:SetDisabled(info.matchRelativeWidth == true)
-							if info.matchRelativeWidth then slider:SetValue(MIN_RESOURCE_BAR_WIDTH) end
-						end
-						requestActiveRefresh(specIndex, REANCHOR_REFRESH)
-						if ResourceBars and ResourceBars.SyncRelativeFrameWidths then ResourceBars.SyncRelativeFrameWidths() end
-					end)
-					cbMatch:SetFullWidth(true)
-					anchorSub:AddChild(cbMatch)
-				else
-					info.matchRelativeWidth = nil
-				end
-
-				if (info.relativeFrame or "UIParent") == "UIParent" then
-					local hint = addon.functions.createLabelAce(L["Movable while holding SHIFT"], nil, nil, 10)
-					anchorSub:AddChild(hint)
-				end
-
-				-- Callback for Relative Frame change (rebuild the sub UI on selection)
-				local function onFrameChanged(self, _, val)
-					local prev = info.relativeFrame or "UIParent"
-					info.relativeFrame = val
-					if val ~= "UIParent" then
-						info.point = "TOPLEFT"
-						info.relativePoint = "BOTTOMLEFT"
-						info.x = 0
-						info.y = stackSpacing
-						info.autoSpacing = true
-					end
-					if val == "UIParent" and prev ~= "UIParent" then
-						info.point = "CENTER"
-						info.relativePoint = "CENTER"
-						info.x = 0
-						info.y = 0
-						info.autoSpacing = nil
-					end
-					if val ~= "UIParent" then
-						if info.matchRelativeWidth then ensureRelativeFrameHooks(val) end
-					else
-						info.matchRelativeWidth = nil
-					end
-					buildAnchorSub()
-					requestActiveRefresh(specIndex, REANCHOR_REFRESH)
-					if ResourceBars and ResourceBars.ui and ResourceBars.ui.barWidthSliders and ResourceBars.ui.barWidthSliders[specIndex] and ResourceBars.ui.barWidthSliders[specIndex][barType] then
-						local slider = ResourceBars.ui.barWidthSliders[specIndex][barType]
-						slider:SetDisabled(info.matchRelativeWidth == true)
-						if info.matchRelativeWidth then slider:SetValue(MIN_RESOURCE_BAR_WIDTH) end
-					end
-				end
-
-				dropFrame:SetCallback("OnValueChanged", onFrameChanged)
-				dropPoint:SetCallback("OnValueChanged", function(self, _, val)
-					info.autoSpacing = false
-					info.point = val
-					info.relativePoint = info.relativePoint or val
-					requestActiveRefresh(specIndex, REANCHOR_REFRESH)
-				end)
-				dropRelPoint:SetCallback("OnValueChanged", function(self, _, val)
-					info.autoSpacing = false
-					info.relativePoint = val
-					requestActiveRefresh(specIndex, REANCHOR_REFRESH)
-				end)
-			end
-
-			-- Initial build
-			buildAnchorSub()
-
-			parent:AddChild(addon.functions.createSpacerAce())
-		end
-
-		local tabGroup = addon.functions.createContainer("TabGroup", "Flow")
-		buildSpec = function(container, specIndex)
-			container:ReleaseChildren()
-			if not addon.Aura.ResourceBars.powertypeClasses[addon.variables.unitClass] then return end
-			local specInfo = addon.Aura.ResourceBars.powertypeClasses[addon.variables.unitClass][specIndex]
-			if not specInfo then return end
-
-			addon.db.personalResourceBarSettings[addon.variables.unitClass] = addon.db.personalResourceBarSettings[addon.variables.unitClass] or {}
-			addon.db.personalResourceBarSettings[addon.variables.unitClass][specIndex] = addon.db.personalResourceBarSettings[addon.variables.unitClass][specIndex] or {}
-			local dbSpec = addon.db.personalResourceBarSettings[addon.variables.unitClass][specIndex]
-
-			-- Gather available bars
-			local available = { HEALTH = true }
-			for _, pType in ipairs(addon.Aura.ResourceBars.classPowerTypes) do
-				if specInfo.MAIN == pType or specInfo[pType] then available[pType] = true end
-			end
-
-			-- Ensure DB defaults
-			for pType in pairs(available) do
-				if pType ~= "HEALTH" then
-					dbSpec[pType] = dbSpec[pType]
-						or {
-							enabled = false,
-							width = DEFAULT_POWER_WIDTH,
-							height = DEFAULT_POWER_HEIGHT,
-							textStyle = pType == "MANA" and "PERCENT" or "CURMAX",
-							fontSize = 16,
-							fontFace = addon.variables.defaultFont,
-							fontOutline = "OUTLINE",
-							fontColor = { 1, 1, 1, 1 },
-							backdrop = {
-								enabled = true,
-								backgroundTexture = "Interface\\DialogFrame\\UI-DialogBox-Background",
-								backgroundColor = { 0, 0, 0, 0.8 },
-								borderTexture = "Interface\\Tooltips\\UI-Tooltip-Border",
-								borderColor = { 0, 0, 0, 0 },
-								edgeSize = 3,
-								outset = 0,
-							},
-							textOffset = { x = 0, y = 0 },
-							useBarColor = false,
-							barColor = { 1, 1, 1, 1 },
-							useMaxColor = false,
-							maxColor = { 1, 1, 1, 1 },
-							showSeparator = false,
-							separatorColor = { 1, 1, 1, 0.5 },
-							separatorThickness = SEPARATOR_THICKNESS,
-							showCooldownText = false,
-							cooldownTextFontSize = 16,
-							reverseFill = false,
-							verticalFill = false,
-							smoothFill = false,
-						}
-					dbSpec[pType].anchor = dbSpec[pType].anchor or {}
-				end
-			end
-
-			-- Compact toggles (including Health)
-			local groupToggles = addon.functions.createContainer("InlineGroup", "Flow")
-			groupToggles:SetTitle(L["Bars to show"])
-			container:AddChild(groupToggles)
-			-- Ensure HEALTH spec config exists
-			dbSpec.HEALTH = dbSpec.HEALTH
-				or {
-					enabled = false,
-					width = DEFAULT_HEALTH_WIDTH,
-					height = DEFAULT_HEALTH_HEIGHT,
-					textStyle = "PERCENT",
-					fontSize = 16,
-					fontFace = addon.variables.defaultFont,
-					fontOutline = "OUTLINE",
-					fontColor = { 1, 1, 1, 1 },
-					backdrop = {
-						enabled = true,
-						backgroundTexture = "Interface\\DialogFrame\\UI-DialogBox-Background",
-						backgroundColor = { 0, 0, 0, 0.8 },
-						borderTexture = "Interface\\Tooltips\\UI-Tooltip-Border",
-						borderColor = { 0, 0, 0, 0 },
-						edgeSize = 3,
-						outset = 0,
-					},
-					textOffset = { x = 0, y = 0 },
-					useBarColor = false,
-					useClassColor = false,
-					barColor = { 1, 1, 1, 1 },
-					useMaxColor = false,
-					maxColor = { 1, 1, 1, 1 },
-					reverseFill = false,
-					verticalFill = false,
-					smoothFill = false,
-					anchor = {},
-				}
-			local specKey = tostring(specIndex)
-			local function fontDropdownData()
-				local map = {
-					[addon.variables.defaultFont] = L["Default"] or "Default",
-				}
-				for name, path in pairs(LSM and LSM:HashTable("font") or {}) do
-					if type(path) == "string" and path ~= "" then map[path] = tostring(name) end
-				end
-				return addon.functions.prepareListForDropdown(map)
-			end
-
-			local function borderDropdownData()
-				local map = {
-					["Interface\\Tooltips\\UI-Tooltip-Border"] = "Tooltip Border",
-				}
-				for name, path in pairs(LSM and LSM:HashTable("border") or {}) do
-					if type(path) == "string" and path ~= "" then map[path] = tostring(name) end
-				end
-				return addon.functions.prepareListForDropdown(map)
-			end
-
-			local function backgroundDropdownData()
-				local map = {
-					["Interface\\DialogFrame\\UI-DialogBox-Background"] = "Dialog Background",
-					["Interface\\Buttons\\WHITE8x8"] = "Solid (tintable)",
-				}
-				for name, path in pairs(LSM and LSM:HashTable("background") or {}) do
-					if type(path) == "string" and path ~= "" then map[path] = tostring(name) end
-				end
-				return addon.functions.prepareListForDropdown(map)
-			end
-
-			local outlineMap = {
-				NONE = L["None"] or NONE,
-				OUTLINE = L["Outline"] or "Outline",
-				THICKOUTLINE = L["Thick Outline"] or "Thick Outline",
-				MONOCHROMEOUTLINE = L["Monochrome Outline"] or "Monochrome Outline",
-			}
-			local outlineOrder = { "NONE", "OUTLINE", "THICKOUTLINE", "MONOCHROMEOUTLINE" }
-
-			local function addFontControls(parent, cfg)
-				local list, order = fontDropdownData()
-				local fontRow = addon.functions.createContainer("SimpleGroup", "Flow")
-				fontRow:SetFullWidth(true)
-				local dropFont = addon.functions.createDropdownAce(L["Font"] or "Font", list, order, function(_, _, key)
-					cfg.fontFace = key
-					requestActiveRefresh(specIndex)
-				end)
-				local curFont = cfg.fontFace or addon.variables.defaultFont
-				if not list[curFont] then curFont = addon.variables.defaultFont end
-				dropFont:SetValue(curFont)
-				dropFont:SetFullWidth(false)
-				dropFont:SetRelativeWidth(0.5)
-				fontRow:AddChild(dropFont)
-
-				local dropOutline = addon.functions.createDropdownAce(L["Font outline"] or "Font outline", outlineMap, outlineOrder, function(_, _, key)
-					cfg.fontOutline = key
-					requestActiveRefresh(specIndex)
-				end)
-				dropOutline:SetValue(cfg.fontOutline or "OUTLINE")
-				dropOutline:SetFullWidth(false)
-				dropOutline:SetRelativeWidth(0.5)
-				fontRow:AddChild(dropOutline)
-				parent:AddChild(fontRow)
-
-				local colorRow = addon.functions.createContainer("SimpleGroup", "Flow")
-				colorRow:SetFullWidth(true)
-				local color = AceGUI:Create("ColorPicker")
-				color:SetLabel(L["Font color"] or "Font color")
-				color:SetHasAlpha(true)
-				local fc = cfg.fontColor or { 1, 1, 1, 1 }
-				color:SetColor(fc[1] or 1, fc[2] or 1, fc[3] or 1, fc[4] or 1)
-				color:SetCallback("OnValueChanged", function(_, _, r, g, b, a)
-					cfg.fontColor = { r, g, b, a }
-					requestActiveRefresh(specIndex)
-				end)
-				color:SetFullWidth(false)
-				color:SetRelativeWidth(0.5)
-				colorRow:AddChild(color)
-				parent:AddChild(colorRow)
-			end
-
-			local function addBackdropControls(parent, cfg, pType)
-				cfg.backdrop = cfg.backdrop or {}
-				if cfg.backdrop.enabled == nil then cfg.backdrop.enabled = true end
-				cfg.backdrop.backgroundTexture = cfg.backdrop.backgroundTexture or "Interface\\DialogFrame\\UI-DialogBox-Background"
-				cfg.backdrop.backgroundColor = cfg.backdrop.backgroundColor or { 0, 0, 0, 0.8 }
-				cfg.backdrop.borderTexture = cfg.backdrop.borderTexture or "Interface\\Tooltips\\UI-Tooltip-Border"
-				cfg.backdrop.borderColor = cfg.backdrop.borderColor or { 0, 0, 0, 0 }
-				cfg.backdrop.edgeSize = cfg.backdrop.edgeSize or 3
-				cfg.backdrop.outset = cfg.backdrop.outset or 0
-				cfg.backdrop.backgroundInset = max(0, cfg.backdrop.backgroundInset or 0)
-				cfg.backdrop.innerPadding = nil
-
-				local group = addon.functions.createContainer("InlineGroup", "Flow")
-				group:SetTitle(L["Frame & Background"] or "Frame & Background")
-				group:SetFullWidth(true)
-				parent:AddChild(group)
-
-				local dropBg, bgColor, dropBorder, borderColor, sliderEdge, sliderOutset, sliderBgInset
-
-				local function applyInsetNow()
-					if specIndex ~= addon.variables.unitSpec then return end
-					if pType == "HEALTH" then
-						if healthBar then applyBackdrop(healthBar, cfg) end
-					elseif pType and powerbar[pType] then
-						applyBackdrop(powerbar[pType], cfg)
-					end
-				end
-
-				local function setDisabled(disable)
-					if dropBg then dropBg:SetDisabled(disable) end
-					if bgColor then bgColor:SetDisabled(disable) end
-					if dropBorder then dropBorder:SetDisabled(disable) end
-					if borderColor then borderColor:SetDisabled(disable) end
-					if sliderEdge then sliderEdge:SetDisabled(disable) end
-					if sliderOutset then sliderOutset:SetDisabled(disable) end
-					if sliderBgInset then sliderBgInset:SetDisabled(disable) end
-				end
-
-				local cb = addon.functions.createCheckboxAce(L["Show backdrop"] or "Show backdrop", cfg.backdrop.enabled ~= false, function(_, _, val)
-					cfg.backdrop.enabled = val and true or false
-					setDisabled(cfg.backdrop.enabled == false)
-					requestActiveRefresh(specIndex)
-				end)
-				cb:SetFullWidth(true)
-				group:AddChild(cb)
-
-				local bgList, bgOrder = backgroundDropdownData()
-				dropBg = addon.functions.createDropdownAce(L["Background texture"] or "Background texture", bgList, bgOrder, function(_, _, key)
-					cfg.backdrop.backgroundTexture = key
-					requestActiveRefresh(specIndex)
-				end)
-				local curBg = cfg.backdrop.backgroundTexture
-				if not bgList[curBg] then curBg = "Interface\\DialogFrame\\UI-DialogBox-Background" end
-				dropBg:SetValue(curBg)
-				dropBg:SetFullWidth(false)
-				dropBg:SetRelativeWidth(0.5)
-				group:AddChild(dropBg)
-
-				bgColor = AceGUI:Create("ColorPicker")
-				bgColor:SetLabel(L["Background color"] or "Background color")
-				bgColor:SetHasAlpha(true)
-				local bc = cfg.backdrop.backgroundColor or { 0, 0, 0, 0.8 }
-				bgColor:SetColor(bc[1] or 0, bc[2] or 0, bc[3] or 0, bc[4] or 0.8)
-				bgColor:SetCallback("OnValueChanged", function(_, _, r, g, b, a)
-					cfg.backdrop.backgroundColor = { r, g, b, a }
-					requestActiveRefresh(specIndex)
-				end)
-				bgColor:SetFullWidth(false)
-				bgColor:SetRelativeWidth(0.5)
-				group:AddChild(bgColor)
-
-				local borderList, borderOrder = borderDropdownData()
-				dropBorder = addon.functions.createDropdownAce(L["Border texture"] or "Border texture", borderList, borderOrder, function(_, _, key)
-					cfg.backdrop.borderTexture = key
-					requestActiveRefresh(specIndex)
-				end)
-				local curBorder = cfg.backdrop.borderTexture
-				if not borderList[curBorder] then curBorder = "Interface\\Tooltips\\UI-Tooltip-Border" end
-				dropBorder:SetValue(curBorder)
-				dropBorder:SetFullWidth(false)
-				dropBorder:SetRelativeWidth(0.5)
-				group:AddChild(dropBorder)
-
-				borderColor = AceGUI:Create("ColorPicker")
-				borderColor:SetLabel(L["Border color"] or "Border color")
-				borderColor:SetHasAlpha(true)
-				local boc = cfg.backdrop.borderColor or { 0, 0, 0, 0 }
-				borderColor:SetColor(boc[1] or 0, boc[2] or 0, boc[3] or 0, boc[4] or 0)
-				borderColor:SetCallback("OnValueChanged", function(_, _, r, g, b, a)
-					cfg.backdrop.borderColor = { r, g, b, a }
-					applyInsetNow()
-					requestActiveRefresh(specIndex)
-				end)
-				borderColor:SetFullWidth(false)
-				borderColor:SetRelativeWidth(0.5)
-				group:AddChild(borderColor)
-
-				sliderEdge = addon.functions.createSliderAce(L["Border size"] or "Border size", cfg.backdrop.edgeSize or 3, 0, 32, 1, function(_, _, val)
-					cfg.backdrop.edgeSize = val
-					cfg.backdrop.innerPadding = nil
-					applyInsetNow()
-					requestActiveRefresh(specIndex)
-				end)
-				sliderEdge:SetFullWidth(false)
-				sliderEdge:SetRelativeWidth(0.5)
-				group:AddChild(sliderEdge)
-
-				sliderOutset = addon.functions.createSliderAce(L["Border offset"] or "Border offset", cfg.backdrop.outset or 0, 0, 32, 1, function(_, _, val)
-					cfg.backdrop.outset = val
-					applyInsetNow()
-					requestActiveRefresh(specIndex)
-				end)
-				sliderOutset:SetFullWidth(false)
-				sliderOutset:SetRelativeWidth(0.5)
-				group:AddChild(sliderOutset)
-
-				sliderBgInset = addon.functions.createSliderAce(L["Background inset"] or "Background inset", cfg.backdrop.backgroundInset or 0, 0, 64, 1, function(_, _, val)
-					cfg.backdrop.backgroundInset = max(0, val)
-					requestActiveRefresh(specIndex)
-				end)
-				sliderBgInset:SetFullWidth(true)
-				group:AddChild(sliderBgInset)
-
-				setDisabled(cfg.backdrop.enabled == false)
-			end
-			local function addTextOffsetControlsUI(parent, cfg, specIndex)
-				local offsets = ensureTextOffsetTable(cfg)
-				local row = addon.functions.createContainer("SimpleGroup", "Flow")
-				row:SetFullWidth(true)
-				local sliderX = addon.functions.createSliderAce(L["Text X Offset"] or "Text X Offset", offsets.x or 0, -200, 200, 1, function(_, _, val)
-					offsets.x = val
-					requestActiveRefresh(specIndex)
-				end)
-				sliderX:SetFullWidth(false)
-				sliderX:SetRelativeWidth(0.5)
-				row:AddChild(sliderX)
-
-				local sliderY = addon.functions.createSliderAce(L["Text Y Offset"] or "Text Y Offset", offsets.y or 0, -200, 200, 1, function(_, _, val)
-					offsets.y = val
-					requestActiveRefresh(specIndex)
-				end)
-				sliderY:SetFullWidth(false)
-				sliderY:SetRelativeWidth(0.5)
-				row:AddChild(sliderY)
-
-				parent:AddChild(row)
-				return sliderX, sliderY
-			end
-
-			local function addColorControls(parent, cfg, specIndex, pType)
-				cfg.barColor = cfg.barColor or { 1, 1, 1, 1 }
-				cfg.maxColor = cfg.maxColor or { 1, 1, 1, 1 }
-				local group = addon.functions.createContainer("InlineGroup", "Flow")
-				group:SetTitle(L["Colors"] or "Colors")
-				group:SetFullWidth(true)
-				parent:AddChild(group)
-
-				local function notifyRefresh()
-					requestActiveRefresh(specIndex)
-					if specIndex == addon.variables.unitSpec and forceColorUpdate then forceColorUpdate(pType) end
-				end
-
-				local colorPicker
-				local maxColorPicker
-				local maxColorCheckbox
-				local customColorCheckbox
-				local classColorCheckbox
-				local suppressColorToggle = false
-				local function refreshMaxColorControls()
-					if maxColorPicker then maxColorPicker:SetDisabled(not (cfg.useMaxColor == true)) end
-				end
-				local function refreshColorPickerState()
-					if colorPicker then colorPicker:SetDisabled(not (cfg.useBarColor == true) or cfg.useClassColor == true) end
-				end
-				local function syncCheckboxValue(widget, value)
-					if not widget or not widget.GetValue or not widget.SetValue then return end
-					if widget:GetValue() == value then return end
-					suppressColorToggle = true
-					widget:SetValue(value)
-					suppressColorToggle = false
-				end
-
-				customColorCheckbox = addon.functions.createCheckboxAce(L["Use custom color"] or "Use custom color", cfg.useBarColor == true, function(_, _, val)
-					if suppressColorToggle then return end
-					cfg.useBarColor = val and true or false
-					if cfg.useBarColor and cfg.useClassColor then
-						cfg.useClassColor = false
-						syncCheckboxValue(classColorCheckbox, false)
-					end
-					refreshColorPickerState()
-					notifyRefresh()
-				end)
-				customColorCheckbox:SetFullWidth(true)
-				group:AddChild(customColorCheckbox)
-
-				colorPicker = AceGUI:Create("ColorPicker")
-				colorPicker:SetLabel(L["Bar color"] or "Bar color")
-				colorPicker:SetHasAlpha(true)
-				local bc = cfg.barColor or { 1, 1, 1, 1 }
-				colorPicker:SetColor(bc[1] or 1, bc[2] or 1, bc[3] or 1, bc[4] or 1)
-				colorPicker:SetCallback("OnValueChanged", function(_, _, r, g, b, a)
-					cfg.barColor = { r, g, b, a }
-					notifyRefresh()
-				end)
-				colorPicker:SetFullWidth(false)
-				colorPicker:SetRelativeWidth(0.5)
-				colorPicker:SetDisabled(not (cfg.useBarColor == true) or cfg.useClassColor == true)
-				group:AddChild(colorPicker)
-
-				if pType == "HEALTH" then
-					classColorCheckbox = addon.functions.createCheckboxAce(L["Use class color"] or "Use class color", cfg.useClassColor == true, function(_, _, val)
-						if suppressColorToggle then return end
-						cfg.useClassColor = val and true or false
-						if cfg.useClassColor and cfg.useBarColor then
-							cfg.useBarColor = false
-							syncCheckboxValue(customColorCheckbox, false)
-						end
-						refreshColorPickerState()
-						notifyRefresh()
-					end)
-					classColorCheckbox:SetFullWidth(true)
-					group:AddChild(classColorCheckbox)
-				end
-
-				if not addon.variables.isMidnight then
-					maxColorCheckbox = addon.functions.createCheckboxAce(L["Use max color"] or "Use max color at maximum", cfg.useMaxColor == true, function(_, _, val)
-						cfg.useMaxColor = val and true or false
-						wasMax = nil
-						refreshMaxColorControls()
-						notifyRefresh()
-					end)
-					maxColorCheckbox:SetFullWidth(true)
-					group:AddChild(maxColorCheckbox)
-
-					maxColorPicker = AceGUI:Create("ColorPicker")
-					maxColorPicker:SetLabel(L["Max color"] or "Max color")
-					maxColorPicker:SetHasAlpha(true)
-					local mc = cfg.maxColor or { 1, 1, 1, 1 }
-					maxColorPicker:SetColor(mc[1] or 1, mc[2] or 1, mc[3] or 1, mc[4] or 1)
-					maxColorPicker:SetCallback("OnValueChanged", function(_, _, r, g, b, a)
-						cfg.maxColor = { r, g, b, a }
-						notifyRefresh()
-					end)
-					maxColorPicker:SetFullWidth(false)
-					maxColorPicker:SetRelativeWidth(0.5)
-					group:AddChild(maxColorPicker)
-
-					refreshMaxColorControls()
-				else
-					cfg.useMaxColor = false
-				end
-				refreshColorPickerState()
-			end
-
-			local function addBehaviorControls(parent, cfg, pType)
-				local group = addon.functions.createContainer("InlineGroup", "Flow")
-				group:SetTitle(L["Behavior"] or "Behavior")
-				group:SetFullWidth(true)
-				parent:AddChild(group)
-
-				local cbReverse = addon.functions.createCheckboxAce(L["Reverse fill"] or "Reverse fill", cfg.reverseFill == true, function(_, _, val)
-					cfg.reverseFill = val and true or false
-					requestActiveRefresh(specIndex)
-				end)
-				cbReverse:SetFullWidth(false)
-				cbReverse:SetRelativeWidth(0.5)
-				group:AddChild(cbReverse)
-
-				if pType ~= "RUNES" then
-					local cbVertical = addon.functions.createCheckboxAce(L["Vertical orientation"] or "Vertical orientation", cfg.verticalFill == true, function(_, _, val)
-						local wasVertical = cfg.verticalFill == true
-						local newVertical = val and true or false
-						cfg.verticalFill = newVertical
-						if wasVertical ~= newVertical then
-							local defaultW = (pType == "HEALTH") and DEFAULT_HEALTH_WIDTH or DEFAULT_POWER_WIDTH
-							local defaultH = (pType == "HEALTH") and DEFAULT_HEALTH_HEIGHT or DEFAULT_POWER_HEIGHT
-							local curW = cfg.width or defaultW
-							local curH = cfg.height or defaultH
-							cfg.width, cfg.height = curH, curW
-							if specIndex == addon.variables.unitSpec then
-								if pType == "HEALTH" and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.SetHealthBarSize then
-									addon.Aura.ResourceBars.SetHealthBarSize(cfg.width or defaultW, cfg.height or defaultH)
-								elseif addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.SetPowerBarSize then
-									addon.Aura.ResourceBars.SetPowerBarSize(cfg.width or defaultW, cfg.height or defaultH, pType)
-								end
-							end
-						end
-						requestActiveRefresh(specIndex)
-						buildSpec(container, specIndex)
-					end)
-					cbVertical:SetFullWidth(false)
-					cbVertical:SetRelativeWidth(0.5)
-					group:AddChild(cbVertical)
-
-					local cbSmooth = addon.functions.createCheckboxAce(L["Smooth fill"] or "Smooth fill", cfg.smoothFill == true, function(_, _, val)
-						cfg.smoothFill = val and true or false
-						requestActiveRefresh(specIndex)
-					end)
-					cbSmooth:SetFullWidth(false)
-					cbSmooth:SetRelativeWidth(0.5)
-					group:AddChild(cbSmooth)
-
-					if (cfg.verticalFill == true) and (cfg.barTexture == nil or cfg.barTexture == "DEFAULT") then
-						local warnText = L["VerticalTextureWarning"]
-						local warnLabel = addon.functions.createLabelAce(warnText, nil, nil, 12)
-						warnLabel:SetFullWidth(true)
-						group:AddChild(warnLabel)
-					end
-				else
-					-- Preserve flow layout when vertical option is hidden for RUNES
-					local spacer = addon.functions.createLabelAce("")
-					spacer:SetFullWidth(false)
-					spacer:SetRelativeWidth(0.5)
-					group:AddChild(spacer)
-				end
-			end
-			do
-				local hcfg = dbSpec.HEALTH
-				local cbH = addon.functions.createCheckboxAce(HEALTH, hcfg.enabled == true, function(self, _, val)
-					if (hcfg.enabled == true) and not val then addon.Aura.ResourceBars.DetachAnchorsFrom("HEALTH", specIndex) end
-					hcfg.enabled = val
-					requestActiveRefresh(specIndex)
-					buildSpec(container, specIndex)
-				end)
-				cbH:SetFullWidth(false)
-				cbH:SetRelativeWidth(0.33)
-				groupToggles:AddChild(cbH)
-			end
-			for pType in pairs(available) do
-				if pType ~= "HEALTH" then
-					local cfg = dbSpec[pType]
-					local label = _G["POWER_TYPE_" .. pType] or _G[pType] or pType
-					local cb = addon.functions.createCheckboxAce(label, cfg.enabled == true, function(self, _, val)
-						if (cfg.enabled == true) and not val then addon.Aura.ResourceBars.DetachAnchorsFrom(pType, specIndex) end
-						cfg.enabled = val
-						requestActiveRefresh(specIndex)
-						buildSpec(container, specIndex)
-					end)
-					cb:SetFullWidth(false)
-					cb:SetRelativeWidth(0.33)
-					groupToggles:AddChild(cb)
-				end
-			end
-
-			-- Copy configuration from another specialization
-			local copyBarList, copyBarOrder = {}, {}
-			local function registerCopyBar(pType)
-				if not pType or copyBarList[pType] then return end
-				copyBarList[pType] = displayNameForBarType and displayNameForBarType(pType) or (_G["POWER_TYPE_" .. pType] or _G[pType] or pType)
-				copyBarOrder[#copyBarOrder + 1] = pType
-			end
-			registerCopyBar("HEALTH")
-			for _, pType in ipairs(addon.Aura.ResourceBars.classPowerTypes) do
-				if available[pType] then registerCopyBar(pType) end
-			end
-			if not lastSpecCopyMode[specKey] then lastSpecCopyMode[specKey] = "ALL" end
-			if #copyBarOrder > 0 and (not lastSpecCopyBar[specKey] or not copyBarList[lastSpecCopyBar[specKey]]) then lastSpecCopyBar[specKey] = copyBarOrder[1] end
-			if lastSpecCopyCosmetic[specKey] == nil then lastSpecCopyCosmetic[specKey] = false end
-
-			local copyGroup = addon.functions.createContainer("InlineGroup", "Flow")
-			copyGroup:SetTitle(L["Copy settings"] or "Copy settings")
-			copyGroup:SetFullWidth(true)
-			container:AddChild(copyGroup)
-
-			local classKey = addon.variables.unitClass
-			local classConfig = classKey and addon.db.personalResourceBarSettings[classKey]
-			local copyList, copyOrder = {}, {}
-			for _, tab in ipairs(specTabs) do
-				local otherIndex = tab.value
-				if otherIndex ~= specIndex and classConfig and classConfig[otherIndex] then
-					copyList[tostring(otherIndex)] = tab.text
-					copyOrder[#copyOrder + 1] = tostring(otherIndex)
-				end
-			end
-
-			if #copyOrder == 0 then
-				local noSpecs = addon.functions.createLabelAce(L["Copy settings unavailable"] or "Configure another specialization first to copy its settings.")
-				noSpecs:SetFullWidth(true)
-				copyGroup:AddChild(noSpecs)
-			else
-				if not lastSpecCopySelection[specKey] or not copyList[lastSpecCopySelection[specKey]] then lastSpecCopySelection[specKey] = copyOrder[1] end
-				local dropBar
-				local function updateDropBarState()
-					if not dropBar then return end
-					local mode = lastSpecCopyMode[specKey] or "ALL"
-					dropBar:SetDisabled(mode ~= "BAR" or #copyBarOrder == 0)
-				end
-				local copyRow = addon.functions.createContainer("SimpleGroup", "Flow")
-				copyRow:SetFullWidth(true)
-				copyGroup:AddChild(copyRow)
-
-				local dropCopy = addon.functions.createDropdownAce(L["Copy from spec"] or "Copy from specialization", copyList, copyOrder, function(_, _, key) lastSpecCopySelection[specKey] = key end)
-				dropCopy:SetFullWidth(false)
-				dropCopy:SetRelativeWidth(0.45)
-				dropCopy:SetValue(lastSpecCopySelection[specKey])
-				copyRow:AddChild(dropCopy)
-
-				local scopeList = {
-					ALL = L["All bars"] or "All bars",
-					BAR = L["Selected bar only"] or "Selected bar only",
-				}
-				local scopeOrder = { "ALL", "BAR" }
-				local dropScope = addon.functions.createDropdownAce(L["Copy scope"] or "Copy scope", scopeList, scopeOrder, function(_, _, key)
-					lastSpecCopyMode[specKey] = key
-					updateDropBarState()
-				end)
-				dropScope:SetFullWidth(false)
-				dropScope:SetRelativeWidth(0.25)
-				dropScope:SetValue(lastSpecCopyMode[specKey] or "ALL")
-				copyRow:AddChild(dropScope)
-
-				local copyButton = addon.functions.createButtonAce(L["Copy"] or "Copy", 120, function()
-					local selected = lastSpecCopySelection[specKey]
-					local fromSpec = selected and tonumber(selected)
-					if not classConfig or not fromSpec or fromSpec == specIndex then return end
-					local sourceSettings = classConfig[fromSpec]
-					if not sourceSettings then return end
-					classConfig[specIndex] = classConfig[specIndex] or {}
-					local destSpec = classConfig[specIndex]
-					local mode = lastSpecCopyMode[specKey] or "ALL"
-					local cosmeticOnly = lastSpecCopyCosmetic[specKey] == true
-					if mode == "ALL" then
-						if cosmeticOnly then
-							for _, barType in ipairs(copyBarOrder) do
-								local srcBar = sourceSettings[barType]
-								if type(srcBar) == "table" then
-									destSpec[barType] = destSpec[barType] or {}
-									copyCosmeticBarSettings(srcBar, destSpec[barType])
-								end
-							end
-						else
-							classConfig[specIndex] = CopyTable(sourceSettings)
-							destSpec = classConfig[specIndex]
-						end
-					else
-						local barType = lastSpecCopyBar[specKey]
-						if not barType or not copyBarList[barType] then return end
-						local srcBar = sourceSettings[barType]
-						if type(srcBar) ~= "table" then
-							notifyUser(L["Copy settings missing bar"] or "The selected specialization has no saved settings for that bar.")
-							return
-						end
-						destSpec[barType] = destSpec[barType] or {}
-						if cosmeticOnly then
-							copyCosmeticBarSettings(srcBar, destSpec[barType])
-						else
-							destSpec[barType] = CopyTable(srcBar)
-						end
-					end
-					requestActiveRefresh(specIndex)
-					buildSpec(container, specIndex)
-				end)
-				copyButton:SetFullWidth(false)
-				copyButton:SetRelativeWidth(0.3)
-				copyRow:AddChild(copyButton)
-
-				local optionsRow = addon.functions.createContainer("SimpleGroup", "Flow")
-				optionsRow:SetFullWidth(true)
-				copyGroup:AddChild(optionsRow)
-
-				dropBar = addon.functions.createDropdownAce(L["Bar to copy"] or "Bar to copy", copyBarList, copyBarOrder, function(_, _, key) lastSpecCopyBar[specKey] = key end)
-				dropBar:SetFullWidth(false)
-				dropBar:SetRelativeWidth(0.6)
-				if lastSpecCopyBar[specKey] then dropBar:SetValue(lastSpecCopyBar[specKey]) end
-				optionsRow:AddChild(dropBar)
-
-				local cbCosmetic = addon.functions.createCheckboxAce(
-					L["Appearance only"] or "Appearance only",
-					lastSpecCopyCosmetic[specKey] == true,
-					function(_, _, val) lastSpecCopyCosmetic[specKey] = val and true or false end
-				)
-				cbCosmetic:SetFullWidth(false)
-				cbCosmetic:SetRelativeWidth(0.4)
-				optionsRow:AddChild(cbCosmetic)
-
-				updateDropBarState()
-
-				local info =
-					addon.functions.createLabelAce(L["Copy settings info"] or "Copies settings from the selected specialization. Use scope and appearance options above to control what is copied.")
-				info:SetFullWidth(true)
-				copyGroup:AddChild(info)
-			end
-
-			-- Selection dropdown for configuring a single bar
-			local cfgList, cfgOrder = {}, {}
-			if dbSpec.HEALTH.enabled == true then
-				cfgList.HEALTH = HEALTH
-				tinsert(cfgOrder, "HEALTH")
-			end
-			for _, pType in ipairs(addon.Aura.ResourceBars.classPowerTypes) do
-				if available[pType] then
-					local cfg = dbSpec[pType]
-					if cfg and cfg.enabled == true then
-						cfgList[pType] = _G["POWER_TYPE_" .. pType] or _G[pType] or pType
-						tinsert(cfgOrder, pType)
-					end
-				end
-			end
-
-			if not lastBarSelectionPerSpec[specKey] or not cfgList[lastBarSelectionPerSpec[specKey]] then
-				lastBarSelectionPerSpec[specKey] = (specInfo.MAIN and cfgList[specInfo.MAIN]) and specInfo.MAIN or (cfgList.HEALTH and "HEALTH" or next(cfgList))
-			end
-
-			local groupConfig = addon.functions.createContainer("InlineGroup", "List")
-			groupConfig:SetTitle(DELVES_CONFIGURE_BUTTON)
-			container:AddChild(groupConfig)
-
-			if #cfgOrder == 0 then
-				local hint = addon.functions.createLabelAce(L["Enable a bar above to configure options."])
-				groupConfig:AddChild(hint)
-				return
-			end
-
-			local dropCfg = addon.functions.createDropdownAce(L["Bar"], cfgList, cfgOrder, function(self, _, val)
-				lastBarSelectionPerSpec[specKey] = val
-				buildSpec(container, specIndex)
-			end)
-			dropCfg:SetValue(lastBarSelectionPerSpec[specKey])
-			groupConfig:AddChild(dropCfg)
-
-			local sel = lastBarSelectionPerSpec[specKey]
-			local frames = {}
-			for k, v in pairs(baseFrameList) do
-				frames[k] = v
-			end
-			-- Only list bars that are valid for this spec and enabled by user
-			if dbSpec.HEALTH and dbSpec.HEALTH.enabled == true then frames.EQOLHealthBar = (displayNameForBarType and displayNameForBarType("HEALTH") or HEALTH) .. " " .. L["BarSuffix"] end
-			for _, t in ipairs(addon.Aura.ResourceBars.classPowerTypes) do
-				if t ~= sel and available[t] and dbSpec[t] and dbSpec[t].enabled == true then
-					frames["EQOL" .. t .. "Bar"] = (displayNameForBarType and displayNameForBarType(t) or (_G[t] or t)) .. " " .. L["BarSuffix"]
-				end
-			end
-
-			if sel == "HEALTH" then
-				local hCfg = dbSpec.HEALTH
-				local anchorInfo = getAnchor("HEALTH", specIndex)
-				-- Size row (50%/50%)
-				local sizeRow = addon.functions.createContainer("SimpleGroup", "Flow")
-				sizeRow:SetFullWidth(true)
-				local verticalHealth = hCfg.verticalFill == true
-				local labelWidth = verticalHealth and (L["Bar thickness"] or "Bar thickness") or (L["Bar length"] or "Bar length")
-				local labelHeight = verticalHealth and (L["Bar length"] or "Bar length") or (L["Bar thickness"] or "Bar thickness")
-				if hCfg.width and hCfg.width < MIN_RESOURCE_BAR_WIDTH then hCfg.width = MIN_RESOURCE_BAR_WIDTH end
-				local currentHealthWidth = max(MIN_RESOURCE_BAR_WIDTH, hCfg.width or DEFAULT_HEALTH_WIDTH)
-				local sw = addon.functions.createSliderAce(labelWidth, currentHealthWidth, MIN_RESOURCE_BAR_WIDTH, 2000, 1, function(self, _, val)
-					hCfg.width = max(MIN_RESOURCE_BAR_WIDTH, val or MIN_RESOURCE_BAR_WIDTH)
-					if specIndex == addon.variables.unitSpec then addon.Aura.ResourceBars.SetHealthBarSize(hCfg.width, hCfg.height or DEFAULT_HEALTH_HEIGHT) end
-				end)
-				sw:SetFullWidth(false)
-				sw:SetRelativeWidth(0.5)
-				sw:SetDisabled(anchorInfo and anchorInfo.matchRelativeWidth == true)
-				ResourceBars.ui = ResourceBars.ui or {}
-				ResourceBars.ui.barWidthSliders = ResourceBars.ui.barWidthSliders or {}
-				ResourceBars.ui.barWidthSliders[specIndex] = ResourceBars.ui.barWidthSliders[specIndex] or {}
-				ResourceBars.ui.barWidthSliders[specIndex].HEALTH = sw
-				sizeRow:AddChild(sw)
-				local sh = addon.functions.createSliderAce(labelHeight, hCfg.height or DEFAULT_HEALTH_HEIGHT, 1, 2000, 1, function(self, _, val)
-					hCfg.height = val
-					if specIndex == addon.variables.unitSpec then addon.Aura.ResourceBars.SetHealthBarSize(hCfg.width or DEFAULT_HEALTH_WIDTH, hCfg.height) end
-				end)
-				sh:SetFullWidth(false)
-				sh:SetRelativeWidth(0.5)
-				sizeRow:AddChild(sh)
-				groupConfig:AddChild(sizeRow)
-
-				-- Text + Size row (hide size when NONE)
-				local healthTextRow = addon.functions.createContainer("SimpleGroup", "Flow")
-				healthTextRow:SetFullWidth(true)
-				groupConfig:AddChild(healthTextRow)
-				local textOffsetSliders
-				local function updateHealthOffsetDisabled()
-					if not textOffsetSliders then return end
-					local disabled = (hCfg.textStyle or "PERCENT") == "NONE"
-					for _, ctrl in ipairs(textOffsetSliders) do
-						if ctrl then ctrl:SetDisabled(disabled) end
-					end
-				end
-				local function buildHealthTextRow()
-					healthTextRow:ReleaseChildren()
-					local tList = { PERCENT = STATUS_TEXT_PERCENT, CURMAX = L["Current/Max"], CURRENT = L["Current"], NONE = NONE }
-					local tOrder = { "PERCENT", "CURMAX", "CURRENT", "NONE" }
-					local dropT = addon.functions.createDropdownAce(L["Text"], tList, tOrder, function(self, _, key)
-						hCfg.textStyle = key
-						requestActiveRefresh(specIndex)
-						buildHealthTextRow()
-					end)
-					dropT:SetValue(hCfg.textStyle or "PERCENT")
-					dropT:SetFullWidth(false)
-					dropT:SetRelativeWidth(0.5)
-					healthTextRow:AddChild(dropT)
-					if (hCfg.textStyle or "PERCENT") ~= "NONE" then
-						local sFont = addon.functions.createSliderAce(HUD_EDIT_MODE_SETTING_OBJECTIVE_TRACKER_TEXT_SIZE, hCfg.fontSize or 16, 6, 64, 1, function(self, _, val)
-							hCfg.fontSize = val
-							requestActiveRefresh(specIndex)
-						end)
-						sFont:SetFullWidth(false)
-						sFont:SetRelativeWidth(0.5)
-						healthTextRow:AddChild(sFont)
-					end
-					updateHealthOffsetDisabled()
-				end
-				buildHealthTextRow()
-				textOffsetSliders = { addTextOffsetControlsUI(groupConfig, hCfg, specIndex) }
-				updateHealthOffsetDisabled()
-				addFontControls(groupConfig, hCfg)
-				addColorControls(groupConfig, hCfg, specIndex, "HEALTH")
-
-				-- Bar Texture (Health)
-				local listTex, orderTex = getStatusbarDropdownLists(true)
-				local dropTex = addon.functions.createDropdownAce(L["Bar Texture"], listTex, orderTex, function(_, _, key)
-					hCfg.barTexture = key
-					requestActiveRefresh(specIndex)
-					buildSpec(container, specIndex)
-				end)
-				local cur = hCfg.barTexture or "DEFAULT"
-				if not listTex[cur] then cur = "DEFAULT" end
-				dropTex:SetValue(cur)
-				groupConfig:AddChild(dropTex)
-				ResourceBars.ui.textureDropdown = dropTex
-				dropTex._rb_cfgRef = hCfg
-				addBackdropControls(groupConfig, hCfg, "HEALTH")
-				addBehaviorControls(groupConfig, hCfg, "HEALTH")
-
-				addAnchorOptions("HEALTH", groupConfig, hCfg.anchor, frames, specIndex)
-			else
-				local cfg = dbSpec[sel] or {}
-				local anchorInfo = getAnchor(sel, specIndex)
-				local defaultW = DEFAULT_POWER_WIDTH
-				local defaultH = DEFAULT_POWER_HEIGHT
-				if cfg.width and cfg.width < MIN_RESOURCE_BAR_WIDTH then cfg.width = MIN_RESOURCE_BAR_WIDTH end
-				local curW = max(MIN_RESOURCE_BAR_WIDTH, cfg.width or defaultW)
-				local curH = cfg.height or defaultH
-				local defaultStyle = (sel == "MANA") and "PERCENT" or "CURMAX"
-				local curStyle = cfg.textStyle or defaultStyle
-				local curFont = cfg.fontSize or 16
-				local vertical = cfg.verticalFill == true
-
-				-- Size row (50%/50%)
-				local sizeRow2 = addon.functions.createContainer("SimpleGroup", "Flow")
-				sizeRow2:SetFullWidth(true)
-				local labelWidth = vertical and (L["Bar thickness"] or "Bar thickness") or (L["Bar length"] or "Bar length")
-				local labelHeight = vertical and (L["Bar length"] or "Bar length") or (L["Bar thickness"] or "Bar thickness")
-				local sw = addon.functions.createSliderAce(labelWidth, curW, MIN_RESOURCE_BAR_WIDTH, 2000, 1, function(self, _, val)
-					local width = max(MIN_RESOURCE_BAR_WIDTH, val or MIN_RESOURCE_BAR_WIDTH)
-					cfg.width = width
-					if specIndex == addon.variables.unitSpec then addon.Aura.ResourceBars.SetPowerBarSize(width, cfg.height or defaultH, sel) end
-				end)
-				sw:SetFullWidth(false)
-				sw:SetRelativeWidth(0.5)
-				sw:SetDisabled(anchorInfo and anchorInfo.matchRelativeWidth == true)
-				ResourceBars.ui = ResourceBars.ui or {}
-				ResourceBars.ui.barWidthSliders = ResourceBars.ui.barWidthSliders or {}
-				ResourceBars.ui.barWidthSliders[specIndex] = ResourceBars.ui.barWidthSliders[specIndex] or {}
-				ResourceBars.ui.barWidthSliders[specIndex][sel] = sw
-				sizeRow2:AddChild(sw)
-				local sh = addon.functions.createSliderAce(labelHeight, curH, 1, 2000, 1, function(self, _, val)
-					cfg.height = val
-					if specIndex == addon.variables.unitSpec then addon.Aura.ResourceBars.SetPowerBarSize(cfg.width or defaultW, val, sel) end
-				end)
-				sh:SetFullWidth(false)
-				sh:SetRelativeWidth(0.5)
-				sizeRow2:AddChild(sh)
-				groupConfig:AddChild(sizeRow2)
-
-				if sel ~= "RUNES" then
-					-- Text + Size row (50%/50%), hide size when NONE
-					local textRow = addon.functions.createContainer("SimpleGroup", "Flow")
-					textRow:SetFullWidth(true)
-					groupConfig:AddChild(textRow)
-					local textOffsetSliders
-					local function updateOffsetDisabled()
-						if not textOffsetSliders then return end
-						local disabled = (cfg.textStyle or curStyle) == "NONE"
-						for _, ctrl in ipairs(textOffsetSliders) do
-							if ctrl then ctrl:SetDisabled(disabled) end
-						end
-					end
-					local function buildTextRow()
-						textRow:ReleaseChildren()
-						local tList = { PERCENT = STATUS_TEXT_PERCENT, CURMAX = L["Current/Max"], CURRENT = L["Current"], NONE = NONE }
-						local tOrder = { "PERCENT", "CURMAX", "CURRENT", "NONE" }
-						local drop = addon.functions.createDropdownAce(L["Text"], tList, tOrder, function(self, _, key)
-							cfg.textStyle = key
-							requestActiveRefresh(specIndex)
-							buildTextRow()
-						end)
-						drop:SetValue(cfg.textStyle or curStyle)
-						drop:SetFullWidth(false)
-						drop:SetRelativeWidth(0.5)
-						textRow:AddChild(drop)
-						if (cfg.textStyle or curStyle) ~= "NONE" then
-							local sFont = addon.functions.createSliderAce(HUD_EDIT_MODE_SETTING_OBJECTIVE_TRACKER_TEXT_SIZE, cfg.fontSize or curFont, 6, 64, 1, function(self, _, val)
-								cfg.fontSize = val
-								requestActiveRefresh(specIndex)
-							end)
-							sFont:SetFullWidth(false)
-							sFont:SetRelativeWidth(0.5)
-							textRow:AddChild(sFont)
-						end
-						updateOffsetDisabled()
-					end
-					buildTextRow()
-					textOffsetSliders = { addTextOffsetControlsUI(groupConfig, cfg, specIndex) }
-					updateOffsetDisabled()
-					addFontControls(groupConfig, cfg)
-					addColorControls(groupConfig, cfg, specIndex, sel)
-
-					-- Bar Texture (Power types incl. RUNES)
-					local listTex2, orderTex2 = getStatusbarDropdownLists(true)
-					local dropTex2 = addon.functions.createDropdownAce(L["Bar Texture"], listTex2, orderTex2, function(_, _, key)
-						cfg.barTexture = key
-						requestActiveRefresh(specIndex)
-						buildSpec(container, specIndex)
-					end)
-					local cur2 = cfg.barTexture or "DEFAULT"
-					if not listTex2[cur2] then cur2 = "DEFAULT" end
-					dropTex2:SetValue(cur2)
-					groupConfig:AddChild(dropTex2)
-					ResourceBars.ui.textureDropdown = dropTex2
-					dropTex2._rb_cfgRef = cfg
-					addBackdropControls(groupConfig, cfg, sel)
-					addBehaviorControls(groupConfig, cfg, sel)
-				else
-					-- RUNES specific options
-					local cbRT = addon.functions.createCheckboxAce(L["Show cooldown text"], cfg.showCooldownText == true, function(self, _, val)
-						cfg.showCooldownText = val and true or false
-						if powerbar["RUNES"] then
-							layoutRunes(powerbar["RUNES"])
-							updatePowerBar("RUNES")
-						end
-					end)
-					groupConfig:AddChild(cbRT)
-
-					local sRTFont = addon.functions.createSliderAce(L["Cooldown Text Size"], cfg.cooldownTextFontSize or 16, 6, 64, 1, function(self, _, val)
-						if cfg.cooldownTextFontSize == val then return end
-						cfg.cooldownTextFontSize = val
-						if powerbar["RUNES"] then
-							layoutRunes(powerbar["RUNES"])
-							updatePowerBar("RUNES")
-						end
-					end)
-					groupConfig:AddChild(sRTFont)
-					addBackdropControls(groupConfig, cfg, sel)
-					addBehaviorControls(groupConfig, cfg, sel)
-				end
-
-				-- Separator toggle + color picker row (eligible bars only)
-				local eligible = addon.Aura.ResourceBars.separatorEligible
-				if eligible and eligible[sel] then
-					local sepRow = addon.functions.createContainer("SimpleGroup", "Flow")
-					sepRow:SetFullWidth(true)
-					local sepColor
-					local sepThickness
-					local cbSep = addon.functions.createCheckboxAce(L["Show separator"], cfg.showSeparator == true, function(self, _, val)
-						cfg.showSeparator = val and true or false
-						requestActiveRefresh(specIndex)
-						if sepColor then sepColor:SetDisabled(not cfg.showSeparator) end
-						if sepThickness then sepThickness:SetDisabled(not cfg.showSeparator) end
-					end)
-					cbSep:SetFullWidth(false)
-					cbSep:SetRelativeWidth(0.5)
-					sepRow:AddChild(cbSep)
-					sepColor = AceGUI:Create("ColorPicker")
-					sepColor:SetLabel(L["Separator Color"] or "Separator Color")
-					local sc = cfg.separatorColor or SEP_DEFAULT
-					sepColor:SetColor(sc[1] or 1, sc[2] or 1, sc[3] or 1, sc[4] or 0.5)
-					sepColor:SetCallback("OnValueChanged", function(_, _, r, g, b, a)
-						cfg.separatorColor = { r, g, b, a }
-						requestActiveRefresh(specIndex)
-					end)
-					sepColor:SetFullWidth(false)
-					sepColor:SetRelativeWidth(0.5)
-					sepColor:SetDisabled(not (cfg.showSeparator == true))
-					sepRow:AddChild(sepColor)
-
-					sepThickness = addon.functions.createSliderAce(L["Separator thickness"] or "Separator thickness", cfg.separatorThickness or SEPARATOR_THICKNESS, 1, 10, 1, function(_, _, val)
-						cfg.separatorThickness = val
-						requestActiveRefresh(specIndex)
-					end)
-					sepThickness:SetFullWidth(false)
-					sepThickness:SetRelativeWidth(0.5)
-					sepThickness:SetDisabled(not (cfg.showSeparator == true))
-					sepRow:AddChild(sepThickness)
-					groupConfig:AddChild(sepRow)
-				end
-
-				-- Druid: Show in forms (per bar), skip for COMBO_POINTS (always Cat)
-				if addon.variables.unitClass == "DRUID" and sel ~= "COMBO_POINTS" then
-					groupConfig:AddChild(addon.functions.createSpacerAce())
-					cfg.showForms = cfg.showForms or {}
-					local formsRow = addon.functions.createContainer("SimpleGroup", "Flow")
-					formsRow:SetFullWidth(true)
-					local label = addon.functions.createLabelAce(L["Show in"])
-					label:SetFullWidth(true)
-					groupConfig:AddChild(label)
-					local function mkCb(key, text)
-						local cb = addon.functions.createCheckboxAce(text, cfg.showForms[key] ~= false, function(self, _, val)
-							cfg.showForms[key] = val and true or false
-							requestActiveRefresh(specIndex)
-						end)
-						cb:SetFullWidth(false)
-						cb:SetRelativeWidth(0.25)
-						formsRow:AddChild(cb)
-					end
-					if sel == "COMBO_POINTS" then
-						-- Combo points only in Cat; default only Cat true
-						if cfg.showForms.CAT == nil then cfg.showForms.CAT = true end
-						cfg.showForms.HUMANOID = cfg.showForms.HUMANOID or false
-						cfg.showForms.BEAR = cfg.showForms.BEAR or false
-						cfg.showForms.TRAVEL = cfg.showForms.TRAVEL or false
-						cfg.showForms.MOONKIN = cfg.showForms.MOONKIN or false
-						cfg.showForms.TREANT = cfg.showForms.TREANT or false
-						cfg.showForms.STAG = cfg.showForms.STAG or false
-						mkCb("CAT", L["Cat"])
-					else
-						if cfg.showForms.HUMANOID == nil then cfg.showForms.HUMANOID = true end
-						if cfg.showForms.BEAR == nil then cfg.showForms.BEAR = true end
-						if cfg.showForms.CAT == nil then cfg.showForms.CAT = true end
-						if cfg.showForms.TRAVEL == nil then cfg.showForms.TRAVEL = true end
-						if cfg.showForms.MOONKIN == nil then cfg.showForms.MOONKIN = true end
-						if cfg.showForms.TREANT == nil then cfg.showForms.TREANT = true end
-						if cfg.showForms.STAG == nil then cfg.showForms.STAG = true end
-						mkCb("HUMANOID", L["Humanoid"])
-						mkCb("BEAR", L["Bear"])
-						mkCb("CAT", L["Cat"])
-						mkCb("TRAVEL", L["Travel"])
-						mkCb("MOONKIN", L["Moonkin"])
-						mkCb("TREANT", L["Treant"])
-						mkCb("STAG", L["Stag"])
-					end
-					groupConfig:AddChild(formsRow)
-				end
-				groupConfig:AddChild(addon.functions.createSpacerAce())
-
-				addAnchorOptions(sel, groupConfig, cfg.anchor, frames, specIndex)
-			end
-			scroll:DoLayout()
-		end
-
-		tabGroup:SetTabs(specTabs)
-		tabGroup:SetCallback("OnGroupSelected", function(tabContainer, _, val) buildSpec(tabContainer, val) end)
-		wrapper:AddChild(tabGroup)
-		tabGroup:SelectTab(addon.variables.unitSpec or specTabs[1].value)
-	end
-	scroll:DoLayout()
-end
-
 function updateHealthBar(evt)
 	if healthBar and healthBar:IsShown() then
 		local previousMax = healthBar._lastMax or 0
@@ -2896,7 +1465,7 @@ function createHealthBar()
 	end)
 end
 
-local powertypeClasses = {
+powertypeClasses = {
 	DRUID = {
 		[1] = { MAIN = "LUNAR_POWER", RAGE = true, ENERGY = true, MANA = true, COMBO_POINTS = true }, -- Balance (combo in Cat)
 		[2] = { MAIN = "ENERGY", COMBO_POINTS = true, RAGE = true, MANA = true }, -- Feral (no Astral Power)
@@ -2971,7 +1540,7 @@ for k, v in pairs(EnumPowerType or {}) do
 	POWER_ENUM[key] = v
 end
 
-local classPowerTypes = {
+classPowerTypes = {
 	"RAGE",
 	"ESSENCE",
 	"FOCUS",
@@ -3009,11 +1578,19 @@ function getBarSettings(pType)
 		local cfg = addon.db.personalResourceBarSettings[class][spec][pType]
 		if cfg then return cfg end
 	end
+	local specInfo = getSpecInfo(spec)
 	if class and spec then
 		local specCfg = ensureSpecCfg(spec)
-		if specCfg and not specCfg[pType] and addon.db.globalResourceBarSettings and addon.db.globalResourceBarSettings[pType] then
-			specCfg[pType] = CopyTable(addon.db.globalResourceBarSettings[pType])
-			return specCfg[pType]
+		if specCfg and not specCfg[pType] then
+			local globalCfg, secondaryIdx = resolveGlobalTemplate(pType, spec)
+			if globalCfg then
+				specCfg[pType] = CopyTable(globalCfg)
+				if secondaryIdx and secondaryIdx > 1 then
+					local prevType = specSecondaries(specInfo)[secondaryIdx - 1]
+					if prevType then maybeChainSecondaryAnchor(specCfg[pType], prevType) end
+				end
+				return specCfg[pType]
+			end
 		end
 	end
 	return nil

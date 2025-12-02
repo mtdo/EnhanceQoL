@@ -36,9 +36,7 @@ function addon.Aura.functions.treeCallback(container, group)
 	-- Strip optional Combat Assist prefix when nested: combat\001combatassist\001...
 	if type(seg) == "string" and seg:sub(1, #"combatassist\001") == "combatassist\001" then seg = seg:sub(#"combatassist\001" + 1) end
 
-	if seg == "combatassist" then
-		addon.Aura.functions.addResourceFrame(container)
-	elseif seg == "bufftracker" then
+	if seg == "bufftracker" then
 		addon.Aura.functions.addBuffTrackerOptions(container)
 		addon.Aura.scanBuffs()
 	elseif seg == "casttracker" and addon.Aura.CastTracker and addon.Aura.CastTracker.functions then
