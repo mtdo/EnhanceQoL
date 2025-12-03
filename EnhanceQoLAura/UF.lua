@@ -11,6 +11,9 @@ addon.Aura = addon.Aura or {}
 local UF = {}
 addon.Aura.UF = UF
 UF.ui = UF.ui or {}
+addon.variables = addon.variables or {}
+addon.variables.ufSampleAbsorb = addon.variables.ufSampleAbsorb or {}
+local sampleAbsorb = addon.variables.ufSampleAbsorb
 
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Aura")
 local LSM = LibStub("LibSharedMedia-3.0")
@@ -120,7 +123,7 @@ local defaults = {
 			absorbColor = { 0.85, 0.95, 1.0, 0.7 },
 			absorbUseCustomColor = false,
 			showSampleAbsorb = false,
-			absorbTexture = "DEFAULT",
+			absorbTexture = "SOLID",
 			useAbsorbGlow = true,
 			backdrop = { enabled = true, color = { 0, 0, 0, 0.6 } },
 			textLeft = "PERCENT",
@@ -587,6 +590,7 @@ local UnitHealthPercent = UnitHealthPercent
 local UnitPowerPercent = UnitPowerPercent
 
 local function resolveTexture(key)
+	if key == "SOLID" then return "Interface\\Buttons\\WHITE8x8" end
 	if not key or key == "DEFAULT" then return BLIZZARD_TEX end
 	if LSM then
 		local tex = LSM:Fetch("statusbar", key)
@@ -647,6 +651,10 @@ local function getAbsorbColor(hc, unit)
 	return defaultAbsorb[1], defaultAbsorb[2], defaultAbsorb[3], defaultAbsorb[4]
 end
 
+local function shouldShowSampleAbsorb(unit)
+	return sampleAbsorb and sampleAbsorb[unit] == true
+end
+
 local function updateHealth(cfg, unit)
 	local st = states[unit]
 	if not st or not st.health or not st.frame then return end
@@ -695,7 +703,7 @@ local function updateHealth(cfg, unit)
 		end
 		st.absorb:SetMinMaxValues(0, maxForValue or 1)
 		local hasVisibleAbsorb = abs and (not issecretvalue or not issecretvalue(abs)) and abs > 0
-		if hc.showSampleAbsorb and not hasVisibleAbsorb and (not issecretvalue or not issecretvalue(maxForValue)) then
+		if shouldShowSampleAbsorb(unit) and not hasVisibleAbsorb and (not issecretvalue or not issecretvalue(maxForValue)) then
 			abs = (maxForValue or 1) * 0.6
 		end
 		st.absorb:SetValue(abs or 0)
@@ -1587,13 +1595,19 @@ local function addOptions(container, skipClear, unit)
 	local function textureDropdown(parent, sec, field)
 		if not parent then return end
 		field = field or "texture"
-		local list = { DEFAULT = "Default (Blizzard)" }
-		local order = { "DEFAULT" }
+		local list, order = {}, {}
+		local seen = {}
+		local function addOpt(key, label)
+			local lk = tostring(key or ""):lower()
+			if lk == "" or seen[lk] then return end
+			seen[lk] = true
+			list[key] = label
+			table.insert(order, key)
+		end
+		addOpt("DEFAULT", "Default (Blizzard)")
+		addOpt("SOLID", "Solid")
 		for name, path in pairs(LSM and LSM:HashTable("statusbar") or {}) do
-			if type(path) == "string" and path ~= "" then
-				list[name] = tostring(name)
-				table.insert(order, name)
-			end
+			if type(path) == "string" and path ~= "" then addOpt(name, tostring(name)) end
 		end
 		table.sort(order, function(a, b) return tostring(list[a]) < tostring(list[b]) end)
 		local dd = addon.functions.createDropdownAce(L["Bar Texture"] or "Bar Texture", list, order, function(_, _, key)
@@ -1615,9 +1629,8 @@ local function addOptions(container, skipClear, unit)
 		or (defaults.player and defaults.player.health and defaults.player.health.absorbColor)
 		or { 0.85, 0.95, 1, 0.7 }
 	if not cfg.health.absorbColor then cfg.health.absorbColor = { defaultAbsorbColor[1], defaultAbsorbColor[2], defaultAbsorbColor[3], defaultAbsorbColor[4] } end
-	if cfg.health.absorbTexture == nil then cfg.health.absorbTexture = (def.health and def.health.absorbTexture) or "DEFAULT" end
+	if cfg.health.absorbTexture == nil then cfg.health.absorbTexture = (def.health and def.health.absorbTexture) or "SOLID" end
 	if cfg.health.absorbUseCustomColor == nil then cfg.health.absorbUseCustomColor = def.health and def.health.absorbUseCustomColor end
-	if cfg.health.showSampleAbsorb == nil then cfg.health.showSampleAbsorb = def.health and def.health.showSampleAbsorb end
 	local cbAbsorbColor = addon.functions.createCheckboxAce(L["Use custom absorb color"] or "Use custom absorb color", cfg.health.absorbUseCustomColor == true, function(_, _, val)
 		cfg.health.absorbUseCustomColor = val and true or false
 		if UF.ui and UF.ui.absorbColorPicker then UF.ui.absorbColorPicker:SetDisabled(cfg.health.absorbUseCustomColor ~= true) end
@@ -1637,8 +1650,8 @@ local function addOptions(container, skipClear, unit)
 	cbAbsorbGlow:SetFullWidth(true)
 	absorbGroup:AddChild(cbAbsorbGlow)
 
-	local cbSampleAbsorb = addon.functions.createCheckboxAce(L["Show sample absorb"] or "Show sample absorb", cfg.health.showSampleAbsorb == true, function(_, _, v)
-		cfg.health.showSampleAbsorb = v and true or false
+	local cbSampleAbsorb = addon.functions.createCheckboxAce(L["Show sample absorb"] or "Show sample absorb", shouldShowSampleAbsorb(unit), function(_, _, v)
+		sampleAbsorb[unit] = v and true or false
 		refresh()
 	end)
 	cbSampleAbsorb:SetFullWidth(true)

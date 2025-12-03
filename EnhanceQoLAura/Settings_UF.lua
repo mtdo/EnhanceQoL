@@ -84,6 +84,10 @@ local function ensureConfig(unit)
 	return addon.db.ufFrames[unit]
 end
 
+addon.variables = addon.variables or {}
+addon.variables.ufSampleAbsorb = addon.variables.ufSampleAbsorb or {}
+local sampleAbsorb = addon.variables.ufSampleAbsorb
+
 local function getValue(unit, path, fallback)
 	local cfg = ensureConfig(unit)
 	local cur = cfg
@@ -152,11 +156,20 @@ local function fontOptions()
 end
 
 local function textureOptions()
-	local list = { { value = "DEFAULT", label = "Default (Blizzard)" } }
+	local list = {}
+	local seen = {}
+	local function add(value, label)
+		local lv = tostring(value or ""):lower()
+		if lv == "" or seen[lv] then return end
+		seen[lv] = true
+		list[#list + 1] = { value = value, label = label }
+	end
+	add("DEFAULT", "Default (Blizzard)")
+	add("SOLID", "Solid")
 	if not LSM then return list end
 	local hash = LSM:HashTable("statusbar") or {}
 	for name, path in pairs(hash) do
-		if type(path) == "string" and path ~= "" then list[#list + 1] = { value = name, label = tostring(name) } end
+		if type(path) == "string" and path ~= "" then add(name, tostring(name)) end
 	end
 	table.sort(list, function(a, b) return tostring(a.label) < tostring(b.label) end)
 	return list
@@ -527,18 +540,18 @@ local function buildUnitSettings(unit)
 	end, healthDef.useAbsorbGlow ~= false, "absorb")
 
 	list[#list + 1] = checkbox(L["Show sample absorb"] or "Show sample absorb", function()
-		return getValue(unit, { "health", "showSampleAbsorb" }, healthDef.showSampleAbsorb == true)
+		return sampleAbsorb[unit] == true
 	end, function(val)
-		setValue(unit, { "health", "showSampleAbsorb" }, val and true or false)
+		sampleAbsorb[unit] = val and true or false
 		refresh()
-	end, healthDef.showSampleAbsorb == true, "absorb")
+	end, false, "absorb")
 
 	list[#list + 1] = radioDropdown(L["Absorb texture"] or "Absorb texture", textureOpts, function()
-		return getValue(unit, { "health", "absorbTexture" }, healthDef.absorbTexture or healthDef.texture or "DEFAULT")
+		return getValue(unit, { "health", "absorbTexture" }, healthDef.absorbTexture or healthDef.texture or "SOLID")
 	end, function(val)
 		setValue(unit, { "health", "absorbTexture" }, val)
 		refresh()
-	end, healthDef.absorbTexture or healthDef.texture or "DEFAULT", "absorb")
+	end, healthDef.absorbTexture or healthDef.texture or "SOLID", "absorb")
 
 	list[#list + 1] = checkboxColor({
 		name = L["UFBarBackdrop"] or "Show bar backdrop",
