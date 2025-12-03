@@ -62,6 +62,7 @@ local wipe = wipe or (table and table.wipe)
 
 local shouldShowSampleCast
 local setSampleCast
+local applyFont
 
 local PLAYER_UNIT = "player"
 local TARGET_UNIT = "target"
@@ -181,6 +182,8 @@ local defaults = {
 			nameOffset = { x = 6, y = 0 },
 			showDuration = true,
 			durationOffset = { x = -6, y = 0 },
+			font = nil,
+			fontSize = 12,
 			showIcon = true,
 			iconSize = 22,
 			texture = "DEFAULT",
@@ -834,12 +837,15 @@ shouldShowSampleCast = function(unit) return sampleCast and sampleCast[unit] == 
 setSampleCast = function(unit)
 	local st = states[unit]
 	if not st or not st.castBar then return end
-	local ccfg = (ensureDB(unit) or {}).cast or {}
-	local defc = (defaultsFor(unit) and defaultsFor(unit).cast) or {}
+	local cfg = ensureDB(unit)
+	local ccfg = (cfg or {}).cast or {}
+	local def = defaultsFor(unit)
+	local defc = (def and def.cast) or {}
 	if ccfg.enabled == false then
 		stopCast(unit)
 		return
 	end
+	local hc = (cfg and cfg.health) or (def and def.health) or {}
 	local nowMs = GetTime() * 1000
 	st.castInfo = {
 		name = L["Sample Cast"] or "Sample Cast",
@@ -850,6 +856,11 @@ setSampleCast = function(unit)
 		isChannel = false,
 	}
 	applyCastLayout(ensureDB(unit), unit)
+	local castFont = ccfg.font or defc.font or hc.font
+	local castFontSize = ccfg.fontSize or defc.fontSize or hc.fontSize or 12
+	local castOutline = hc.fontOutline or "OUTLINE"
+	applyFont(st.castName, castFont, castFontSize, castOutline)
+	applyFont(st.castDuration, castFont, castFontSize, castOutline)
 	updateCastBar(unit)
 	if not castOnUpdateHandlers[unit] then
 		st.castBar:SetScript("OnUpdate", function() updateCastBar(unit) end)
@@ -1016,7 +1027,7 @@ local function updatePower(cfg, unit)
 	end
 end
 
-local function applyFont(fs, fontPath, size, outline)
+applyFont = function(fs, fontPath, size, outline)
 	if not fs then return end
 	fs:SetFont(getFont(fontPath), size or 14, outline or "OUTLINE")
 	fs:SetShadowColor(0, 0, 0, 0.5)
@@ -1297,8 +1308,11 @@ local function applyBars(cfg, unit)
 		st.castBar:SetMinMaxValues(0, 1)
 		st.castBar:SetValue(0)
 		applyCastLayout(cfg, unit)
-		applyFont(st.castName, hc.font, (ccfg.nameSize or defc.nameSize or hc.fontSize or 12), hc.fontOutline or "OUTLINE")
-		applyFont(st.castDuration, hc.font, (ccfg.nameSize or defc.nameSize or hc.fontSize or 12), hc.fontOutline or "OUTLINE")
+		local castFont = ccfg.font or defc.font or hc.font
+		local castFontSize = ccfg.fontSize or defc.fontSize or hc.fontSize or 12
+		local castOutline = hc.fontOutline or "OUTLINE"
+		applyFont(st.castName, castFont, castFontSize, castOutline)
+		applyFont(st.castDuration, castFont, castFontSize, castOutline)
 	end
 
 	applyFont(st.healthTextLeft, hc.font, hc.fontSize or 14)
@@ -1932,12 +1946,37 @@ local function addOptions(container, skipClear, unit)
 				refresh()
 			end
 		)
-		nameY:SetRelativeWidth(0.25)
-		nameRow:AddChild(nameY)
+			nameY:SetRelativeWidth(0.25)
+			nameRow:AddChild(nameY)
 
-		local durRow = addon.functions.createContainer("SimpleGroup", "Flow")
-		durRow:SetFullWidth(true)
-		castGroup:AddChild(durRow)
+			local fontRowCast = addon.functions.createContainer("SimpleGroup", "Flow")
+			fontRowCast:SetFullWidth(true)
+			castGroup:AddChild(fontRowCast)
+			local fontListCast = {}
+			local fontOrderCast = {}
+			for name, path in pairs(LSM and LSM:HashTable("font") or {}) do
+				fontListCast[path] = name
+				table.insert(fontOrderCast, path)
+			end
+			table.sort(fontOrderCast, function(a, b) return tostring(fontListCast[a]) < tostring(fontListCast[b]) end)
+			local fddCast = addon.functions.createDropdownAce(L["Font"] or "Font", fontListCast, fontOrderCast, function(_, _, key)
+				cfg.cast.font = key
+				refresh()
+			end)
+			fddCast:SetValue(cfg.cast.font or "")
+			fddCast:SetRelativeWidth(0.5)
+			fontRowCast:AddChild(fddCast)
+
+			local fsCast = addon.functions.createSliderAce(L["FontSize"] or "Font size", cfg.cast.fontSize or castDef.fontSize or 12, 8, 30, 1, function(_, _, val)
+				cfg.cast.fontSize = val or 12
+				refresh()
+			end)
+			fsCast:SetRelativeWidth(0.5)
+			fontRowCast:AddChild(fsCast)
+
+			local durRow = addon.functions.createContainer("SimpleGroup", "Flow")
+			durRow:SetFullWidth(true)
+			castGroup:AddChild(durRow)
 		local cbDur = addon.functions.createCheckboxAce(L["Show cast duration"] or "Show cast duration", cfg.cast.showDuration ~= false, function(_, _, v)
 			cfg.cast.showDuration = v and true or false
 			refresh()

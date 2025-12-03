@@ -841,6 +841,20 @@ local function buildUnitSettings(unit)
 			refresh()
 		end, (castDef.nameOffset and castDef.nameOffset.y) or 0, "cast", true)
 
+		list[#list + 1] = radioDropdown(L["Font"] or "Font", fontOptions(), function()
+			return getValue(unit, { "cast", "font" }, castDef.font or "")
+		end, function(val)
+			setValue(unit, { "cast", "font" }, val)
+			refresh()
+		end, castDef.font or "", "cast")
+
+		list[#list + 1] = slider(L["FontSize"] or "Font size", 8, 30, 1, function()
+			return getValue(unit, { "cast", "fontSize" }, castDef.fontSize or 12)
+		end, function(val)
+			setValue(unit, { "cast", "fontSize" }, val or 12)
+			refresh()
+		end, castDef.fontSize or 12, "cast", true)
+
 		list[#list + 1] = checkbox(L["Show cast duration"] or "Show cast duration", function()
 			return getValue(unit, { "cast", "showDuration" }, castDef.showDuration ~= false) ~= false
 		end, function(val)
