@@ -110,8 +110,7 @@ data = {
 		text = L["moveLootToast"],
 		desc = L["moveLootToastDesc"],
 		func = function(value)
-			addon.db.enableGroupLootAnchor = value and true or false
-			if addon.LootToast and addon.LootToast.OnGroupRollAnchorOptionChanged then addon.LootToast:OnGroupRollAnchorOptionChanged(addon.db.enableGroupLootAnchor) end
+			addon.db.enableLootToastAnchor = value and true or false
 			addon.functions.initLootToast()
 		end,
 		children = {

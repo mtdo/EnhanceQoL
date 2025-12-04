@@ -11,29 +11,7 @@ Changing minimap Button behaviour
 
 ### Options Update
 
-Starting to change stuff to blizzard options, for now only a small part is there but more and more will follow
-
-- Options menus transformed
-  - Combat & Dungeons
-    - Drink & Food
-  - Items & Inventory
-    - Container Action
-    - Gear & Upgrade
-    - Vendors & Economy
-      - Selling & Shopping
-    - Map & Navigation
-      - Quest
-  - Profiles
-  - Sound
-  - SharedMedia
-  - UI & Input
-    - Chat Frame
-    - Data Panel
-    - Mouse
-    - System
-    - Tooltip
-    - Unit Frames
-    - Visibility Hub
+Changed everything which will be part of midnight to the Blizzard Option menu
 
 ### ✨ Added
 
@@ -45,6 +23,7 @@ Starting to change stuff to blizzard options, for now only a small part is there
   - Set another keybind to clear all world markers
 - Hide Action Button borders
 - Action Bars: Option to hide the Assisted Combat Rotation overlay/glow on buttons
+- Automatically open the preview for player housing items
 
 ### 🔄 Changed
 

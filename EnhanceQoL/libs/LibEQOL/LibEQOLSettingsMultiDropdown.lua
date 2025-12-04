@@ -1,6 +1,9 @@
-local MODULE_MAJOR = "LibEQOLSettingsMode-1.0"
+local MODULE_MAJOR, EXPECTED_MINOR = "LibEQOLSettingsMode-1.0", 2000001
 local _, lib = pcall(LibStub, MODULE_MAJOR)
 if not lib then
+	return
+end
+if lib.MINOR and lib.MINOR > EXPECTED_MINOR then
 	return
 end
 
@@ -143,6 +146,12 @@ function LibEQOL_MultiDropdownMixin:Init(initializer)
 	self.getSelectionFunc = data.getSelection or data.get
 	self.setSelectionFunc = data.setSelection or data.set
 	self.summaryFunc = data.summaryFunc or data.summary
+	-- Default caption behaviour for empty state
+	if data.customText ~= nil then
+		self.customDefaultText = data.customText
+	elseif data.customDefaultText ~= nil then
+		self.customDefaultText = data.customDefaultText
+	end
 	self.hideSummary = data.hideSummary
 	self.callback = data.callback
 
@@ -414,7 +423,14 @@ end
 function LibEQOL_MultiDropdownMixin:SetupDropdownMenu(button, setting, optionsFunc, initTooltip)
 	local dropdown = button or self.Control.Dropdown
 
-	dropdown:SetDefaultText(CUSTOM)
+	-- Default caption: empty unless explicitly requested
+	local defaultText
+	if self.customDefaultText ~= nil then
+		defaultText = tostring(self.customDefaultText)
+	else
+		defaultText = ""
+	end
+	dropdown:SetDefaultText(defaultText)
 
 	dropdown:SetupMenu(function(_, rootDescription)
 		rootDescription:SetGridMode(MenuConstants.VerticalGridDirection)

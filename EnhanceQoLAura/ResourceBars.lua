@@ -410,6 +410,14 @@ end
 local function applyGlobalProfile(barType, specIndex, cosmeticOnly)
 	if not barType then return false, "NO_BAR" end
 	local globalCfg, secondaryIdx = resolveGlobalTemplate(barType, specIndex)
+	if not globalCfg then
+		local store = addon.db and addon.db.globalResourceBarSettings
+		if store and store.MAIN then
+			globalCfg = store.MAIN
+			local specInfo = getSpecInfo(specIndex)
+			secondaryIdx = specInfo and secondaryIndex(specInfo, barType)
+		end
+	end
 	if not globalCfg then return false, "NO_GLOBAL" end
 	-- Ensure size fields exist even for older saved globals
 	if not globalCfg.width or not globalCfg.height then
@@ -433,6 +441,12 @@ local function applyGlobalProfile(barType, specIndex, cosmeticOnly)
 			local prevType = specSecondaries(getSpecInfo(specIndex))[secondaryIdx - 1]
 			if prevType then maybeChainSecondaryAnchor(specCfg[barType], prevType) end
 		end
+		-- Always enable separators when applying globals for eligible bars
+		if ResourceBars.separatorEligible and ResourceBars.separatorEligible[barType] then
+			specCfg[barType].showSeparator = true
+			if not specCfg[barType].separatorThickness then specCfg[barType].separatorThickness = globalCfg.separatorThickness or SEPARATOR_THICKNESS end
+			specCfg[barType].separatorColor = specCfg[barType].separatorColor or globalCfg.separatorColor or SEP_DEFAULT
+		end
 	end
 	return true
 end
@@ -454,7 +468,80 @@ ensureSpecCfg = function(specIndex)
 	addon.db.personalResourceBarSettings = addon.db.personalResourceBarSettings or {}
 	addon.db.personalResourceBarSettings[class] = addon.db.personalResourceBarSettings[class] or {}
 	addon.db.personalResourceBarSettings[class][spec] = addon.db.personalResourceBarSettings[class][spec] or {}
-	return addon.db.personalResourceBarSettings[class][spec]
+	local specCfg = addon.db.personalResourceBarSettings[class][spec]
+
+	-- Auto-populate from global when enabled and spec has no explicit enables yet
+	local function maybeAutoEnableRuntime()
+		if not addon.db.resourceBarsAutoEnableAll then return end
+		local specInfo = powertypeClasses[class] and powertypeClasses[class][spec]
+		if not specInfo then return end
+		if specCfg._autoEnabledRuntime or specCfg._autoEnableInProgress then return end
+		for _, cfg in pairs(specCfg) do
+			if type(cfg) == "table" and cfg.enabled ~= nil then return end
+		end
+		specCfg._autoEnableInProgress = true
+
+		local bars = { "HEALTH" }
+		local mainType = specInfo.MAIN
+		if mainType then bars[#bars + 1] = mainType end
+		for _, pType in ipairs(classPowerTypes or {}) do
+			if specInfo[pType] and pType ~= mainType then bars[#bars + 1] = pType end
+		end
+
+		local function frameNameFor(typeId)
+			if typeId == "HEALTH" then return "EQOLHealthBar" end
+			return "EQOL" .. tostring(typeId) .. "Bar"
+		end
+
+		local prevFrame = frameNameFor("HEALTH")
+		local mainFrame = frameNameFor(mainType or "HEALTH")
+		local applied = 0
+		for _, pType in ipairs(bars) do
+			specCfg[pType] = specCfg[pType] or {}
+			local ok = false
+			if ResourceBars.ApplyGlobalProfile then ok = ResourceBars.ApplyGlobalProfile(pType, specIndex or spec, false) end
+			if ok then
+				applied = applied + 1
+				specCfg[pType].enabled = true
+				if pType == mainType and pType ~= "HEALTH" then
+					local a = specCfg[pType].anchor or {}
+					a.point = "TOP"
+					a.relativePoint = "BOTTOM"
+					a.relativeFrame = frameNameFor("HEALTH")
+					a.x = 0
+					a.y = -2
+					a.autoSpacing = nil
+					a.matchRelativeWidth = true
+					specCfg[pType].anchor = a
+					prevFrame = frameNameFor(pType)
+				elseif pType ~= "HEALTH" then
+					local a = specCfg[pType].anchor or {}
+					a.point = "TOP"
+					a.relativePoint = "BOTTOM"
+					local targetFrame
+					if class == "DRUID" then
+						if pType == "COMBO_POINTS" then targetFrame = frameNameFor("ENERGY") end
+						if not targetFrame or targetFrame == "" then targetFrame = mainFrame end
+					else
+						targetFrame = prevFrame
+					end
+					a.relativeFrame = targetFrame
+					a.x = 0
+					a.y = -2
+					a.autoSpacing = nil
+					a.matchRelativeWidth = true
+					specCfg[pType].anchor = a
+					if class ~= "DRUID" then prevFrame = frameNameFor(pType) end
+				end
+			end
+		end
+
+		if applied > 0 then specCfg._autoEnabledRuntime = true end
+		specCfg._autoEnableInProgress = nil
+	end
+
+	maybeAutoEnableRuntime()
+	return specCfg
 end
 
 local function specNameByIndex(specIndex)
@@ -694,11 +781,7 @@ DEFAULT_HEALTH_HEIGHT = 20
 DEFAULT_POWER_WIDTH = 200
 DEFAULT_POWER_HEIGHT = 20
 
-local function defaultFontPath()
-	return (addon.variables and addon.variables.defaultFont)
-		or (LSM and LSM.DefaultMedia and LSM:Fetch("font", LSM.DefaultMedia.font))
-		or STANDARD_TEXT_FONT
-end
+local function defaultFontPath() return (addon.variables and addon.variables.defaultFont) or (LSM and LSM.DefaultMedia and LSM:Fetch("font", LSM.DefaultMedia.font)) or STANDARD_TEXT_FONT end
 
 local function resolveFontFace(cfg)
 	if cfg and cfg.fontFace and cfg.fontFace ~= "" then return cfg.fontFace end
@@ -3127,14 +3210,16 @@ function ResourceBars.SetPowerBarSize(w, h, pType)
 
 	if specCfg then
 		for bType, cfg in pairs(specCfg) do
-			local anchor = cfg.anchor
-			if anchor and changed[anchor.relativeFrame] then
-				local frame = bType == "HEALTH" and healthBar or powerbar[bType]
-				if frame then
-					local rel = _G[anchor.relativeFrame] or UIParent
-					-- Ensure we don't accumulate multiple points to stale relatives
-					frame:ClearAllPoints()
-					frame:SetPoint(anchor.point or "CENTER", rel, anchor.relativePoint or anchor.point or "CENTER", anchor.x or 0, anchor.y or 0)
+			if type(cfg) == "table" then
+				local anchor = cfg.anchor
+				if anchor and changed[anchor.relativeFrame] then
+					local frame = bType == "HEALTH" and healthBar or powerbar[bType]
+					if frame then
+						local rel = _G[anchor.relativeFrame] or UIParent
+						-- Ensure we don't accumulate multiple points to stale relatives
+						frame:ClearAllPoints()
+						frame:SetPoint(anchor.point or "CENTER", rel, anchor.relativePoint or anchor.point or "CENTER", anchor.x or 0, anchor.y or 0)
+					end
 				end
 			end
 		end
@@ -3151,13 +3236,15 @@ function ResourceBars.ReanchorDependentsOf(frameName)
 	if not specCfg then return end
 
 	for bType, cfg in pairs(specCfg) do
-		local anch = cfg and cfg.anchor
-		if anch and anch.relativeFrame == frameName then
-			local frame = (bType == "HEALTH") and healthBar or powerbar[bType]
-			if frame then
-				local rel = _G[anch.relativeFrame] or UIParent
-				frame:ClearAllPoints()
-				frame:SetPoint(anch.point or "TOPLEFT", rel, anch.relativePoint or anch.point or "TOPLEFT", anch.x or 0, anch.y or 0)
+		if type(cfg) == "table" then
+			local anch = cfg.anchor
+			if anch and anch.relativeFrame == frameName then
+				local frame = (bType == "HEALTH") and healthBar or powerbar[bType]
+				if frame then
+					local rel = _G[anch.relativeFrame] or UIParent
+					frame:ClearAllPoints()
+					frame:SetPoint(anch.point or "TOPLEFT", rel, anch.relativePoint or anch.point or "TOPLEFT", anch.x or 0, anch.y or 0)
+				end
 			end
 		end
 	end

@@ -4,6 +4,7 @@ local L = LibStub("AceLocale-3.0"):NewLocale("EnhanceQoL", "enUS", true) -- “t
 
 L["Quick signup"] = "Quick signup"
 L["interruptWithShift"] = "Hold shift to interrupt that feature"
+L["SettingsLegacyNotice"] = "Legacy settings (old UI)\n\nRight-click the minimap button and choose \"Legacy Settings\" to open them.\n\nWarning: These old settings are unlikely to work in Midnight anymore."
 
 L["Persist LFG signup note"] = "Persist LFG signup note"
 L["Hide Minimap Button"] = "Hide Minimap Button"
@@ -204,6 +205,8 @@ L["confirmReplaceEnchant"] = "Automatically accept Enchant Replacement"
 L["confirmReplaceEnchantDesc"] = "Skips the confirmation dialog when replacing an enchant"
 L["confirmSocketReplace"] = "Automatically accept Socket replacement"
 L["confirmSocketReplaceDesc"] = "Skips the confirmation dialog when replacing sockets"
+L["confirmHighCostItem"] = "Automatically confirm purchasing high-value items"
+L["confirmHighCostItemDesc"] = "Skips the confirmation dialog when buying expensive items from a vendor"
 
 L["XP_Rep"] = "XP and Reputation bar"
 L["modifyXPRepBar"] = "Modify XP and Reputation bar"

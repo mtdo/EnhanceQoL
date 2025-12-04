@@ -11,6 +11,11 @@ addon.Aura = addon.Aura or {}
 local UF = {}
 addon.Aura.UF = UF
 UF.ui = UF.ui or {}
+addon.variables = addon.variables or {}
+addon.variables.ufSampleAbsorb = addon.variables.ufSampleAbsorb or {}
+local sampleAbsorb = addon.variables.ufSampleAbsorb
+addon.variables.ufSampleCast = addon.variables.ufSampleCast or {}
+local sampleCast = addon.variables.ufSampleCast
 
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Aura")
 local LSM = LibStub("LibSharedMedia-3.0")
@@ -35,10 +40,13 @@ local UnitExists = UnitExists
 local InCombatLockdown = InCombatLockdown
 local BreakUpLargeNumbers = BreakUpLargeNumbers
 local AbbreviateNumbers = AbbreviateNumbers
+local CASTING_BAR_TYPES = _G.CASTING_BAR_TYPES
 local EnumPowerType = Enum and Enum.PowerType
 local PowerBarColor = PowerBarColor
 local UnitName, UnitClass, UnitLevel, UnitClassification = UnitName, UnitClass, UnitLevel, UnitClassification
 local UnitGetTotalAbsorbs = UnitGetTotalAbsorbs or function() return 0 end
+local RegisterStateDriver = _G.RegisterStateDriver
+local UnregisterStateDriver = _G.UnregisterStateDriver
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 local CUSTOM_CLASS_COLORS = CUSTOM_CLASS_COLORS
 local AuraUtil = AuraUtil
@@ -46,12 +54,18 @@ local C_UnitAuras = C_UnitAuras
 local CopyTable = CopyTable
 local UIParent = UIParent
 local CreateFrame = CreateFrame
+local GetTime = GetTime
 local IsShiftKeyDown = IsShiftKeyDown
 local After = C_Timer and C_Timer.After
+local NewTicker = C_Timer and C_Timer.NewTicker
 local floor = math.floor
 local max = math.max
 local abs = math.abs
 local wipe = wipe or (table and table.wipe)
+
+local shouldShowSampleCast
+local setSampleCast
+local applyFont
 
 local PLAYER_UNIT = "player"
 local TARGET_UNIT = "target"
@@ -68,6 +82,9 @@ local TARGET_TARGET_FRAME_NAME = "EQOLUFToTFrame"
 local TARGET_TARGET_HEALTH_NAME = "EQOLUFToTHealth"
 local TARGET_TARGET_POWER_NAME = "EQOLUFToTPower"
 local TARGET_TARGET_STATUS_NAME = "EQOLUFToTStatus"
+local BLIZZ_PLAYER_FRAME_NAME = "PlayerFrame"
+local BLIZZ_TARGET_FRAME_NAME = "TargetFrame"
+local BLIZZ_TARGET_TARGET_FRAME_NAME = "TargetFrameToT"
 local MIN_WIDTH = 50
 
 local function getFont(path)
@@ -118,6 +135,10 @@ local defaults = {
 			useClassColor = false,
 			color = { 0.0, 0.8, 0.0, 1 },
 			absorbColor = { 0.85, 0.95, 1.0, 0.7 },
+			absorbUseCustomColor = false,
+			showSampleAbsorb = false,
+			absorbTexture = "SOLID",
+			useAbsorbGlow = true,
 			backdrop = { enabled = true, color = { 0, 0, 0, 0.6 } },
 			textLeft = "PERCENT",
 			textRight = "CURMAX",
@@ -152,11 +173,36 @@ local defaults = {
 			nameOffset = { x = 0, y = 0 },
 			levelOffset = { x = 0, y = 0 },
 			levelEnabled = true,
+			combatIndicator = {
+				enabled = false,
+				size = 18,
+				offset = { x = -8, y = 0 },
+				texture = "Interface\\CharacterFrame\\UI-StateIcon",
+				texCoords = { 0.5, 1, 0, 0.5 }, -- combat icon region
+			},
 		},
 	},
 	target = {
 		enabled = false,
-		auraIcons = { size = 24, padding = 2, max = 16, showCooldown = true },
+		auraIcons = { size = 24, padding = 2, max = 16, showCooldown = true, showTooltip = true, hidePermanentAuras = false, anchor = "BOTTOM", offset = { x = 0, y = -5 } },
+		cast = {
+			enabled = true,
+			width = 220,
+			height = 16,
+			anchor = "BOTTOM", -- or "TOP"
+			offset = { x = 0, y = -4 },
+			showName = true,
+			nameOffset = { x = 6, y = 0 },
+			showDuration = true,
+			durationOffset = { x = -6, y = 0 },
+			font = nil,
+			fontSize = 12,
+			showIcon = true,
+			iconSize = 22,
+			texture = "DEFAULT",
+			color = { 0.9, 0.7, 0.2, 1 },
+			notInterruptibleColor = { 0.6, 0.6, 0.6, 1 },
+		},
 	},
 	targettarget = {
 		enabled = false,
@@ -182,6 +228,10 @@ local targetAuraIndexById = {}
 local auraList = {}
 local blizzardPlayerHooked = false
 local blizzardTargetHooked = false
+local castOnUpdateHandlers = {}
+local originalFrameRules = {}
+local totTicker
+local editModeHooked
 
 local function defaultsFor(unit) return defaults[unit] or defaults.player or {} end
 
@@ -259,6 +309,15 @@ local function removeTargetAuraFromOrder(auraInstanceID)
 	return idx
 end
 
+local function isPermanentAura(aura)
+	if not aura then return false end
+	local duration = aura.duration
+	local expiration = aura.expirationTime
+	if duration and duration > 0 then return false end
+	if expiration and expiration > 0 then return false end
+	return true
+end
+
 local function ensureAuraButton(index, ac)
 	local st = states.target
 	if not st or not st.auraContainer then return nil end
@@ -281,6 +340,19 @@ local function ensureAuraButton(index, ac)
 		btn.cd:SetReverse(true)
 		btn.cd:SetDrawEdge(true)
 		btn.cd:SetDrawSwipe(true)
+		btn:SetScript("OnEnter", function(self)
+			if not self._showTooltip then return end
+			local spellId = self.spellId
+			if not spellId or (issecretvalue and issecretvalue(spellId)) then return end
+			if GameTooltip then
+				GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
+				GameTooltip:SetSpellByID(spellId)
+				GameTooltip:Show()
+			end
+		end)
+		btn:SetScript("OnLeave", function()
+			if GameTooltip then GameTooltip:Hide() end
+		end)
 		icons[index] = btn
 	else
 		btn:SetSize(ac.size, ac.size)
@@ -290,6 +362,8 @@ end
 
 local function applyAuraToButton(btn, aura, ac)
 	if not btn or not aura then return end
+	btn.spellId = aura.spellId
+	btn._showTooltip = ac.showTooltip ~= false
 	btn.icon:SetTexture(aura.icon or "")
 	btn.cd:Clear()
 	if issecretvalue and issecretvalue(aura.duration) then
@@ -313,7 +387,12 @@ local function anchorAuraButton(btn, index, ac, perRow, st)
 	local row = math.floor((index - 1) / perRow)
 	local col = (index - 1) % perRow
 	btn:ClearAllPoints()
-	btn:SetPoint("TOPLEFT", st.auraContainer, "TOPLEFT", col * (ac.size + ac.padding), -row * (ac.size + ac.padding))
+	local anchor = ac.anchor or "BOTTOM"
+	if anchor == "TOP" then
+		btn:SetPoint("BOTTOMLEFT", st.auraContainer, "BOTTOMLEFT", col * (ac.size + ac.padding), row * (ac.size + ac.padding))
+	else
+		btn:SetPoint("TOPLEFT", st.auraContainer, "TOPLEFT", col * (ac.size + ac.padding), -row * (ac.size + ac.padding))
+	end
 end
 
 local function updateAuraContainerSize(shown, ac, perRow, st)
@@ -333,6 +412,7 @@ local function updateTargetAuraIcons(startIndex)
 	ac.size = ac.size or 24
 	ac.padding = ac.padding or 0
 	ac.max = ac.max or 16
+	if ac.showTooltip == nil then ac.showTooltip = true end
 	if ac.max < 1 then ac.max = 1 end
 
 	local width = st.frame:GetWidth() or 0
@@ -369,31 +449,44 @@ end
 local function fullScanTargetAuras()
 	resetTargetAuras()
 	if not UnitExists or not UnitExists("target") then return end
+	local cfg = ensureDB("target")
+	local ac = cfg.auraIcons or defaults.target.auraIcons or {}
+	local hidePermanent = ac.hidePermanentAuras == true or ac.hidePermanent == true
 	if C_UnitAuras and C_UnitAuras.GetUnitAuras then
 		local helpful = C_UnitAuras.GetUnitAuras("target", "HELPFUL|CANCELABLE")
 		for i = 1, #helpful do
-			cacheTargetAura(helpful[i])
-			addTargetAuraToOrder(helpful[i].auraInstanceID)
+			local aura = helpful[i]
+			if aura and (not hidePermanent or not isPermanentAura(aura)) then
+				cacheTargetAura(aura)
+				addTargetAuraToOrder(aura.auraInstanceID)
+			end
 		end
 		local harmful = C_UnitAuras.GetUnitAuras("target", "HARMFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY")
 		for i = 1, #harmful do
-			cacheTargetAura(harmful[i])
-			addTargetAuraToOrder(harmful[i].auraInstanceID)
+			local aura = harmful[i]
+			if aura and (not hidePermanent or not isPermanentAura(aura)) then
+				cacheTargetAura(aura)
+				addTargetAuraToOrder(aura.auraInstanceID)
+			end
 		end
 	elseif C_UnitAuras and C_UnitAuras.GetAuraSlots then
 		local helpful = { C_UnitAuras.GetAuraSlots("target", "HELPFUL|CANCELABLE") }
 		for i = 2, #helpful do
 			local slot = helpful[i]
 			local aura = C_UnitAuras.GetAuraDataBySlot("target", slot)
-			cacheTargetAura(aura)
-			addTargetAuraToOrder(aura and aura.auraInstanceID)
+			if aura and (not hidePermanent or not isPermanentAura(aura)) then
+				cacheTargetAura(aura)
+				addTargetAuraToOrder(aura.auraInstanceID)
+			end
 		end
 		local harmful = { C_UnitAuras.GetAuraSlots("target", "HARMFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY") }
 		for i = 2, #harmful do
 			local slot = harmful[i]
 			local aura = C_UnitAuras.GetAuraDataBySlot("target", slot)
-			cacheTargetAura(aura)
-			addTargetAuraToOrder(aura and aura.auraInstanceID)
+			if aura and (not hidePermanent or not isPermanentAura(aura)) then
+				cacheTargetAura(aura)
+				addTargetAuraToOrder(aura.auraInstanceID)
+			end
 		end
 	end
 	updateTargetAuraIcons()
@@ -429,6 +522,67 @@ local function findTreeNode(path)
 		return nil
 	end
 	return search(addon.treeGroupData, 1)
+end
+
+local function getFrameInfo(frameName)
+	if not addon.variables or not addon.variables.unitFrameNames then return nil end
+	for _, info in ipairs(addon.variables.unitFrameNames) do
+		if info.name == frameName then return info end
+	end
+	return nil
+end
+
+local function applyVisibilityDriver(unit, enabled)
+	if InCombatLockdown() then return end
+	local st = states[unit]
+	if not st or not st.frame or not RegisterStateDriver then return end
+	local cond
+	if not enabled then
+		cond = "hide"
+	elseif unit == TARGET_UNIT then
+		cond = "[@target,exists] show; hide"
+	elseif unit == TARGET_TARGET_UNIT then
+		cond = "[@targettarget,exists] show; hide"
+	end
+	if cond == st._visibilityCond then return end
+	if not cond then
+		if UnregisterStateDriver then UnregisterStateDriver(st.frame, "visibility") end
+		st._visibilityCond = nil
+		return
+	end
+	if UnregisterStateDriver then UnregisterStateDriver(st.frame, "visibility") end
+	st.frame:SetAttribute("state-visibility", nil)
+	RegisterStateDriver(st.frame, "visibility", cond)
+	st._visibilityCond = cond
+end
+
+local function applyFrameRuleOverride(frameName, enabled)
+	if not frameName then return end
+	local info = getFrameInfo(frameName)
+	if not info then
+		if frameName == TARGET_TARGET_FRAME_NAME then
+			info = { name = TARGET_TARGET_FRAME_NAME, var = "unitframeSettingTargetTargetFrame", unitToken = TARGET_TARGET_UNIT }
+		else
+			return
+		end
+	end
+	local NormalizeUnitFrameVisibilityConfig = addon.functions and addon.functions.NormalizeUnitFrameVisibilityConfig
+	local UpdateUnitFrameMouseover = addon.functions and addon.functions.UpdateUnitFrameMouseover
+	if not NormalizeUnitFrameVisibilityConfig or not UpdateUnitFrameMouseover then return end
+	addon.db = addon.db or {}
+	local key = info.var
+	if enabled then
+		if originalFrameRules[key] == nil then originalFrameRules[key] = addon.db[key] end
+		NormalizeUnitFrameVisibilityConfig(key, { ALWAYS_HIDDEN = true })
+	else
+		if originalFrameRules[key] ~= nil then
+			addon.db[key] = originalFrameRules[key]
+			originalFrameRules[key] = nil
+		else
+			NormalizeUnitFrameVisibilityConfig(key, nil)
+		end
+	end
+	UpdateUnitFrameMouseover(info.name, info)
 end
 
 local function addTreeNode(path, node, parentPath)
@@ -528,7 +682,7 @@ do
 	targetDefaults.enabled = false
 	targetDefaults.anchor = targetDefaults.anchor and CopyTable(targetDefaults.anchor) or { point = "CENTER", relativeTo = "UIParent", relativePoint = "CENTER", x = 0, y = -200 }
 	targetDefaults.anchor.x = (targetDefaults.anchor.x or 0) + 260
-	targetDefaults.auraIcons = { size = 24, padding = 2, max = 16, showCooldown = true }
+	targetDefaults.auraIcons = { size = 24, padding = 2, max = 16, showCooldown = true, showTooltip = true, hidePermanentAuras = false, anchor = "BOTTOM", offset = { x = 0, y = -5 } }
 	defaults.target = targetDefaults
 
 	local totDefaults = CopyTable(targetDefaults)
@@ -583,7 +737,21 @@ local UnitHealthPercent = UnitHealthPercent
 local UnitPowerPercent = UnitPowerPercent
 
 local function resolveTexture(key)
+	if key == "SOLID" then return "Interface\\Buttons\\WHITE8x8" end
 	if not key or key == "DEFAULT" then return BLIZZARD_TEX end
+	if LSM then
+		local tex = LSM:Fetch("statusbar", key)
+		if tex then return tex end
+	end
+	return key
+end
+
+local function resolveCastTexture(key)
+	if key == "SOLID" then return "Interface\\Buttons\\WHITE8x8" end
+	if not key or key == "DEFAULT" then
+		if CASTING_BAR_TYPES and CASTING_BAR_TYPES.standard and CASTING_BAR_TYPES.standard.full then return CASTING_BAR_TYPES.standard.full end
+		return BLIZZARD_TEX
+	end
 	if LSM then
 		local tex = LSM:Fetch("statusbar", key)
 		if tex then return tex end
@@ -634,7 +802,228 @@ local function formatText(mode, cur, maxv, useShort, percentValue)
 	return shortValue(cur or 0)
 end
 
+local function getAbsorbColor(hc, unit)
+	local def = defaultsFor(unit)
+	local defaultAbsorb = (def.health and def.health.absorbColor) or { 0.85, 0.95, 1, 0.7 }
+	if hc and hc.absorbUseCustomColor and hc.absorbColor then
+		return hc.absorbColor[1] or defaultAbsorb[1], hc.absorbColor[2] or defaultAbsorb[2], hc.absorbColor[3] or defaultAbsorb[3], hc.absorbColor[4] or defaultAbsorb[4]
+	end
+	return defaultAbsorb[1], defaultAbsorb[2], defaultAbsorb[3], defaultAbsorb[4]
+end
+
+local function shouldShowSampleAbsorb(unit) return sampleAbsorb and sampleAbsorb[unit] == true end
+
+local function stopCast(unit)
+	local st = states[unit]
+	if not st or not st.castBar then return end
+	st.castBar:Hide()
+	if st.castName then st.castName:SetText("") end
+	if st.castDuration then st.castDuration:SetText("") end
+	if st.castIcon then st.castIcon:Hide() end
+	st.castInfo = nil
+	if castOnUpdateHandlers[unit] then
+		st.castBar:SetScript("OnUpdate", nil)
+		castOnUpdateHandlers[unit] = nil
+	end
+end
+
+local function applyCastLayout(cfg, unit)
+	local st = states[unit]
+	if not st or not st.castBar then return end
+	local def = defaultsFor(unit)
+	local ccfg = (cfg and cfg.cast) or {}
+	local defc = (def and def.cast) or {}
+	local width = ccfg.width or (cfg and cfg.width) or defc.width or (def and def.width) or 220
+	local height = ccfg.height or defc.height or 16
+	st.castBar:SetSize(width, height)
+	local anchor = (ccfg.anchor or defc.anchor or "BOTTOM")
+	local off = ccfg.offset or defc.offset or { x = 0, y = -4 }
+	st.castBar:ClearAllPoints()
+	if anchor == "TOP" then
+		st.castBar:SetPoint("BOTTOM", st.frame, "TOP", off.x or 0, off.y or 0)
+	else
+		st.castBar:SetPoint("TOP", st.frame, "BOTTOM", off.x or 0, off.y or 0)
+	end
+	if st.castName then
+		local nameOff = ccfg.nameOffset or defc.nameOffset or { x = 6, y = 0 }
+		st.castName:ClearAllPoints()
+		st.castName:SetPoint("LEFT", st.castBar, "LEFT", nameOff.x or 0, nameOff.y or 0)
+		st.castName:SetShown(ccfg.showName ~= false)
+	end
+	if st.castDuration then
+		local durOff = ccfg.durationOffset or defc.durationOffset or { x = -6, y = 0 }
+		st.castDuration:ClearAllPoints()
+		st.castDuration:SetPoint("RIGHT", st.castBar, "RIGHT", durOff.x or 0, durOff.y or 0)
+		st.castDuration:SetShown(ccfg.showDuration ~= false)
+	end
+	if st.castIcon then
+		local size = ccfg.iconSize or defc.iconSize or height
+		st.castIcon:SetSize(size, size)
+		st.castIcon:ClearAllPoints()
+		st.castIcon:SetPoint("RIGHT", st.castBar, "LEFT", -4, 0)
+		st.castIcon:SetShown(ccfg.showIcon ~= false)
+	end
+	local texKey = ccfg.texture or defc.texture or "DEFAULT"
+	st.castBar:SetStatusBarTexture(resolveCastTexture(texKey))
+	if st.castBar.SetStatusBarDesaturated then st.castBar:SetStatusBarDesaturated(false) end
+end
+
+local function configureCastStatic(unit, ccfg, defc)
+	local st = states[unit]
+	if not st or not st.castBar or not st.castInfo then return end
+	ccfg = ccfg or st.castCfg or {}
+	defc = defc or (defaultsFor(unit) and defaultsFor(unit).cast) or {}
+	local clr = ccfg.color or defc.color or { 0.9, 0.7, 0.2, 1 }
+	if st.castInfo.notInterruptible then clr = ccfg.notInterruptibleColor or defc.notInterruptibleColor or clr end
+	st.castBar:SetStatusBarColor(clr[1] or 0.9, clr[2] or 0.7, clr[3] or 0.2, clr[4] or 1)
+	local duration = (st.castInfo.endTime or 0) - (st.castInfo.startTime or 0)
+	local maxValue = duration and duration > 0 and duration / 1000 or 1
+	if st.castBar.SetReverseFill then st.castBar:SetReverseFill(st.castInfo.isChannel == true) end
+	st.castBar:SetMinMaxValues(0, maxValue)
+	if st.castName then
+		local showName = ccfg.showName ~= false
+		st.castName:SetShown(showName)
+		st.castName:SetText(showName and (st.castInfo.name or "") or "")
+	end
+	if st.castIcon then
+		local showIcon = ccfg.showIcon ~= false and st.castInfo.texture ~= nil
+		st.castIcon:SetShown(showIcon)
+		if showIcon then st.castIcon:SetTexture(st.castInfo.texture) end
+	end
+	if st.castDuration then st.castDuration:SetShown(ccfg.showDuration ~= false) end
+	st.castBar:Show()
+end
+
+local function updateCastBar(unit)
+	local st = states[unit]
+	local ccfg = st and st.castCfg
+	if not st or not st.castBar or not st.castInfo or not st.castInfo.startTime or not st.castInfo.endTime or not ccfg then
+		stopCast(unit)
+		return
+	end
+	if issecretvalue and (issecretvalue(st.castInfo.startTime) or issecretvalue(st.castInfo.endTime)) then
+		stopCast(unit)
+		return
+	end
+	local nowMs = GetTime() * 1000
+	local startMs = st.castInfo.startTime or 0
+	local endMs = st.castInfo.endTime or 0
+	local duration = endMs - startMs
+	if not duration or duration <= 0 then
+		stopCast(unit)
+		return
+	end
+	if nowMs >= endMs then
+		if shouldShowSampleCast(unit) then
+			setSampleCast(unit)
+		else
+			stopCast(unit)
+		end
+		return
+	end
+	local elapsedMs = st.castInfo.isChannel and (endMs - nowMs) or (nowMs - startMs)
+	if elapsedMs < 0 then elapsedMs = 0 end
+	local value = elapsedMs / 1000
+	st.castBar:SetValue(value)
+	if st.castDuration then
+		if ccfg.showDuration ~= false then
+			local remaining = (endMs - nowMs) / 1000
+			if remaining < 0 then remaining = 0 end
+			st.castDuration:SetText(("%.1f"):format(remaining))
+			st.castDuration:Show()
+		else
+			st.castDuration:SetText("")
+			st.castDuration:Hide()
+		end
+	end
+end
+
+shouldShowSampleCast = function(unit) return sampleCast and sampleCast[unit] == true end
+
+setSampleCast = function(unit)
+	local st = states[unit]
+	if not st or not st.castBar then return end
+	local cfg = (st and st.cfg) or ensureDB(unit)
+	local ccfg = (cfg or {}).cast or {}
+	local def = defaultsFor(unit)
+	local defc = (def and def.cast) or {}
+	if ccfg.enabled == false then
+		stopCast(unit)
+		return
+	end
+	local resolvedCfg = ccfg or defc or {}
+	st.castCfg = resolvedCfg
+	local nowMs = GetTime() * 1000
+	st.castInfo = {
+		name = L["Sample Cast"] or "Sample Cast",
+		texture = 136235, -- lightning icon as placeholder
+		startTime = nowMs,
+		endTime = nowMs + 3000,
+		notInterruptible = false,
+		isChannel = false,
+	}
+	applyCastLayout(cfg, unit)
+	configureCastStatic(unit, resolvedCfg, defc)
+	if not castOnUpdateHandlers[unit] then
+		st.castBar:SetScript("OnUpdate", function() updateCastBar(unit) end)
+		castOnUpdateHandlers[unit] = true
+	end
+	updateCastBar(unit)
+end
+
+local function setCastInfoFromUnit(unit)
+	local st = states[unit]
+	if not st or not st.castBar then return end
+	local cfg = (st and st.cfg) or ensureDB(unit)
+	local ccfg = (cfg or {}).cast or {}
+	local defc = (defaultsFor(unit) and defaultsFor(unit).cast) or {}
+	if ccfg.enabled == false then
+		stopCast(unit)
+		return
+	end
+	local name, text, texture, startTimeMS, endTimeMS, _, _, notInterruptible, spellId, isEmpowered, numEmpowerStages = UnitChannelInfo(unit)
+	local isChannel = true
+	if not name then
+		name, text, texture, startTimeMS, endTimeMS, _, _, notInterruptible, spellId = UnitCastingInfo(unit)
+		isChannel = false
+	end
+	if not name then
+		if shouldShowSampleCast(unit) then
+			setSampleCast(unit)
+		else
+			stopCast(unit)
+		end
+		return
+	end
+	if issecretvalue and ((startTimeMS and issecretvalue(startTimeMS)) or (endTimeMS and issecretvalue(endTimeMS))) then
+		stopCast(unit)
+		return
+	end
+	local duration = (endTimeMS or 0) - (startTimeMS or 0)
+	if not duration or duration <= 0 then
+		stopCast(unit)
+		return
+	end
+	local resolvedCfg = ccfg or defc or {}
+	st.castCfg = resolvedCfg
+	st.castInfo = {
+		name = text or name,
+		texture = texture,
+		startTime = startTimeMS,
+		endTime = endTimeMS,
+		notInterruptible = notInterruptible,
+		isChannel = isChannel,
+	}
+	applyCastLayout(cfg, unit)
+	configureCastStatic(unit, resolvedCfg, defc)
+	if not castOnUpdateHandlers[unit] then
+		st.castBar:SetScript("OnUpdate", function() updateCastBar(unit) end)
+		castOnUpdateHandlers[unit] = true
+	end
+	updateCastBar(unit)
+end
 local function updateHealth(cfg, unit)
+	cfg = cfg or (states[unit] and states[unit].cfg) or ensureDB(unit)
 	local st = states[unit]
 	if not st or not st.health or not st.frame then return end
 	local cur = UnitHealth(unit)
@@ -646,7 +1035,6 @@ local function updateHealth(cfg, unit)
 	end
 	st.health:SetValue(cur or 0)
 	local hc = cfg.health or {}
-	configureSpecialTexture(st.health, "HEALTH", hc.texture, hc)
 	local percentVal
 	if addon.variables and addon.variables.isMidnight and UnitHealthPercent then
 		percentVal = UnitHealthPercent(unit, true, true)
@@ -672,23 +1060,36 @@ local function updateHealth(cfg, unit)
 		hr, hg, hb, ha = color[1] or 0, color[2] or 0.8, color[3] or 0, color[4] or 1
 	end
 	st.health:SetStatusBarColor(hr or 0, hg or 0.8, hb or 0, ha or 1)
-	st.health:SetStatusBarDesaturated(true)
 	if st.absorb then
 		local abs = UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(unit) or 0
+		local maxForValue
 		if issecretvalue and issecretvalue(maxv) then
-			st.absorb:SetMinMaxValues(0, maxv or 1)
+			maxForValue = maxv or 1
 		else
-			st.absorb:SetMinMaxValues(0, maxv > 0 and maxv or 1)
+			maxForValue = (maxv and maxv > 0) and maxv or 1
 		end
+		st.absorb:SetMinMaxValues(0, maxForValue or 1)
+		local hasVisibleAbsorb = abs and (not issecretvalue or not issecretvalue(abs)) and abs > 0
+		if shouldShowSampleAbsorb(unit) and not hasVisibleAbsorb and (not issecretvalue or not issecretvalue(maxForValue)) then abs = (maxForValue or 1) * 0.6 end
 		st.absorb:SetValue(abs or 0)
-		local ac = hc.absorbColor or { 0.85, 0.95, 1, 0.7 }
-		st.absorb:SetStatusBarColor(ac[1] or 0.85, ac[2] or 0.95, ac[3] or 1, ac[4] or 0.7)
+		local ar, ag, ab, aa = getAbsorbColor(hc, unit)
+		st.absorb:SetStatusBarColor(ar or 0.85, ag or 0.95, ab or 1, aa or 0.7)
+		if st.overAbsorbGlow then
+			local showGlow = hc.useAbsorbGlow ~= false and ((C_StringUtil and not C_StringUtil.TruncateWhenZero(abs)) or (not issecretvalue and abs > 0))
+			-- (not (C_StringUtil and C_StringUtil.TruncateWhenZero(abs)) or (not addon.variables.isMidnight and abs))
+			if showGlow then
+				st.overAbsorbGlow:Show()
+			else
+				st.overAbsorbGlow:Hide()
+			end
+		end
 	end
 	if st.healthTextLeft then st.healthTextLeft:SetText(formatText(hc.textLeft or "PERCENT", cur, maxv, hc.useShortNumbers ~= false, percentVal)) end
 	if st.healthTextRight then st.healthTextRight:SetText(formatText(hc.textRight or "CURMAX", cur, maxv, hc.useShortNumbers ~= false, percentVal)) end
 end
 
 local function updatePower(cfg, unit)
+	cfg = cfg or (states[unit] and states[unit].cfg) or ensureDB(unit)
 	local st = states[unit]
 	if not st then return end
 	local bar = st.power
@@ -704,7 +1105,6 @@ local function updatePower(cfg, unit)
 	end
 	bar:SetValue(cur or 0)
 	local pcfg = cfg.power or {}
-	configureSpecialTexture(bar, powerToken, pcfg.texture, pcfg)
 	local percentVal
 	if addon.variables and addon.variables.isMidnight and UnitPowerPercent then
 		percentVal = UnitPowerPercent(unit, powerEnum, true, true)
@@ -720,22 +1120,21 @@ local function updatePower(cfg, unit)
 		cr, cg, cb, ca = getPowerColor(powerToken)
 	end
 	bar:SetStatusBarColor(cr or 0.1, cg or 0.45, cb or 1, ca or 1)
-	if bar.SetStatusBarDesaturated then bar:SetStatusBarDesaturated(pcfg.useCustomColor ~= true) end
 	if st.powerTextLeft then
-		if (issecretvalue and not issecretvalue(maxv)) or (not addon.variables.isMidnight and maxv == 0) then
+		if (issecretvalue and not issecretvalue(maxv) and maxv == 0) or (not addon.variables.isMidnight and maxv == 0) then
 			st.powerTextLeft:SetText("")
 		else
 			st.powerTextLeft:SetText(formatText(pcfg.textLeft or "PERCENT", cur, maxv, pcfg.useShortNumbers ~= false, percentVal))
 		end
 	end
-	if (issecretvalue and not issecretvalue(maxv)) or (not addon.variables.isMidnight and maxv == 0) then
+	if (issecretvalue and not issecretvalue(maxv) and maxv == 0) or (not addon.variables.isMidnight and maxv == 0) then
 		st.powerTextRight:SetText("")
 	else
 		if st.powerTextRight then st.powerTextRight:SetText(formatText(pcfg.textRight or "CURMAX", cur, maxv, pcfg.useShortNumbers ~= false, percentVal)) end
 	end
 end
 
-local function applyFont(fs, fontPath, size, outline)
+applyFont = function(fs, fontPath, size, outline)
 	if not fs then return end
 	fs:SetFont(getFont(fontPath), size or 14, outline or "OUTLINE")
 	fs:SetShadowColor(0, 0, 0, 0.5)
@@ -756,7 +1155,41 @@ local function layoutTexts(bar, leftFS, rightFS, cfg, width)
 	end
 end
 
+local function setFrameLevelAbove(child, parent, offset)
+	if not child or not parent then return end
+	child:SetFrameStrata(parent:GetFrameStrata())
+	child:SetFrameLevel((parent:GetFrameLevel() or 0) + (offset or 1))
+end
+
+local function syncTextFrameLevels(st)
+	if not st then return end
+	setFrameLevelAbove(st.healthTextLayer, st.health, 2)
+	setFrameLevelAbove(st.powerTextLayer, st.power, 2)
+	setFrameLevelAbove(st.statusTextLayer, st.status, 2)
+	if st.castTextLayer then setFrameLevelAbove(st.castTextLayer, st.castBar, 2) end
+end
+
+local function hookTextFrameLevels(st)
+	if not st then return end
+	st._textLevelHooks = st._textLevelHooks or {}
+	local function hookFrame(frame)
+		if not frame or st._textLevelHooks[frame] then return end
+		st._textLevelHooks[frame] = true
+		if hooksecurefunc then
+			hooksecurefunc(frame, "SetFrameLevel", function() syncTextFrameLevels(st) end)
+			hooksecurefunc(frame, "SetFrameStrata", function() syncTextFrameLevels(st) end)
+		end
+	end
+	hookFrame(st.frame)
+	hookFrame(st.barGroup)
+	hookFrame(st.health)
+	hookFrame(st.power)
+	hookFrame(st.status)
+	syncTextFrameLevels(st)
+end
+
 local function updateStatus(cfg, unit)
+	cfg = cfg or (states[unit] and states[unit].cfg) or ensureDB(unit)
 	local st = states[unit]
 	if not st or not st.status then return end
 	local scfg = cfg.status or {}
@@ -765,27 +1198,35 @@ local function updateStatus(cfg, unit)
 	st.status:SetShown(scfg.enabled ~= false)
 	if st.nameText then
 		applyFont(st.nameText, scfg.font, scfg.fontSize or 14, scfg.fontOutline)
-		local class = select(2, UnitClass(unit))
-		local nc
-		if scfg.nameColorMode == "CLASS" then
-			nc = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[class]) or (RAID_CLASS_COLORS and RAID_CLASS_COLORS[class])
-		else
-			nc = scfg.nameColor or { 1, 1, 1, 1 }
-		end
-		st.nameText:SetText(UnitName(unit) or "")
-		st.nameText:SetTextColor(nc and (nc.r or nc[1] or 1) or 1, nc and (nc.g or nc[2] or 1) or 1, nc and (nc.b or nc[3] or 1) or 1, nc and (nc.a or nc[4] or 1) or 1)
 		st.nameText:ClearAllPoints()
 		st.nameText:SetPoint(scfg.nameAnchor or "LEFT", st.status, scfg.nameAnchor or "LEFT", (scfg.nameOffset and scfg.nameOffset.x) or 0, (scfg.nameOffset and scfg.nameOffset.y) or 0)
 		st.nameText:SetShown(scfg.enabled ~= false)
 	end
 	if st.levelText then
 		applyFont(st.levelText, scfg.font, scfg.fontSize or 14, scfg.fontOutline)
-		local lc = scfg.levelColor or { 1, 0.85, 0, 1 }
-		st.levelText:SetText(UnitLevel(unit) or "")
-		st.levelText:SetTextColor(lc[1] or 1, lc[2] or 0.85, lc[3] or 0, lc[4] or 1)
 		st.levelText:ClearAllPoints()
 		st.levelText:SetPoint(scfg.levelAnchor or "RIGHT", st.status, scfg.levelAnchor or "RIGHT", (scfg.levelOffset and scfg.levelOffset.x) or 0, (scfg.levelOffset and scfg.levelOffset.y) or 0)
 		st.levelText:SetShown(scfg.enabled ~= false and scfg.levelEnabled ~= false)
+	end
+end
+
+local function updateCombatIndicator(cfg)
+	local st = states[PLAYER_UNIT]
+	if not st or not st.combatIcon or not st.status then return end
+	local scfg = (cfg and cfg.status) or (defaultsFor(PLAYER_UNIT) and defaultsFor(PLAYER_UNIT).status) or {}
+	local ccfg = scfg.combatIndicator or {}
+	if ccfg.enabled == false then
+		st.combatIcon:Hide()
+		return
+	end
+	st.combatIcon:SetTexture("Interface\\Addons\\EnhanceQoLAura\\Icons\\CombatIndicator.tga")
+	st.combatIcon:SetSize(ccfg.size or 18, ccfg.size or 18)
+	st.combatIcon:ClearAllPoints()
+	st.combatIcon:SetPoint("TOP", st.status, "TOP", (ccfg.offset and ccfg.offset.x) or -8, (ccfg.offset and ccfg.offset.y) or 0)
+	if (UnitAffectingCombat and UnitAffectingCombat(PLAYER_UNIT)) or addon.EditModeLib:IsInEditMode() then
+		st.combatIcon:Show()
+	else
+		st.combatIcon:Hide()
 	end
 end
 
@@ -855,15 +1296,25 @@ local function layoutFrame(cfg, unit)
 
 	layoutTexts(st.health, st.healthTextLeft, st.healthTextRight, cfg.health, width)
 	layoutTexts(st.power, st.powerTextLeft, st.powerTextRight, cfg.power, width)
+	if st.castBar and unit == TARGET_UNIT then applyCastLayout(cfg, unit) end
 
 	-- Apply border only around the bar region wrapper
 	if st.barGroup then setBackdrop(st.barGroup, cfg.border) end
 
 	if unit == "target" and st.auraContainer then
 		st.auraContainer:ClearAllPoints()
-		st.auraContainer:SetPoint("TOPLEFT", st.barGroup, "BOTTOMLEFT", 0, -5)
+		local acfg = cfg.auraIcons or def.auraIcons or defaults.target.auraIcons or {}
+		local ax = (acfg.offset and acfg.offset.x) or 0
+		local ay = (acfg.offset and acfg.offset.y) or (acfg.anchor == "TOP" and 5 or -5)
+		local anchor = acfg.anchor or "BOTTOM"
+		if anchor == "TOP" then
+			st.auraContainer:SetPoint("BOTTOMLEFT", st.barGroup, "TOPLEFT", ax, ay)
+		else
+			st.auraContainer:SetPoint("TOPLEFT", st.barGroup, "BOTTOMLEFT", ax, ay)
+		end
 		st.auraContainer:SetWidth(width + borderInset * 2)
 	end
+	syncTextFrameLevels(st)
 end
 
 local function ensureFrames(unit)
@@ -886,15 +1337,48 @@ local function ensureFrames(unit)
 	st.status = _G[info.statusName] or CreateFrame("Frame", info.statusName, st.frame)
 	st.barGroup = st.barGroup or CreateFrame("Frame", nil, st.frame, "BackdropTemplate")
 	st.health = _G[info.healthName] or CreateFrame("StatusBar", info.healthName, st.barGroup, "BackdropTemplate")
+	if st.health.SetStatusBarDesaturated then st.health:SetStatusBarDesaturated(false) end
 	st.power = _G[info.powerName] or CreateFrame("StatusBar", info.powerName, st.barGroup, "BackdropTemplate")
+	if st.power.SetStatusBarDesaturated then st.power:SetStatusBarDesaturated(false) end
 	st.absorb = CreateFrame("StatusBar", info.healthName .. "Absorb", st.health, "BackdropTemplate")
+	if st.absorb.SetStatusBarDesaturated then st.absorb:SetStatusBarDesaturated(false) end
+	st.overAbsorbGlow = st.overAbsorbGlow or st.health:CreateTexture(nil, "ARTWORK", "OverAbsorbGlowTemplate")
+	st.absorb.overAbsorbGlow = st.overAbsorbGlow
+	if not st.overAbsorbGlow then st.overAbsorbGlow = st.health:CreateTexture(nil, "ARTWORK") end
+	if st.overAbsorbGlow then
+		st.overAbsorbGlow:SetTexture(798066)
+		st.overAbsorbGlow:SetBlendMode("ADD")
+		st.overAbsorbGlow:SetAlpha(0.8)
+		st.overAbsorbGlow:Hide()
+	end
+	if unit == "target" and not st.castBar then
+		st.castBar = CreateFrame("StatusBar", info.healthName .. "Cast", st.frame, "BackdropTemplate")
+		st.castBar:SetStatusBarDesaturated(true)
+		st.castTextLayer = CreateFrame("Frame", nil, st.castBar)
+		st.castTextLayer:SetAllPoints(st.castBar)
+		st.castName = st.castTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		st.castDuration = st.castTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		st.castIcon = st.castBar:CreateTexture(nil, "ARTWORK")
+		st.castIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+		st.castBar:SetMinMaxValues(0, 1)
+		st.castBar:SetValue(0)
+		st.castBar:Hide()
+	end
 
-	st.healthTextLeft = st.health:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	st.healthTextRight = st.health:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	st.powerTextLeft = st.power:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	st.powerTextRight = st.power:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	st.nameText = st.status:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	st.levelText = st.status:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	st.healthTextLayer = st.healthTextLayer or CreateFrame("Frame", nil, st.health)
+	st.healthTextLayer:SetAllPoints(st.health)
+	st.powerTextLayer = st.powerTextLayer or CreateFrame("Frame", nil, st.power)
+	st.powerTextLayer:SetAllPoints(st.power)
+	st.statusTextLayer = st.statusTextLayer or CreateFrame("Frame", nil, st.status)
+	st.statusTextLayer:SetAllPoints(st.status)
+
+	st.healthTextLeft = st.healthTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	st.healthTextRight = st.healthTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	st.powerTextLeft = st.powerTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	st.powerTextRight = st.powerTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	st.nameText = st.statusTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	st.levelText = st.statusTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	if unit == PLAYER_UNIT then st.combatIcon = st.statusTextLayer:CreateTexture("EQOLUFPlayerCombatIcon", "OVERLAY") end
 
 	if unit == "target" then
 		st.auraContainer = CreateFrame("Frame", nil, st.frame)
@@ -920,6 +1404,7 @@ local function ensureFrames(unit)
 		cfg.anchor.x = x
 		cfg.anchor.y = y
 	end)
+	hookTextFrameLevels(st)
 end
 
 local function applyBars(cfg, unit)
@@ -928,28 +1413,52 @@ local function applyBars(cfg, unit)
 	local hc = cfg.health or {}
 	local pcfg = cfg.power or {}
 	st.health:SetStatusBarTexture(resolveTexture(hc.texture))
+	if st.health.SetStatusBarDesaturated then st.health:SetStatusBarDesaturated(false) end
 	configureSpecialTexture(st.health, "HEALTH", hc.texture, hc)
 	applyBarBackdrop(st.health, hc)
 	st.power:SetStatusBarTexture(resolveTexture(pcfg.texture))
+	if st.power.SetStatusBarDesaturated then st.power:SetStatusBarDesaturated(pcfg.useCustomColor == true) end
+	if unit == PLAYER_UNIT then refreshMainPower(unit) end
 	local _, powerToken = getMainPower(unit)
 	configureSpecialTexture(st.power, powerToken, pcfg.texture, pcfg)
 	applyBarBackdrop(st.power, pcfg)
-	st.absorb:SetStatusBarTexture(LSM and LSM:Fetch("statusbar", "Blizzard") or BLIZZARD_TEX)
+	local absorbTextureKey = hc.absorbTexture or hc.texture
+	st.absorb:SetStatusBarTexture(resolveTexture(absorbTextureKey))
+	if st.absorb.SetStatusBarDesaturated then st.absorb:SetStatusBarDesaturated(false) end
+	configureSpecialTexture(st.absorb, "HEALTH", absorbTextureKey, hc)
 	st.absorb:SetAllPoints(st.health)
 	st.absorb:SetFrameLevel(st.health:GetFrameLevel() + 1)
 	st.absorb:SetMinMaxValues(0, 1)
 	st.absorb:SetValue(0)
-	st.absorb:SetStatusBarColor(0.8, 0.8, 0.9, 0.6)
+	if st.overAbsorbGlow then
+		st.overAbsorbGlow:ClearAllPoints()
+		st.overAbsorbGlow:SetPoint("TOPLEFT", st.health, "TOPRIGHT", -7, 0)
+		st.overAbsorbGlow:SetPoint("BOTTOMLEFT", st.health, "BOTTOMRIGHT", -7, 0)
+	end
+	if st.overAbsorbGlow then st.overAbsorbGlow:Hide() end
+	if st.castBar and unit == TARGET_UNIT then
+		local defc = (defaultsFor(unit) and defaultsFor(unit).cast) or {}
+		local ccfg = cfg.cast or defc
+		st.castBar:SetStatusBarTexture(resolveCastTexture((ccfg.texture or defc.texture or "DEFAULT")))
+		st.castBar:SetMinMaxValues(0, 1)
+		st.castBar:SetValue(0)
+		applyCastLayout(cfg, unit)
+		local castFont = ccfg.font or defc.font or hc.font
+		local castFontSize = ccfg.fontSize or defc.fontSize or hc.fontSize or 12
+		local castOutline = hc.fontOutline or "OUTLINE"
+		applyFont(st.castName, castFont, castFontSize, castOutline)
+		applyFont(st.castDuration, castFont, castFontSize, castOutline)
+	end
 
 	applyFont(st.healthTextLeft, hc.font, hc.fontSize or 14)
 	applyFont(st.healthTextRight, hc.font, hc.fontSize or 14)
 	applyFont(st.powerTextLeft, pcfg.font, pcfg.fontSize or 14)
 	applyFont(st.powerTextRight, pcfg.font, pcfg.fontSize or 14)
-	applyFont(st.nameText, cfg.status.font, cfg.status.fontSize or 14, cfg.status.fontOutline)
-	applyFont(st.levelText, cfg.status.font, cfg.status.fontSize or 14, cfg.status.fontOutline)
+	syncTextFrameLevels(st)
 end
 
 local function updateNameAndLevel(cfg, unit)
+	cfg = cfg or (states[unit] and states[unit].cfg) or ensureDB(unit)
 	local st = states[unit]
 	if not st then return end
 	if st.nameText then
@@ -999,28 +1508,50 @@ end
 
 local function applyConfig(unit)
 	local cfg = ensureDB(unit)
+	states[unit] = states[unit] or {}
 	local st = states[unit]
+	st.cfg = cfg
 	if not cfg.enabled then
-		if st and st.frame then st.frame:Hide() end
+		if st and st.frame then
+			if st.barGroup then st.barGroup:Hide() end
+			if st.status then st.status:Hide() end
+		end
+		applyVisibilityDriver(unit, false)
+		if unit == PLAYER_UNIT then applyFrameRuleOverride(BLIZZ_PLAYER_FRAME_NAME, false) end
+		if unit == TARGET_UNIT then applyFrameRuleOverride(BLIZZ_TARGET_FRAME_NAME, false) end
+		if unit == TARGET_TARGET_UNIT then applyFrameRuleOverride(BLIZZ_TARGET_TARGET_FRAME_NAME, false) end
 		if unit == "target" then resetTargetAuras() end
 		return
 	end
 	ensureFrames(unit)
 	st = states[unit]
+	st.cfg = cfg
+	applyVisibilityDriver(unit, cfg.enabled)
+	if unit == PLAYER_UNIT then applyFrameRuleOverride(BLIZZ_PLAYER_FRAME_NAME, true) end
+	if unit == TARGET_UNIT then applyFrameRuleOverride(BLIZZ_TARGET_FRAME_NAME, true) end
+	if unit == TARGET_TARGET_UNIT then applyFrameRuleOverride(BLIZZ_TARGET_TARGET_FRAME_NAME, true) end
 	applyBars(cfg, unit)
 	if not InCombatLockdown() then layoutFrame(cfg, unit) end
 	updateStatus(cfg, unit)
 	updateNameAndLevel(cfg, unit)
 	updateHealth(cfg, unit)
 	updatePower(cfg, unit)
+	if unit == PLAYER_UNIT then updateCombatIndicator(cfg) end
 	-- if unit == "target" then hideBlizzardTargetFrame() end
-	if not InCombatLockdown() then
-		if st and st.frame then st.frame:Show() end
+	if st and st.frame then
+		if st.barGroup then st.barGroup:Show() end
+		if st.status then st.status:Show() end
 	end
-	if unit ~= "player" then
-		st.barGroup:Hide()
-		st.status:Hide()
+	if unit == TARGET_UNIT and st.castBar then
+		if cfg.cast and cfg.cast.enabled ~= false and UnitExists(TARGET_UNIT) then
+			if shouldShowSampleCast(unit) and (not st.castInfo or not UnitCastingInfo or not UnitCastingInfo(unit)) then setSampleCast(unit) end
+			st.castBar:Show()
+		else
+			stopCast(TARGET_UNIT)
+			st.castBar:Hide()
+		end
 	end
+	if unit == TARGET_UNIT and states[unit] and states[unit].auraContainer then updateTargetAuraIcons(1) end
 end
 
 local unitEvents = {
@@ -1034,6 +1565,11 @@ local unitEvents = {
 	"UNIT_NAME_UPDATE",
 	"UNIT_AURA",
 	"UNIT_TARGET",
+	"UNIT_SPELLCAST_START",
+	"UNIT_SPELLCAST_STOP",
+	"UNIT_SPELLCAST_CHANNEL_START",
+	"UNIT_SPELLCAST_CHANNEL_STOP",
+	"UNIT_SPELLCAST_CHANNEL_UPDATE",
 }
 local unitEventsMap = {}
 for _, evt in ipairs(unitEvents) do
@@ -1048,9 +1584,18 @@ local generalEvents = {
 	"PLAYER_ALIVE",
 	"PLAYER_TARGET_CHANGED",
 	"PLAYER_LOGIN",
+	"PLAYER_REGEN_DISABLED",
+	"PLAYER_REGEN_ENABLED",
 }
 
 local eventFrame
+
+local function anyUFEnabled()
+	local p = ensureDB("player").enabled
+	local t = ensureDB("target").enabled
+	local tt = ensureDB(TARGET_TARGET_UNIT).enabled
+	return p or t or tt
+end
 
 local allowedEventUnit = {
 	["target"] = true,
@@ -1058,39 +1603,79 @@ local allowedEventUnit = {
 	["targettarget"] = true,
 }
 
-local function updateTargetTargetFrame(cfg)
+local function stopToTTicker()
+	if totTicker and totTicker.Cancel then totTicker:Cancel() end
+	totTicker = nil
+end
+
+local function ensureToTTicker()
+	if totTicker or not NewTicker then return end
+	totTicker = NewTicker(0.2, function()
+		local st = states[TARGET_TARGET_UNIT]
+		local cfg = st and st.cfg
+		if not cfg or not cfg.enabled then return end
+		if not UnitExists(TARGET_TARGET_UNIT) or not st.frame or not st.frame:IsShown() then return end
+		local _, powerToken = UnitPowerType(TARGET_TARGET_UNIT)
+		if st.power and powerToken and powerToken ~= st._lastPowerToken then
+			if st.power.SetStatusBarDesaturated then st.power:SetStatusBarDesaturated((cfg.power or {}).useCustomColor == true) end
+			configureSpecialTexture(st.power, powerToken, (cfg.power or {}).texture, cfg.power)
+			st._lastPowerToken = powerToken
+		end
+		updateHealth(cfg, TARGET_TARGET_UNIT)
+		updatePower(cfg, TARGET_TARGET_UNIT)
+	end)
+end
+
+local function updateTargetTargetFrame(cfg, forceApply)
 	cfg = cfg or ensureDB(TARGET_TARGET_UNIT)
 	local st = states[TARGET_TARGET_UNIT]
 	if not cfg.enabled then
-		if st and st.frame then st.frame:Hide() end
+		stopToTTicker()
+		if st then
+			if st.barGroup then st.barGroup:Hide() end
+			if st.status then st.status:Hide() end
+		end
 		return
 	end
-	if UnitExists(TARGET_TARGET_UNIT) then
+	if forceApply or not st or not st.frame then
 		applyConfig(TARGET_TARGET_UNIT)
 		st = states[TARGET_TARGET_UNIT]
-		if st and st.frame then
-			st.barGroup:Show()
-			st.status:Show()
+	end
+	if st then st.cfg = st.cfg or cfg end
+	if UnitExists("target") and UnitExists(TARGET_TARGET_UNIT) and UnitHealth("target") > 0 then
+		if st then
+			if st.barGroup then st.barGroup:Show() end
+			if st.status then st.status:Show() end
+			local _, powerToken = getMainPower(TARGET_TARGET_UNIT)
+			updateNameAndLevel(cfg, TARGET_TARGET_UNIT)
+			updateHealth(cfg, TARGET_TARGET_UNIT)
+			if st.power then
+				if st.power.SetStatusBarDesaturated then st.power:SetStatusBarDesaturated((cfg.power or {}).useCustomColor == true) end
+				configureSpecialTexture(st.power, powerToken, (cfg.power or {}).texture, cfg.power)
+				st._lastPowerToken = powerToken
+			end
+			updatePower(cfg, TARGET_TARGET_UNIT)
 		end
 	else
-		if st and st.frame then
+		if st then
 			if st.barGroup then st.barGroup:Hide() end
 			if st.status then st.status:Hide() end
 		end
 	end
+	ensureToTTicker()
 end
 
 local function onEvent(self, event, unit, arg1)
 	if unitEventsMap[event] and unit and not allowedEventUnit[unit] then return end
-	local playerCfg = ensureDB("player")
-	local targetCfg = ensureDB("target")
-	local totCfg = ensureDB(TARGET_TARGET_UNIT)
+	local playerCfg = (states[PLAYER_UNIT] and states[PLAYER_UNIT].cfg) or ensureDB("player")
+	local targetCfg = (states[TARGET_UNIT] and states[TARGET_UNIT].cfg) or ensureDB("target")
+	local totCfg = (states[TARGET_TARGET_UNIT] and states[TARGET_TARGET_UNIT].cfg) or ensureDB(TARGET_TARGET_UNIT)
 	if event == "PLAYER_ENTERING_WORLD" then
 		refreshMainPower(PLAYER_UNIT)
 		applyConfig("player")
 		applyConfig("target")
-		updateTargetTargetFrame(totCfg)
-		hideBlizzardPlayerFrame()
+		updateTargetTargetFrame(totCfg, true)
+		updateCombatIndicator(playerCfg)
 	elseif event == "PLAYER_DEAD" then
 		if states.player and states.player.health then states.player.health:SetValue(0) end
 		updateHealth(playerCfg, "player")
@@ -1098,25 +1683,37 @@ local function onEvent(self, event, unit, arg1)
 		refreshMainPower(PLAYER_UNIT)
 		updateHealth(playerCfg, "player")
 		updatePower(playerCfg, "player")
+		updateCombatIndicator(playerCfg)
+	elseif event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" then
+		updateCombatIndicator(playerCfg)
 	elseif event == "PLAYER_TARGET_CHANGED" then
-		if UnitExists("target") then
-			refreshMainPower("target")
-			fullScanTargetAuras()
-			applyConfig("target")
-			if states and states["target"] and states["target"].frame then
-				states["target"].barGroup:Show()
-				states["target"].status:Show()
-			end
+		local unitToken = TARGET_UNIT
+		local st = states[unitToken]
+		if not st or not st.frame then
+			resetTargetAuras()
+			updateTargetAuraIcons()
 			if totCfg.enabled then updateTargetTargetFrame(totCfg) end
+			return
+		end
+		if UnitExists(unitToken) then
+			refreshMainPower(unitToken)
+			fullScanTargetAuras()
+			local _, powerToken = getMainPower(unitToken)
+			updateNameAndLevel(targetCfg, unitToken)
+			updateHealth(targetCfg, unitToken)
+			if st.power then configureSpecialTexture(st.power, powerToken, (targetCfg.power or {}).texture, targetCfg.power) end
+			updatePower(targetCfg, unitToken)
+			st.barGroup:Show()
+			st.status:Show()
+			setCastInfoFromUnit(unitToken)
 		else
 			resetTargetAuras()
 			updateTargetAuraIcons()
-			if states and states["target"] and states["target"].frame then
-				states["target"].barGroup:Hide()
-				states["target"].status:Hide()
-			end
-			updateTargetTargetFrame(totCfg)
+			st.barGroup:Hide()
+			st.status:Hide()
+			stopCast(unitToken)
 		end
+		if totCfg.enabled then updateTargetTargetFrame(totCfg) end
 	elseif event == "UNIT_AURA" and unit == "target" then
 		local eventInfo = arg1
 		if not UnitExists("target") then
@@ -1128,12 +1725,13 @@ local function onEvent(self, event, unit, arg1)
 			fullScanTargetAuras()
 			return
 		end
-		local cfg = ensureDB("target")
+		local cfg = targetCfg
 		local ac = cfg.auraIcons or defaults.target.auraIcons or { size = 24, padding = 2, max = 16, showCooldown = true }
 		ac.size = ac.size or 24
 		ac.padding = ac.padding or 0
 		ac.max = ac.max or 16
 		if ac.max < 1 then ac.max = 1 end
+		local hidePermanent = ac.hidePermanentAuras == true or ac.hidePermanent == true
 		local st = states.target
 		if not st or not st.auraContainer then return end
 		local width = st.frame and st.frame:GetWidth() or 0
@@ -1141,13 +1739,21 @@ local function onEvent(self, event, unit, arg1)
 		local firstChanged
 		if eventInfo.addedAuras then
 			for _, aura in ipairs(eventInfo.addedAuras) do
-				if not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, "HARMFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY") then
+				if aura and hidePermanent and isPermanentAura(aura) then
+					if targetAuras[aura.auraInstanceID] then
+						targetAuras[aura.auraInstanceID] = nil
+						local idx = removeTargetAuraFromOrder(aura.auraInstanceID)
+						if idx and idx <= (ac.max + 1) then
+							if not firstChanged or idx < firstChanged then firstChanged = idx end
+						end
+					end
+				elseif aura and not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, "HARMFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY") then
 					cacheTargetAura(aura)
 					local idx = addTargetAuraToOrder(aura.auraInstanceID)
 					if idx and idx <= ac.max then
 						if not firstChanged or idx < firstChanged then firstChanged = idx end
 					end
-				elseif not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, "HELPFUL|CANCELABLE") then
+				elseif aura and not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, "HELPFUL|CANCELABLE") then
 					cacheTargetAura(aura)
 					local idx = addTargetAuraToOrder(aura.auraInstanceID)
 					if idx and idx <= ac.max then
@@ -1181,38 +1787,50 @@ local function onEvent(self, event, unit, arg1)
 	elseif event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED" then
 		if unit == PLAYER_UNIT then updateHealth(playerCfg, "player") end
 		if unit == "target" then updateHealth(targetCfg, "target") end
-		if unit == TARGET_TARGET_UNIT then updateHealth(totCfg, TARGET_TARGET_UNIT) end
 	elseif event == "UNIT_MAXPOWER" then
 		if unit == PLAYER_UNIT then updatePower(playerCfg, "player") end
 		if unit == "target" then updatePower(targetCfg, "target") end
-		if unit == TARGET_TARGET_UNIT then updatePower(totCfg, TARGET_TARGET_UNIT) end
 	elseif event == "UNIT_DISPLAYPOWER" then
 		if unit == PLAYER_UNIT then
-			refreshMainPower()
+			refreshMainPower(unit)
+			local _, powerToken = getMainPower(unit)
+			local st = states[unit]
+			if st and st.power then configureSpecialTexture(st.power, powerToken, (playerCfg.power or {}).texture, playerCfg.power) end
 			updatePower(playerCfg, "player")
 		elseif unit == "target" then
+			local _, powerToken = getMainPower(unit)
+			local st = states[unit]
+			if st and st.power then configureSpecialTexture(st.power, powerToken, (targetCfg.power or {}).texture, targetCfg.power) end
 			updatePower(targetCfg, "target")
-		elseif unit == TARGET_TARGET_UNIT then
-			updatePower(totCfg, TARGET_TARGET_UNIT)
 		end
 	elseif event == "UNIT_POWER_UPDATE" and not FREQUENT[arg1] then
 		if unit == PLAYER_UNIT then updatePower(playerCfg, "player") end
 		if unit == "target" then updatePower(targetCfg, "target") end
-		if unit == TARGET_TARGET_UNIT then updatePower(totCfg, TARGET_TARGET_UNIT) end
 	elseif event == "UNIT_POWER_FREQUENT" and FREQUENT[arg1] then
 		if unit == PLAYER_UNIT then updatePower(playerCfg, "player") end
 		if unit == "target" then updatePower(targetCfg, "target") end
-		if unit == TARGET_TARGET_UNIT then updatePower(totCfg, TARGET_TARGET_UNIT) end
 	elseif event == "UNIT_NAME_UPDATE" or event == "PLAYER_LEVEL_UP" then
 		if unit == PLAYER_UNIT or event == "PLAYER_LEVEL_UP" then updateNameAndLevel(playerCfg, "player") end
 		if unit == "target" then updateNameAndLevel(targetCfg, "target") end
-		if unit == TARGET_TARGET_UNIT then updateNameAndLevel(totCfg, TARGET_TARGET_UNIT) end
 	elseif event == "UNIT_TARGET" and unit == TARGET_UNIT then
 		if totCfg.enabled then updateTargetTargetFrame(totCfg) end
+	elseif event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_CHANNEL_START" or event == "UNIT_SPELLCAST_CHANNEL_UPDATE" then
+		if unit == TARGET_UNIT then setCastInfoFromUnit(TARGET_UNIT) end
+	elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP" then
+		if unit == TARGET_UNIT then
+			stopCast(TARGET_UNIT)
+			if shouldShowSampleCast(unit) then setSampleCast(unit) end
+		end
 	end
 end
 
 local function ensureEventHandling()
+	if not anyUFEnabled() then
+		if eventFrame and eventFrame.UnregisterAllEvents then eventFrame:UnregisterAllEvents() end
+		if eventFrame then eventFrame:SetScript("OnEvent", nil) end
+		eventFrame = nil
+		return
+	end
 	if eventFrame then return end
 	eventFrame = CreateFrame("Frame")
 	for _, evt in ipairs(unitEvents) do
@@ -1222,6 +1840,11 @@ local function ensureEventHandling()
 		eventFrame:RegisterEvent(evt)
 	end
 	eventFrame:SetScript("OnEvent", onEvent)
+	if not editModeHooked and EditModeManagerFrame then
+		editModeHooked = true
+		EditModeManagerFrame:HookScript("OnShow", function() updateCombatIndicator(states[PLAYER_UNIT] and states[PLAYER_UNIT].cfg or ensureDB(PLAYER_UNIT)) end)
+		EditModeManagerFrame:HookScript("OnHide", function() updateCombatIndicator(states[PLAYER_UNIT] and states[PLAYER_UNIT].cfg or ensureDB(PLAYER_UNIT)) end)
+	end
 end
 
 function UF.Enable()
@@ -1231,39 +1854,43 @@ function UF.Enable()
 	applyConfig("player")
 	if ensureDB("target").enabled then applyConfig("target") end
 	local totCfg = ensureDB(TARGET_TARGET_UNIT)
-	if totCfg.enabled then updateTargetTargetFrame(totCfg) end
-	hideBlizzardPlayerFrame()
-	hideBlizzardTargetFrame()
+	if totCfg.enabled then updateTargetTargetFrame(totCfg, true) end
+	-- hideBlizzardPlayerFrame()
+	-- hideBlizzardTargetFrame()
 end
 
 function UF.Disable()
 	local cfg = ensureDB("player")
 	cfg.enabled = false
 	if states.player and states.player.frame then states.player.frame:Hide() end
+	stopToTTicker()
 	addon.variables.requireReload = true
 	if addon.functions and addon.functions.checkReloadFrame then addon.functions.checkReloadFrame() end
 	if _G.PlayerFrame and not InCombatLockdown() then _G.PlayerFrame:Show() end
+	ensureEventHandling()
 end
 
 function UF.Refresh()
 	ensureEventHandling()
+	if not anyUFEnabled() then return end
 	applyConfig("player")
 	applyConfig("target")
-	applyConfig(TARGET_TARGET_UNIT)
 	local targetCfg = ensureDB("target")
 	if targetCfg.enabled and UnitExists and UnitExists(TARGET_UNIT) and states[TARGET_UNIT] and states[TARGET_UNIT].frame then
 		states[TARGET_UNIT].barGroup:Show()
 		states[TARGET_UNIT].status:Show()
 	end
 	local totCfg = ensureDB(TARGET_TARGET_UNIT)
-	if totCfg.enabled then updateTargetTargetFrame(totCfg) end
+	updateTargetTargetFrame(totCfg, true)
 end
 
 function UF.RefreshUnit(unit)
 	ensureEventHandling()
+	if not anyUFEnabled() then return end
 	if unit == TARGET_TARGET_UNIT then
 		local totCfg = ensureDB(TARGET_TARGET_UNIT)
-		if totCfg.enabled then updateTargetTargetFrame(totCfg) end
+		updateTargetTargetFrame(totCfg, true)
+		ensureToTTicker()
 	elseif unit == TARGET_UNIT then
 		applyConfig(TARGET_UNIT)
 		local targetCfg = ensureDB("target")
@@ -1276,619 +1903,22 @@ function UF.RefreshUnit(unit)
 	end
 end
 
-local function addOptions(container, skipClear, unit)
-	unit = unit or PLAYER_UNIT
-	local cfg = ensureDB(unit)
-	local def = defaults[unit] or defaults.player or {}
-	local isPlayer = unit == PLAYER_UNIT
-	local isTarget = unit == TARGET_UNIT
-	local isToT = unit == TARGET_TARGET_UNIT
-	if not skipClear and container and container.ReleaseChildren then container:ReleaseChildren() end
-
-	local parent = container
-	if not skipClear then
-		parent = addon.functions.createContainer("ScrollFrame", "Flow")
-		parent:SetFullWidth(true)
-		parent:SetFullHeight(true)
-		container:AddChild(parent)
-	end
-
-	local function addColorPicker(parent, label, color, callback)
-		local cp = AceGUI:Create("ColorPicker")
-		cp:SetLabel(label)
-		cp:SetHasAlpha(true)
-		cp:SetColor(color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1)
-		cp:SetCallback("OnValueChanged", function(_, _, r, g, b, a)
-			color[1], color[2], color[3], color[4] = r, g, b, a
-			if callback then callback() end
-		end)
-		cp:SetFullWidth(false)
-		cp:SetRelativeWidth(0.33)
-		parent:AddChild(cp)
-		return cp
-	end
-	local function refresh()
-		UF.Refresh()
-		if cfg.enabled then
-			if isToT then
-				updateTargetTargetFrame(cfg)
-			elseif isTarget and UnitExists and UnitExists(TARGET_UNIT) and states[unit] and states[unit].frame then
-				states[unit].barGroup:Show()
-				states[unit].status:Show()
-			end
-		end
-	end
-	local enableLabel
-	if isPlayer then
-		enableLabel = L["UFPlayerEnable"] or "Enable custom player frame"
-	elseif isTarget then
-		enableLabel = L["UFTargetEnable"] or "Enable custom target frame"
-	else
-		enableLabel = L["UFToTEnable"] or "Enable target-of-target frame"
-	end
-	local enableCB = addon.functions.createCheckboxAce(enableLabel, cfg.enabled == true, function(_, _, val)
-		cfg.enabled = val and true or false
-		if isPlayer then
-			if cfg.enabled then
-				UF.Enable()
-			else
-				UF.Disable()
-			end
-		else
-			ensureEventHandling()
-			if cfg.enabled then
-				if isToT then
-					updateTargetTargetFrame(cfg)
-				else
-					applyConfig(unit)
-					if isTarget and UnitExists and UnitExists(TARGET_UNIT) and states[unit] and states[unit].frame then
-						states[unit].barGroup:Show()
-						states[unit].status:Show()
-					end
-				end
-			elseif states[unit] and states[unit].frame then
-				states[unit].frame:Hide()
-			end
-		end
-		UF.Refresh()
-		if cfg.enabled then
-			if isToT then
-				updateTargetTargetFrame(cfg)
-			elseif isTarget and UnitExists and UnitExists(TARGET_UNIT) and states[unit] and states[unit].frame then
-				states[unit].barGroup:Show()
-				states[unit].status:Show()
-			end
-		end
-	end)
-	enableCB:SetFullWidth(true)
-	parent:AddChild(enableCB)
-
-	local sizeRow = addon.functions.createContainer("SimpleGroup", "Flow")
-	sizeRow:SetFullWidth(true)
-	parent:AddChild(sizeRow)
-	local sw = addon.functions.createSliderAce(L["UFWidth"] or "Frame width", cfg.width or def.width, MIN_WIDTH, 800, 1, function(_, _, val)
-		cfg.width = max(MIN_WIDTH, val or MIN_WIDTH)
-		refresh()
-	end)
-	sw:SetRelativeWidth(0.5)
-	sizeRow:AddChild(sw)
-	local shHealth = addon.functions.createSliderAce(L["UFHealthHeight"] or "Health height", cfg.healthHeight or def.healthHeight, 8, 80, 1, function(_, _, val)
-		cfg.healthHeight = val
-		refresh()
-	end)
-	shHealth:SetRelativeWidth(0.25)
-	sizeRow:AddChild(shHealth)
-	local shPower = addon.functions.createSliderAce(L["UFPowerHeight"] or "Power height", cfg.powerHeight or def.powerHeight, 6, 60, 1, function(_, _, val)
-		cfg.powerHeight = val
-		refresh()
-	end)
-	shPower:SetRelativeWidth(0.25)
-	sizeRow:AddChild(shPower)
-
-	if unit == "target" then
-		local auraRow = addon.functions.createContainer("InlineGroup", "Flow")
-		auraRow:SetTitle(L["Auras"] or "Auras")
-		auraRow:SetFullWidth(true)
-		parent:AddChild(auraRow)
-		cfg.auraIcons = cfg.auraIcons or {}
-		cfg.auraIcons.size = cfg.auraIcons.size or def.auraIcons.size
-		cfg.auraIcons.padding = cfg.auraIcons.padding or def.auraIcons.padding
-		cfg.auraIcons.max = cfg.auraIcons.max or def.auraIcons.max
-		if cfg.auraIcons.showCooldown == nil then cfg.auraIcons.showCooldown = def.auraIcons.showCooldown end
-
-		local sSize = addon.functions.createSliderAce(L["UFHealthHeight"] or "Aura size", cfg.auraIcons.size or 24, 12, 48, 1, function(_, _, val)
-			cfg.auraIcons.size = val
-			refresh()
-		end)
-		sSize:SetRelativeWidth(0.5)
-		auraRow:AddChild(sSize)
-
-		local sPad = addon.functions.createSliderAce(L["UFBarGap"] or "Aura spacing", cfg.auraIcons.padding or 2, 0, 10, 1, function(_, _, val)
-			cfg.auraIcons.padding = val or 0
-			refresh()
-		end)
-		sPad:SetRelativeWidth(0.5)
-		auraRow:AddChild(sPad)
-
-		local sMax = addon.functions.createSliderAce(L["UFFrameLevel"] or "Max auras", cfg.auraIcons.max or 16, 4, 40, 1, function(_, _, val)
-			cfg.auraIcons.max = val or 16
-			refresh()
-		end)
-		sMax:SetFullWidth(true)
-		auraRow:AddChild(sMax)
-
-		local cbCD = addon.functions.createCheckboxAce(L["Show cooldown text"] or "Show cooldown text", cfg.auraIcons.showCooldown ~= false, function(_, _, v)
-			cfg.auraIcons.showCooldown = v and true or false
-			refresh()
-		end)
-		cbCD:SetFullWidth(true)
-		auraRow:AddChild(cbCD)
-	end
-
-	local gapRow = addon.functions.createContainer("SimpleGroup", "Flow")
-	gapRow:SetFullWidth(true)
-	parent:AddChild(gapRow)
-	local gapSlider = addon.functions.createSliderAce(L["UFBarGap"] or "Gap between bars", cfg.barGap or def.barGap or 0, 0, 10, 1, function(_, _, val)
-		cfg.barGap = val or 0
-		refresh()
-	end)
-	gapSlider:SetFullWidth(true)
-	gapRow:AddChild(gapSlider)
-
-	local strataRow = addon.functions.createContainer("SimpleGroup", "Flow")
-	strataRow:SetFullWidth(true)
-	parent:AddChild(strataRow)
-	local strataList = {
-		"BACKGROUND",
-		"LOW",
-		"MEDIUM",
-		"HIGH",
-		"DIALOG",
-		"FULLSCREEN",
-		"FULLSCREEN_DIALOG",
-		"TOOLTIP",
-	}
-	local strataMap = {}
-	for _, k in ipairs(strataList) do
-		strataMap[k] = k
-	end
-	local ddStrata = addon.functions.createDropdownAce(L["UFStrata"] or "Frame strata", strataMap, strataList, function(_, _, key)
-		cfg.strata = key ~= "" and key or nil
-		refresh()
-	end)
-	ddStrata:SetRelativeWidth(0.5)
-	local defaultStrata = (_G.PlayerFrame and _G.PlayerFrame.GetFrameStrata and _G.PlayerFrame:GetFrameStrata()) or ""
-	ddStrata:SetValue(cfg.strata or defaultStrata or "")
-	strataRow:AddChild(ddStrata)
-
-	local defaultLevel = (_G.PlayerFrame and _G.PlayerFrame.GetFrameLevel and _G.PlayerFrame:GetFrameLevel()) or 0
-	local levelSlider = addon.functions.createSliderAce(L["UFFrameLevel"] or "Frame level", cfg.frameLevel or defaultLevel, 0, 50, 1, function(_, _, val)
-		cfg.frameLevel = val
-		refresh()
-	end)
-	levelSlider:SetRelativeWidth(0.5)
-	strataRow:AddChild(levelSlider)
-
-	local cbClassColor = addon.functions.createCheckboxAce(L["UFUseClassColor"] or "Use class color (health)", cfg.health.useClassColor == true, function(_, _, val)
-		cfg.health.useClassColor = val and true or false
-		refresh()
-		if UF.ui and UF.ui.healthColorPicker then UF.ui.healthColorPicker:SetDisabled(cfg.health.useClassColor == true) end
-	end)
-	cbClassColor:SetFullWidth(true)
-	parent:AddChild(cbClassColor)
-
-	local colorRow = addon.functions.createContainer("SimpleGroup", "Flow")
-	colorRow:SetFullWidth(true)
-	parent:AddChild(colorRow)
-	UF.ui = UF.ui or {}
-	UF.ui.healthColorPicker = addColorPicker(colorRow, L["UFHealthColor"], cfg.health.color or def.health.color, function() refresh() end)
-	if UF.ui.healthColorPicker then UF.ui.healthColorPicker:SetDisabled(cfg.health.useClassColor == true) end
-	local cbPowerCustom = addon.functions.createCheckboxAce(L["UFPowerColor"], cfg.power.useCustomColor == true, function(_, _, val)
-		cfg.power.useCustomColor = val and true or false
-		if UF.ui and UF.ui.powerColorPicker then UF.ui.powerColorPicker:SetDisabled(cfg.power.useCustomColor ~= true) end
-		if val and not cfg.power.color then cfg.power.color = { getPowerColor(getMainPower()) } end
-		refresh()
-	end)
-	cbPowerCustom:SetRelativeWidth(0.5)
-	colorRow:AddChild(cbPowerCustom)
-
-	UF.ui.powerColorPicker = addColorPicker(colorRow, L["UFPowerColor"], cfg.power.color or { getPowerColor(getMainPower()) }, function() refresh() end)
-	UF.ui.powerColorPicker:SetRelativeWidth(0.5)
-	if UF.ui.powerColorPicker then UF.ui.powerColorPicker:SetDisabled(cfg.power.useCustomColor ~= true) end
-
-	local function textureDropdown(parent, sec)
-		if not parent then return end
-		local list = { DEFAULT = "Default (Blizzard)" }
-		local order = { "DEFAULT" }
-		for name, path in pairs(LSM and LSM:HashTable("statusbar") or {}) do
-			if type(path) == "string" and path ~= "" then
-				list[name] = tostring(name)
-				table.insert(order, name)
-			end
-		end
-		table.sort(order, function(a, b) return tostring(list[a]) < tostring(list[b]) end)
-		local dd = addon.functions.createDropdownAce(L["Bar Texture"] or "Bar Texture", list, order, function(_, _, key)
-			sec.texture = key
-			refresh()
-		end)
-		local cur = sec.texture or "DEFAULT"
-		if not list[cur] then cur = "DEFAULT" end
-		dd:SetValue(cur)
-		dd:SetFullWidth(true)
-		parent:AddChild(dd)
-	end
-
-	local function addTextControls(label, sectionKey, fsLeft, fsRight)
-		local sec = cfg[sectionKey] or {}
-		local group = addon.functions.createContainer("InlineGroup", "Flow")
-		group:SetTitle(label)
-		group:SetFullWidth(true)
-		parent:AddChild(group)
-
-		local list = { PERCENT = L["PERCENT"] or "Percent", CURMAX = L["Current/Max"] or "Current/Max", CURRENT = L["Current"] or "Current", NONE = L["None"] or "None" }
-		local order = { "PERCENT", "CURMAX", "CURRENT", "NONE" }
-
-		local row = addon.functions.createContainer("SimpleGroup", "Flow")
-		row:SetFullWidth(true)
-		group:AddChild(row)
-
-		local dl = addon.functions.createDropdownAce(L["TextLeft"] or "Left text", list, order, function(_, _, key)
-			sec.textLeft = key
-			refresh()
-		end)
-		dl:SetValue(sec.textLeft or "PERCENT")
-		dl:SetRelativeWidth(0.5)
-		row:AddChild(dl)
-
-		local dr = addon.functions.createDropdownAce(L["TextRight"] or "Right text", list, order, function(_, _, key)
-			sec.textRight = key
-			refresh()
-		end)
-		dr:SetValue(sec.textRight or "CURMAX")
-		dr:SetRelativeWidth(0.5)
-		row:AddChild(dr)
-
-		local fontRow = addon.functions.createContainer("SimpleGroup", "Flow")
-		fontRow:SetFullWidth(true)
-		group:AddChild(fontRow)
-
-		local fontList = {}
-		local fontOrder = {}
-		for name, path in pairs(LSM and LSM:HashTable("font") or {}) do
-			fontList[path] = name
-			table.insert(fontOrder, path)
-		end
-		table.sort(fontOrder, function(a, b) return tostring(fontList[a]) < tostring(fontList[b]) end)
-
-		local fdd = addon.functions.createDropdownAce(L["Font"] or "Font", fontList, fontOrder, function(_, _, key)
-			sec.font = key
-			refresh()
-		end)
-		fdd:SetValue(sec.font or "")
-		fdd:SetRelativeWidth(0.5)
-		fontRow:AddChild(fdd)
-
-		local fs = addon.functions.createSliderAce(L["FontSize"] or "Font size", sec.fontSize or 14, 8, 30, 1, function(_, _, val)
-			sec.fontSize = val
-			refresh()
-		end)
-		fs:SetRelativeWidth(0.5)
-		fontRow:AddChild(fs)
-
-		local shortRow = addon.functions.createContainer("SimpleGroup", "Flow")
-		shortRow:SetFullWidth(true)
-		group:AddChild(shortRow)
-		local cbShort = addon.functions.createCheckboxAce(L["Use short numbers"] or "Use short numbers", sec.useShortNumbers ~= false, function(_, _, v)
-			sec.useShortNumbers = v and true or false
-			refresh()
-		end)
-		cbShort:SetFullWidth(true)
-		shortRow:AddChild(cbShort)
-
-		local offsets1 = addon.functions.createContainer("SimpleGroup", "Flow")
-		offsets1:SetFullWidth(true)
-		group:AddChild(offsets1)
-
-		local leftX = addon.functions.createSliderAce(L["Left X Offset"] or "Left X Offset", (sec.offsetLeft and sec.offsetLeft.x) or 0, -100, 100, 1, function(_, _, val)
-			sec.offsetLeft = sec.offsetLeft or {}
-			sec.offsetLeft.x = val
-			refresh()
-		end)
-		leftX:SetRelativeWidth(0.25)
-		offsets1:AddChild(leftX)
-
-		local leftY = addon.functions.createSliderAce(L["Left Y Offset"] or "Left Y Offset", (sec.offsetLeft and sec.offsetLeft.y) or 0, -100, 100, 1, function(_, _, val)
-			sec.offsetLeft = sec.offsetLeft or {}
-			sec.offsetLeft.y = val
-			refresh()
-		end)
-		leftY:SetRelativeWidth(0.25)
-		offsets1:AddChild(leftY)
-
-		local rightX = addon.functions.createSliderAce(L["Right X Offset"] or "Right X Offset", (sec.offsetRight and sec.offsetRight.x) or 0, -100, 100, 1, function(_, _, val)
-			sec.offsetRight = sec.offsetRight or {}
-			sec.offsetRight.x = val
-			refresh()
-		end)
-		rightX:SetRelativeWidth(0.25)
-		offsets1:AddChild(rightX)
-
-		local rightY = addon.functions.createSliderAce(L["Right Y Offset"] or "Right Y Offset", (sec.offsetRight and sec.offsetRight.y) or 0, -100, 100, 1, function(_, _, val)
-			sec.offsetRight = sec.offsetRight or {}
-			sec.offsetRight.y = val
-			refresh()
-		end)
-		rightY:SetRelativeWidth(0.25)
-		offsets1:AddChild(rightY)
-
-		local bdRow = addon.functions.createContainer("SimpleGroup", "Flow")
-		bdRow:SetFullWidth(true)
-		group:AddChild(bdRow)
-		local cbBd = addon.functions.createCheckboxAce(L["UFBarBackdrop"] or "Show bar backdrop", (sec.backdrop and sec.backdrop.enabled) ~= false, function(_, _, v)
-			sec.backdrop = sec.backdrop or {}
-			sec.backdrop.enabled = v and true or false
-			refresh()
-		end)
-		cbBd:SetRelativeWidth(0.5)
-		bdRow:AddChild(cbBd)
-		sec.backdrop = sec.backdrop or {}
-		sec.backdrop.color = sec.backdrop.color or { 0, 0, 0, 0.6 }
-		local bdColor = addColorPicker(bdRow, L["UFBarBackdropColor"] or "Backdrop color", sec.backdrop.color, function() refresh() end)
-		bdColor:SetRelativeWidth(0.5)
-
-		textureDropdown(group, sec)
-	end
-
-	addTextControls(L["HealthBar"] or "Health Bar", "health")
-	addTextControls(L["PowerBar"] or "Power Bar", "power")
-
-	local borderGroup = addon.functions.createContainer("InlineGroup", "Flow")
-	borderGroup:SetTitle(L["UFBorder"] or "Border")
-	borderGroup:SetFullWidth(true)
-	parent:AddChild(borderGroup)
-	local cbBorder = addon.functions.createCheckboxAce(L["UFBorderEnable"] or "Show border", cfg.border.enabled ~= false, function(_, _, v)
-		cfg.border.enabled = v and true or false
-		refresh()
-	end)
-	cbBorder:SetFullWidth(true)
-	borderGroup:AddChild(cbBorder)
-	addColorPicker(borderGroup, L["UFBorderColor"] or "Border color", cfg.border.color or def.border.color, function() refresh() end)
-	local edge = addon.functions.createSliderAce(L["UFBorderThickness"] or "Border size", cfg.border.edgeSize or def.border.edgeSize, 0, 8, 0.5, function(_, _, val)
-		cfg.border.edgeSize = val
-		refresh()
-	end)
-	edge:SetFullWidth(true)
-	borderGroup:AddChild(edge)
-
-	local statusGroup = addon.functions.createContainer("InlineGroup", "Flow")
-	statusGroup:SetTitle(L["UFStatusLine"] or "Status line")
-	statusGroup:SetFullWidth(true)
-	parent:AddChild(statusGroup)
-
-	local cbStatus = addon.functions.createCheckboxAce(L["UFStatusEnable"] or "Show status line", cfg.status.enabled ~= false, function(_, _, v)
-		cfg.status.enabled = v and true or false
-		refresh()
-	end)
-	cbStatus:SetFullWidth(true)
-	statusGroup:AddChild(cbStatus)
-
-	local cbLevel = addon.functions.createCheckboxAce(L["UFShowLevel"] or "Show level", cfg.status.levelEnabled ~= false, function(_, _, v)
-		cfg.status.levelEnabled = v and true or false
-		refresh()
-	end)
-	cbLevel:SetFullWidth(true)
-	statusGroup:AddChild(cbLevel)
-
-	local colorRowStatus = addon.functions.createContainer("SimpleGroup", "Flow")
-	colorRowStatus:SetFullWidth(true)
-	statusGroup:AddChild(colorRowStatus)
-	local nameColorMode = addon.functions.createDropdownAce(
-		L["UFNameColorMode"] or "Name color",
-		{ CLASS = L["ClassColor"] or "Class color", CUSTOM = L["Custom"] or "Custom" },
-		{ "CLASS", "CUSTOM" },
-		function(_, _, key)
-			cfg.status.nameColorMode = key
-			refresh()
-			if UF.ui and UF.ui.nameColorPicker then UF.ui.nameColorPicker:SetDisabled(key == "CLASS") end
-		end
-	)
-	nameColorMode:SetValue(cfg.status.nameColorMode or "CLASS")
-	nameColorMode:SetRelativeWidth(0.33)
-	colorRowStatus:AddChild(nameColorMode)
-	UF.ui = UF.ui or {}
-	UF.ui.nameColorPicker = addColorPicker(colorRowStatus, L["UFNameColor"] or "Name color", cfg.status.nameColor or def.status.nameColor, function() refresh() end)
-	if UF.ui.nameColorPicker then UF.ui.nameColorPicker:SetDisabled((cfg.status.nameColorMode or "CLASS") == "CLASS") end
-	addColorPicker(colorRowStatus, L["UFLevelColor"] or "Level color", cfg.status.levelColor or def.status.levelColor, function() refresh() end)
-
-	local sFont = addon.functions.createSliderAce(L["FontSize"] or "Font size", cfg.status.fontSize or 14, 8, 30, 1, function(_, _, val)
-		cfg.status.fontSize = val
-		refresh()
-	end)
-	sFont:SetFullWidth(true)
-	statusGroup:AddChild(sFont)
-
-	local fontRow = addon.functions.createContainer("SimpleGroup", "Flow")
-	fontRow:SetFullWidth(true)
-	statusGroup:AddChild(fontRow)
-	local fontList = {}
-	local fontOrder = {}
-	for name, path in pairs(LSM and LSM:HashTable("font") or {}) do
-		if type(path) == "string" and path ~= "" then
-			fontList[path] = name
-			table.insert(fontOrder, path)
-		end
-	end
-	table.sort(fontOrder, function(a, b) return tostring(fontList[a]) < tostring(fontList[b]) end)
-	local fdd = addon.functions.createDropdownAce(L["Font"] or "Font", fontList, fontOrder, function(_, _, key)
-		cfg.status.font = key
-		refresh()
-	end)
-	fdd:SetRelativeWidth(0.5)
-	fdd:SetValue(cfg.status.font or "")
-	fontRow:AddChild(fdd)
-
-	local outlineMap = {
-		NONE = L["None"] or "None",
-		OUTLINE = L["Outline"] or "Outline",
-		THICKOUTLINE = L["Thick Outline"] or "Thick Outline",
-		MONOCHROMEOUTLINE = L["Monochrome Outline"] or "Monochrome Outline",
-	}
-	local outlineOrder = { "NONE", "OUTLINE", "THICKOUTLINE", "MONOCHROMEOUTLINE" }
-	local fdo = addon.functions.createDropdownAce(L["Font outline"] or "Font outline", outlineMap, outlineOrder, function(_, _, key)
-		cfg.status.fontOutline = key
-		refresh()
-	end)
-	fdo:SetRelativeWidth(0.5)
-	fdo:SetValue(cfg.status.fontOutline or "OUTLINE")
-	fontRow:AddChild(fdo)
-
-	local statusOffsets = addon.functions.createContainer("SimpleGroup", "Flow")
-	statusOffsets:SetFullWidth(true)
-	statusGroup:AddChild(statusOffsets)
-
-	local anchorList = { LEFT = "LEFT", CENTER = "CENTER", RIGHT = "RIGHT" }
-	local anchorOrder = { "LEFT", "CENTER", "RIGHT" }
-	local nameAnchor = addon.functions.createDropdownAce(L["UFNameAnchor"] or "Name anchor", anchorList, anchorOrder, function(_, _, key)
-		cfg.status.nameAnchor = key
-		refresh()
-	end)
-	nameAnchor:SetRelativeWidth(0.25)
-	nameAnchor:SetValue(cfg.status.nameAnchor or "LEFT")
-	statusOffsets:AddChild(nameAnchor)
-
-	local nameX = addon.functions.createSliderAce(L["UFNameX"] or "Name X offset", (cfg.status.nameOffset and cfg.status.nameOffset.x) or 0, -200, 200, 1, function(_, _, val)
-		cfg.status.nameOffset = cfg.status.nameOffset or {}
-		cfg.status.nameOffset.x = val
-		refresh()
-	end)
-	nameX:SetRelativeWidth(0.25)
-	statusOffsets:AddChild(nameX)
-	local nameY = addon.functions.createSliderAce(L["UFNameY"] or "Name Y offset", (cfg.status.nameOffset and cfg.status.nameOffset.y) or 0, -200, 200, 1, function(_, _, val)
-		cfg.status.nameOffset = cfg.status.nameOffset or {}
-		cfg.status.nameOffset.y = val
-		refresh()
-	end)
-	nameY:SetRelativeWidth(0.25)
-	statusOffsets:AddChild(nameY)
-
-	local levelAnchor = addon.functions.createDropdownAce(L["UFLevelAnchor"] or "Level anchor", anchorList, anchorOrder, function(_, _, key)
-		cfg.status.levelAnchor = key
-		refresh()
-	end)
-	levelAnchor:SetRelativeWidth(0.25)
-	levelAnchor:SetValue(cfg.status.levelAnchor or "RIGHT")
-	statusOffsets:AddChild(levelAnchor)
-
-	local lvlX = addon.functions.createSliderAce(L["UFLevelX"] or "Level X offset", (cfg.status.levelOffset and cfg.status.levelOffset.x) or 0, -200, 200, 1, function(_, _, val)
-		cfg.status.levelOffset = cfg.status.levelOffset or {}
-		cfg.status.levelOffset.x = val
-		refresh()
-	end)
-	lvlX:SetRelativeWidth(0.25)
-	statusOffsets:AddChild(lvlX)
-	local lvlY = addon.functions.createSliderAce(L["UFLevelY"] or "Level Y offset", (cfg.status.levelOffset and cfg.status.levelOffset.y) or 0, -200, 200, 1, function(_, _, val)
-		cfg.status.levelOffset = cfg.status.levelOffset or {}
-		cfg.status.levelOffset.y = val
-		refresh()
-	end)
-	lvlY:SetRelativeWidth(0.25)
-	statusOffsets:AddChild(lvlY)
-
-	parent:DoLayout()
-end
-
-if addon.functions and addon.functions.RegisterOptionsPage then
-	addon.functions.RegisterOptionsPage("ufplus", function(container)
-		container:ReleaseChildren()
-		local lbl = addon.functions.createLabelAce(L["UFPlusRoot"] or "UF Plus")
-		lbl:SetFullWidth(true)
-		container:AddChild(lbl)
-		local playerCfg = ensureDB("player")
-		local targetCfg = ensureDB("target")
-		local totCfg = ensureDB(TARGET_TARGET_UNIT)
-		local cbPlayer = addon.functions.createCheckboxAce(L["UFPlayerEnable"] or "Enable custom player frame", playerCfg.enabled == true, function(_, _, val)
-			playerCfg.enabled = val and true or false
-			if playerCfg.enabled then
-				ensureRootNode()
-				addTreeNode("ufplus\001player", { value = "player", text = L["UFPlayerFrame"] or PLAYER }, "ufplus")
-				UF.Enable()
-			else
-				UF.Disable()
-			end
-		end)
-		cbPlayer:SetFullWidth(true)
-		container:AddChild(cbPlayer)
-
-		local cbTarget = addon.functions.createCheckboxAce(L["UFTargetEnable"] or "Enable custom target frame", targetCfg.enabled == true, function(_, _, val)
-			targetCfg.enabled = val and true or false
-			if targetCfg.enabled then
-				ensureRootNode()
-				addTreeNode("ufplus\001target", { value = "target", text = L["UFTargetFrame"] or TARGET }, "ufplus")
-				ensureEventHandling()
-				applyConfig("target")
-			end
-		end)
-		cbTarget:SetFullWidth(true)
-		container:AddChild(cbTarget)
-
-		local cbToT = addon.functions.createCheckboxAce(L["UFToTEnable"] or "Enable target-of-target frame", totCfg.enabled == true, function(_, _, val)
-			totCfg.enabled = val and true or false
-			if totCfg.enabled then
-				ensureRootNode()
-				addTreeNode("ufplus\001targettarget", { value = "targettarget", text = L["UFToTFrame"] or "Target of Target" }, "ufplus")
-				ensureEventHandling()
-				applyConfig(TARGET_TARGET_UNIT)
-				updateTargetTargetFrame(totCfg)
-			elseif states[TARGET_TARGET_UNIT] and states[TARGET_TARGET_UNIT].frame then
-				states[TARGET_TARGET_UNIT].frame:Hide()
-			end
-		end)
-		cbToT:SetFullWidth(true)
-		container:AddChild(cbToT)
-	end)
-	addon.functions.RegisterOptionsPage("ufplus\001player", function(container) addOptions(container, false, "player") end)
-	addon.functions.RegisterOptionsPage("ufplus\001target", function(container) addOptions(container, false, "target") end)
-	addon.functions.RegisterOptionsPage("ufplus\001targettarget", function(container) addOptions(container, false, TARGET_TARGET_UNIT) end)
-	ensureRootNode()
-	addTreeNode("ufplus\001player", { value = "player", text = L["UFPlayerFrame"] or PLAYER }, "ufplus")
-	addTreeNode("ufplus\001target", { value = "target", text = L["UFTargetFrame"] or TARGET }, "ufplus")
-	addTreeNode("ufplus\001targettarget", { value = "targettarget", text = L["UFToTFrame"] or "Target of Target" }, "ufplus")
-end
-
-function UF.treeCallback(container, group)
-	if not container then return end
-	container:ReleaseChildren()
-	if group == "ufplus" then
-		if addon.functions and addon.functions.ShowOptionsPage then addon.functions.ShowOptionsPage(container, "ufplus") end
-	elseif group == "ufplus\001player" then
-		addOptions(container, false, "player")
-	elseif group == "ufplus\001target" then
-		addOptions(container, false, "target")
-	elseif group == "ufplus\001targettarget" then
-		addOptions(container, false, TARGET_TARGET_UNIT)
-	end
-end
-
 -- Auto-enable on load when configured
 if not addon.Aura.UFInitialized then
 	addon.Aura.UFInitialized = true
-	ensureRootNode()
-	addTreeNode("ufplus\001player", { value = "player", text = L["UFPlayerFrame"] or PLAYER }, "ufplus")
-	addTreeNode("ufplus\001target", { value = "target", text = L["UFTargetFrame"] or TARGET }, "ufplus")
-	addTreeNode("ufplus\001targettarget", { value = "targettarget", text = L["UFToTFrame"] or "Target of Target" }, "ufplus")
 	local cfg = ensureDB("player")
 	if cfg.enabled then After(0.1, function() UF.Enable() end) end
 	local tc = ensureDB("target")
 	if tc.enabled then
 		ensureEventHandling()
 		applyConfig("target")
-		hideBlizzardTargetFrame()
+		-- hideBlizzardTargetFrame()
 	end
 	local ttc = ensureDB(TARGET_TARGET_UNIT)
 	if ttc.enabled then
 		ensureEventHandling()
-		applyConfig(TARGET_TARGET_UNIT)
-		updateTargetTargetFrame(ttc)
+		updateTargetTargetFrame(ttc, true)
+		ensureToTTicker()
 	end
 end
 
@@ -1898,4 +1928,6 @@ UF.GetDefaults = function(unit) return defaults[unit] or defaults.player end
 UF.EnsureDB = ensureDB
 UF.GetConfig = ensureDB
 UF.EnsureFrames = ensureFrames
+UF.StopEventsIfInactive = function() ensureEventHandling() end
+UF.FullScanTargetAuras = fullScanTargetAuras
 return UF

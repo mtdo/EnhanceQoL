@@ -64,21 +64,6 @@ local function updateButtonMouseState()
 	end
 end
 
-local syncingPosition = false
-
-local function syncEditModePosition()
-	if syncingPosition then return end
-	if not (EditMode and editModeRegistered and EditMode.SetFramePosition) then return end
-	local pos = addon.db["mageFoodReminderPos"] or defaultPos
-	if not pos.point then pos.point = defaultPos.point end
-	if pos.x == nil then pos.x = defaultPos.x end
-	if pos.y == nil then pos.y = defaultPos.y end
-	syncingPosition = true
-	local ok, err = pcall(EditMode.SetFramePosition, EditMode, editModeId, pos.point, pos.x, pos.y)
-	if not ok and err then geterrorhandler()(err) end
-	syncingPosition = false
-end
-
 local function ensureAnchor()
 	if reminderAnchor then return reminderAnchor end
 
@@ -108,7 +93,10 @@ local function ensureAnchor()
 		self:StopMovingOrSizing()
 		local point, _, _, xOfs, yOfs = self:GetPoint()
 		addon.db["mageFoodReminderPos"] = { point = point, x = xOfs, y = yOfs }
-		syncEditModePosition()
+		if EditMode and editModeRegistered and EditMode.SetFramePosition then
+			local ok, err = pcall(EditMode.SetFramePosition, EditMode, editModeId, point, xOfs, yOfs, nil, true)
+			if not ok and err then geterrorhandler()(err) end
+		end
 	end)
 
 	local pos = addon.db["mageFoodReminderPos"] or defaultPos
@@ -199,8 +187,6 @@ local function applyButtonSettings()
 	else
 		anchor:SetBackdropColor(0, 0, 0, 0)
 	end
-
-	syncEditModePosition()
 end
 
 local function createLeaveFrame()
@@ -438,7 +424,7 @@ registerEditModeFrame = function()
 			relativePoint = defaultPos.point,
 			x = defaultPos.x,
 			y = defaultPos.y,
-			scale = 1,
+			scale = addon.db["mageFoodReminderScale"] or 1,
 		}
 
 		local settings
@@ -461,16 +447,20 @@ registerEditModeFrame = function()
 				get = function() return addon.db.mageFoodReminderScale or 1 end,
 				set = function(_, value)
 					value = tonumber(value) or addon.db.mageFoodReminderScale or 1
-					value = math.floor(value / 0.05 + 0.5) * 0.05
-					if value < 0.1 then
-						value = 0.1
-					elseif value > 2.0 then
-						value = 2.0
-					end
-					value = tonumber(string.format("%.2f", value))
-					addon.db.mageFoodReminderScale = value
-					applyButtonSettings()
-				end,
+						value = math.floor(value / 0.05 + 0.5) * 0.05
+						if value < 0.1 then
+							value = 0.1
+						elseif value > 2.0 then
+							value = 2.0
+						end
+						value = tonumber(string.format("%.2f", value))
+						addon.db.mageFoodReminderScale = value
+						applyButtonSettings()
+						if EditMode and editModeRegistered and EditMode.SetValue then
+							local ok, err = pcall(EditMode.SetValue, EditMode, editModeId, "scale", value, nil, true)
+							if not ok and err then geterrorhandler()(err) end
+						end
+					end,
 				formatter = function(value)
 					value = math.floor(value / 0.05 + 0.5) * 0.05
 					if value < 0.1 then
@@ -483,35 +473,33 @@ registerEditModeFrame = function()
 			}
 		end
 
-		EditMode:RegisterFrame(editModeId, {
-			frame = anchor,
-			title = L["mageFoodReminder"] or "Food Reminder",
-			layoutDefaults = defaults,
-			onApply = function(_, layoutName, data)
+			EditMode:RegisterFrame(editModeId, {
+				frame = anchor,
+				title = L["mageFoodReminder"] or "Food Reminder",
+				layoutDefaults = defaults,
+				onApply = function(_, layoutName, data)
 				if not data then
 					addon.db["mageFoodReminderPos"] = CopyTable(defaultPos)
 					addon.db.mageFoodReminderScale = 1
-				else
-					if data.point then addon.db["mageFoodReminderPos"] = {
-						point = data.point,
-						x = data.x or 0,
-						y = data.y or 0,
-					} end
-					if data.scale then addon.db.mageFoodReminderScale = data.scale end
-				end
-				applyButtonSettings()
-				syncEditModePosition()
-			end,
-			onPositionChanged = function(_, layoutName, data)
-				if not data then return end
-				addon.db["mageFoodReminderPos"] = {
-					point = data.point or defaults.point,
-					x = data.x or defaults.x,
-					y = data.y or defaults.y,
-				}
-				applyButtonSettings()
-				syncEditModePosition()
-			end,
+					else
+						if data.point then addon.db["mageFoodReminderPos"] = {
+							point = data.point,
+							x = data.x or 0,
+							y = data.y or 0,
+						} end
+						if data.scale then addon.db.mageFoodReminderScale = data.scale end
+					end
+					applyButtonSettings()
+				end,
+				onPositionChanged = function(_, layoutName, data)
+					if not data then return end
+					addon.db["mageFoodReminderPos"] = {
+						point = data.point or defaults.point,
+						x = data.x or defaults.x,
+						y = data.y or defaults.y,
+					}
+					applyButtonSettings()
+				end,
 			onEnter = function()
 				editModeActive = true
 				local anchorFrame = ensureAnchor()
@@ -529,7 +517,6 @@ registerEditModeFrame = function()
 
 		if EditMode.lib and EditMode.lib.frameDefaults then EditMode.lib.frameDefaults[anchor] = CopyTable(defaultPos) end
 		editModeRegistered = true
-		syncEditModePosition()
 	end
 
 	local ok, err = pcall(performRegistration)

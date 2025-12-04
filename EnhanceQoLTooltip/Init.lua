@@ -41,6 +41,7 @@ addon.functions.InitDBValue("TooltipItemHideType", 1)
 addon.functions.InitDBValue("TooltipItemHideInCombat", false)
 addon.functions.InitDBValue("TooltipItemHideInDungeon", false)
 addon.functions.InitDBValue("TooltipShowItemID", false)
+addon.functions.InitDBValue("TooltipHousingAutoPreview", false)
 
 -- Buff
 addon.functions.InitDBValue("TooltipBuffHideType", 1)

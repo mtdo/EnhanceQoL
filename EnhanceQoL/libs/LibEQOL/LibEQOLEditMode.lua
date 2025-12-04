@@ -1,4 +1,4 @@
-local MODULE_MAJOR, BASE_MAJOR, MINOR = "LibEQOLEditMode-1.0", "LibEQOL-1.0", 2
+local MODULE_MAJOR, BASE_MAJOR, MINOR = "LibEQOLEditMode-1.0", "LibEQOL-1.0", 1000003
 local LibStub = _G.LibStub
 assert(LibStub, MODULE_MAJOR .. " requires LibStub")
 
@@ -47,6 +47,7 @@ local State = {
 	overlayToggleFlags = lib.overlayToggleFlags or {},
 	dragPredicates = lib.dragPredicates or {},
 	layoutSnapshot = Internal.layoutNameSnapshot,
+	pendingDeletedLayouts = lib.pendingDeletedLayouts or {},
 }
 
 lib.selectionRegistry = State.selectionRegistry
@@ -61,6 +62,7 @@ lib.collapseExclusiveFlags = State.collapseExclusiveFlags
 lib.widgetPools = State.widgetPools
 lib.overlayToggleFlags = State.overlayToggleFlags
 lib.dragPredicates = State.dragPredicates
+lib.pendingDeletedLayouts = State.pendingDeletedLayouts
 
 -- frequently used globals ----------------------------------------------------------
 local CreateFrame = _G.CreateFrame
@@ -104,7 +106,7 @@ local GetSpecialization = C_SpecializationInfo and C_SpecializationInfo.GetSpeci
 
 -- layout names are lazily resolved so we do not need early API availability
 local layoutNames = lib.layoutNames
-	or setmetatable({ "Modern", "Classic" }, {
+	or setmetatable({ _G.LAYOUT_STYLE_MODERN or "Modern", _G.LAYOUT_STYLE_CLASSIC or "Classic" }, {
 		__index = function(t, key)
 			if key <= 2 then
 				return rawget(t, key)
@@ -416,6 +418,48 @@ local function snapshotLayoutNames(layoutInfo)
 	return snapshot
 end
 
+-- Track deleted layout names so we can still surface them once the delete event fires.
+local function recordDeletedLayouts(oldSnapshot, newSnapshot)
+	if not oldSnapshot or #newSnapshot >= #oldSnapshot then
+		return
+	end
+	local deletedIndex
+	for i = 1, #oldSnapshot do
+		if oldSnapshot[i] ~= newSnapshot[i] then
+			deletedIndex = i
+			break
+		end
+	end
+	deletedIndex = deletedIndex or #oldSnapshot
+	local deletedName = oldSnapshot[deletedIndex]
+	if not deletedName then
+		return
+	end
+	local uiIndex = deletedIndex + 2
+	if not State.pendingDeletedLayouts[uiIndex] then
+		State.pendingDeletedLayouts[uiIndex] = deletedName
+	end
+end
+
+-- Prefer cached names so we can resolve deleted layouts before reloading from the API.
+local function getCachedLayoutName(layoutIndex)
+	if not layoutIndex then
+		return nil
+	end
+	if layoutIndex > 2 then
+		local pending = State.pendingDeletedLayouts
+		if pending and pending[layoutIndex] then
+			return pending[layoutIndex]
+		end
+		local snapshot = State.layoutSnapshot or Internal.layoutNameSnapshot
+		local cached = snapshot and snapshot[layoutIndex - 2]
+		if cached then
+			return cached
+		end
+	end
+	return layoutNames[layoutIndex]
+end
+
 local function updateActiveLayoutFromAPI()
 	if not C_EditMode or not C_EditMode.GetLayouts then
 		return
@@ -452,10 +496,14 @@ function Layout:HandleLayoutsChanged(_, layoutInfo)
 	for index, newName in pairs(newSnapshot) do
 		local oldName = oldSnapshot[index]
 		if oldName and newName and oldName ~= newName then
+			local uiIndex = index + 2
 			for _, callback in next, lib.eventHandlersLayoutRenamed do
-				securecallfunction(callback, oldName, newName, index)
+				securecallfunction(callback, oldName, newName, uiIndex)
 			end
 		end
+	end
+	if layoutInfo and layoutInfo.layouts then
+		recordDeletedLayouts(oldSnapshot, newSnapshot)
 	end
 	State.layoutSnapshot = newSnapshot
 	Internal.layoutNameSnapshot = State.layoutSnapshot
@@ -481,22 +529,27 @@ function Layout:HandleSpecChanged()
 end
 
 function Layout:HandleLayoutDeleted(deletedLayoutIndex)
+	local deletedName = getCachedLayoutName(deletedLayoutIndex)
 	for _, callback in next, lib.eventHandlersLayoutDeleted do
-		securecallfunction(callback, deletedLayoutIndex)
+		securecallfunction(callback, deletedLayoutIndex, deletedName)
 	end
+	State.pendingDeletedLayouts[deletedLayoutIndex] = nil
 end
 
 function Layout:HandleLayoutAdded(addedLayoutIndex, activateNewLayout, isLayoutImported)
 	local layoutType
+	local layoutName
 	if C_EditMode_GetLayouts then
 		local info = C_EditMode_GetLayouts()
 		local entry = info and info.layouts and info.layouts[addedLayoutIndex - 2]
 		if entry and entry.layoutType then
 			layoutType = entry.layoutType
 		end
+		layoutName = entry and entry.layoutName
 	end
+	layoutName = layoutName or layoutNames[addedLayoutIndex]
 	for _, callback in next, lib.eventHandlersLayoutAdded do
-		securecallfunction(callback, addedLayoutIndex, activateNewLayout, isLayoutImported, layoutType)
+		securecallfunction(callback, addedLayoutIndex, activateNewLayout, isLayoutImported, layoutType, layoutName)
 	end
 
 	-- Detect duplicates by serializing and comparing layout info
@@ -507,7 +560,7 @@ function Layout:HandleLayoutAdded(addedLayoutIndex, activateNewLayout, isLayoutI
 			local newLayout = layoutInfo.layouts[customIndex]
 			if newLayout then
 				local newString = C_EditMode_ConvertLayoutInfoToString(newLayout)
-				local newName = newLayout.layoutName
+				local newName = newLayout.layoutName or layoutName
 				if newString and newString ~= "" then
 					local dupes = {}
 					for idx, info in ipairs(layoutInfo.layouts) do
@@ -520,7 +573,7 @@ function Layout:HandleLayoutAdded(addedLayoutIndex, activateNewLayout, isLayoutI
 					end
 					if #dupes > 0 then
 						for _, callback in next, lib.eventHandlersLayoutDuplicate do
-							securecallfunction(callback, addedLayoutIndex, dupes, isLayoutImported, layoutType)
+							securecallfunction(callback, addedLayoutIndex, dupes, isLayoutImported, layoutType, newName)
 						end
 					end
 				end
@@ -665,6 +718,16 @@ local function buildDropdown()
 		self.Label:SetText(data.name)
 		self.ignoreInLayout = nil
 
+		if data.useOldStyle and self.OldDropdown then
+			self.Control:Hide()
+			self.OldDropdown:Show()
+			self.Dropdown = self.OldDropdown
+		else
+			if self.OldDropdown then self.OldDropdown:Hide() end
+			self.Control:Show()
+			self.Dropdown = self.Control.Dropdown
+		end
+
 		if data.generator then
 			self.Dropdown:SetupMenu(function(owner, rootDescription)
 				pcall(data.generator, owner, rootDescription, data)
@@ -713,18 +776,21 @@ local function buildDropdown()
 
 		local control = CreateFrame("Frame", nil, frame, "SettingsDropdownWithButtonsTemplate")
 		control:SetPoint("LEFT", label, "RIGHT", 5, 0)
+		frame.Control = control
 
-		if control.DecrementButton then
-			control.DecrementButton:Hide()
-		end
-		if control.IncrementButton then
-			control.IncrementButton:Hide()
-		end
+		if control.DecrementButton then control.DecrementButton:Hide() end
+		if control.IncrementButton then control.IncrementButton:Hide() end
 
 		local dropdown = control.Dropdown
 		dropdown:SetPoint("LEFT", label, "RIGHT", 5, 0)
 		dropdown:SetSize(200, 30)
 		frame.Dropdown = dropdown
+
+		local oldDropdown = CreateFrame("DropdownButton", nil, frame, "WowStyle1DropdownTemplate")
+		oldDropdown:SetPoint("LEFT", label, "RIGHT", 5, 0)
+		oldDropdown:SetSize(200, 30)
+		oldDropdown:Hide()
+		frame.OldDropdown = oldDropdown
 
 		return frame
 	end, function(_, frame)
@@ -744,7 +810,23 @@ local function buildMultiDropdown()
 		self.hideSummary = data.hideSummary or data.noSummary or data.summary == false
 
 		self.Label:SetText(data.name)
-		self.Dropdown:SetDefaultText(CUSTOM)
+		-- Hide the "Custom" placeholder when no selection is made
+		self.Dropdown:SetDefaultText("")
+
+		if data.useOldStyle and self.OldDropdown then
+			self.Control:Hide()
+			self.OldDropdown:Show()
+			self.Dropdown = self.OldDropdown
+		else
+			if self.OldDropdown then self.OldDropdown:Hide() end
+			self.Control:Show()
+			self.Dropdown = self.Control.Dropdown
+		end
+		if self.Summary then
+			self.Summary:ClearAllPoints()
+			self.Summary:SetPoint("TOPLEFT", self.Dropdown, "BOTTOMLEFT", 0, -2)
+			self.Summary:SetPoint("TOPRIGHT", self.Dropdown, "BOTTOMRIGHT", 0, -2)
+		end
 
 		local targetHeight = self.hideSummary and 32 or 48
 		self.fixedHeight = targetHeight
@@ -944,6 +1026,7 @@ local function buildMultiDropdown()
 
 		local control = CreateFrame("Frame", nil, frame, "SettingsDropdownWithButtonsTemplate")
 		control:SetPoint("LEFT", label, "RIGHT", 5, 0)
+		frame.Control = control
 
 		if control.DecrementButton then
 			control.DecrementButton:Hide()
@@ -956,6 +1039,12 @@ local function buildMultiDropdown()
 		dropdown:SetPoint("LEFT", label, "RIGHT", 5, 0)
 		dropdown:SetSize(200, 30)
 		frame.Dropdown = dropdown
+
+		local oldDropdown = CreateFrame("DropdownButton", nil, frame, "WowStyle1DropdownTemplate")
+		oldDropdown:SetPoint("LEFT", label, "RIGHT", 5, 0)
+		oldDropdown:SetSize(200, 30)
+		oldDropdown:Hide()
+		frame.OldDropdown = oldDropdown
 
 		local summary = frame:CreateFontString(nil, nil, "GameFontHighlightSmall")
 		summary:SetPoint("TOPLEFT", dropdown, "BOTTOMLEFT", 0, -2)
@@ -1248,6 +1337,24 @@ local function buildDropdownColor()
 		self.Label:SetText(data.name)
 		self.ignoreInLayout = nil
 
+		if data.useOldStyle then
+			if self.OldDropdown then
+				self.Control:Hide()
+				self.OldDropdown:Show()
+				self.Dropdown = self.OldDropdown
+				self.Button:ClearAllPoints()
+				self.Button:SetPoint("LEFT", self.Dropdown, "RIGHT", 6, 0)
+			end
+		else
+			if self.OldDropdown then
+				self.OldDropdown:Hide()
+			end
+			self.Control:Show()
+			self.Dropdown = self.Control.Dropdown
+			self.Button:ClearAllPoints()
+			self.Button:SetPoint("LEFT", self.Dropdown, "RIGHT", 6, 0)
+		end
+
 		local function createEntries(rootDescription)
 			if data.height then
 				rootDescription:SetScrollMode(data.height)
@@ -1371,8 +1478,10 @@ local function buildDropdownColor()
 		label:SetJustifyH("LEFT")
 		frame.Label = label
 
+		-- modern control
 		local control = CreateFrame("Frame", nil, frame, "SettingsDropdownWithButtonsTemplate")
 		control:SetPoint("LEFT", label, "RIGHT", 5, 0)
+		frame.Control = control
 
 		if control.DecrementButton then
 			control.DecrementButton:Hide()
@@ -1385,6 +1494,13 @@ local function buildDropdownColor()
 		dropdown:SetPoint("LEFT", label, "RIGHT", 5, 0)
 		dropdown:SetSize(200, 30)
 		frame.Dropdown = dropdown
+
+		-- old style control (hidden by default)
+		local oldDropdown = CreateFrame("DropdownButton", nil, frame, "WowStyle1DropdownTemplate")
+		oldDropdown:SetPoint("LEFT", label, "RIGHT", 5, 0)
+		oldDropdown:SetSize(200, 30)
+		oldDropdown:Hide()
+		frame.OldDropdown = oldDropdown
 
 		local button = CreateFrame("Button", nil, frame)
 		button:SetSize(36, 22)
@@ -1474,15 +1590,18 @@ local function buildSlider()
 
 	function mixin:OnSliderValueChanged(value)
 		if not self.initInProgress then
-			self.setting.set(lib.activeLayoutName, value, lib:GetActiveLayoutIndex())
-			self.currentValue = value
+			-- Avoid redundant setter calls on identical values (helps rapid slider drags).
+			if value ~= self.currentValue then
+				self.setting.set(lib.activeLayoutName, value, lib:GetActiveLayoutIndex())
+				self.currentValue = value
+				Internal:RefreshSettings()
+			end
 			if self.Input and self.Input:IsShown() then
 				self.Input:SetText(tostring(value))
-				if self.Slider.RightText then
+				if self.Slider.RightText and self.Slider.RightText:IsShown() then
 					self.Slider.RightText:Hide()
 				end
 			end
-			Internal:RefreshSettings()
 		end
 	end
 
@@ -2083,6 +2202,24 @@ local function isInCombat()
 	return InCombatLockdown and InCombatLockdown()
 end
 
+local function setPropagateKeyboardInputSafe(frame, propagate)
+	if not frame or not frame.SetPropagateKeyboardInput or isInCombat() or not lib.isEditing then
+		return
+	end
+	frame:SetPropagateKeyboardInput(not not propagate)
+end
+
+local function updateSelectionKeyboard(selection)
+	if not selection or not selection.EnableKeyboard then
+		return
+	end
+	local allow = lib.isEditing and not isInCombat()
+	selection:EnableKeyboard(allow)
+	if allow then
+		setPropagateKeyboardInputSafe(selection, true)
+	end
+end
+
 local function deriveAnchorAndOffset(frame)
 	-- Finds the nearest anchor on each axis (left/right/center, top/bottom/center) and
 	-- returns a Blizzard anchor string plus offsets relative to the parent.
@@ -2167,9 +2304,16 @@ local function resetSelectionIndicators()
 		else
 			selection:ShowHighlighted()
 		end
+		updateSelectionKeyboard(selection)
 	end
 	if Internal.dialog and Internal.dialog.HideLabelButton then
 		updateEyeButton(Internal.dialog.HideLabelButton, false)
+	end
+end
+
+local function hideOverlapMenu()
+	if Internal.overlapMenu then
+		Internal.overlapMenu:Hide()
 	end
 end
 
@@ -2177,6 +2321,7 @@ local function beginSelectionDrag(self)
 	if isInCombat() then
 		return
 	end
+	hideOverlapMenu()
 	if not isDragAllowed(self.parent) then
 		return
 	end
@@ -2274,12 +2419,6 @@ local function ensureOverlapMenu()
 	return menu
 end
 
-local function hideOverlapMenu()
-	if Internal.overlapMenu then
-		Internal.overlapMenu:Hide()
-	end
-end
-
 local function selectSelection(selection)
 	if isInCombat() or not selection then
 		return
@@ -2357,7 +2496,11 @@ local function handleSelectionMouseDown(self)
 	hideOverlapMenu()
 	local cx, cy = getCursorPositionUI()
 	local hits = collectOverlappingSelections(cx, cy)
+	if #hits <= 1 and self.isSelected then
+		return
+	end
 	if #hits > 1 then
+		selectSelection(self)
 		showOverlapMenu(hits, cx, cy, self)
 		return
 	end
@@ -2428,40 +2571,25 @@ function lib:AddFrame(frame, callback, default)
 		end
 		local step = IsShiftKeyDown() and 10 or 1
 		if key == "UP" then
-			if selectionFrame.SetPropagateKeyboardInput then
-				selectionFrame:SetPropagateKeyboardInput(false)
-			end
+			setPropagateKeyboardInputSafe(selectionFrame, false)
 			adjustPosition(selectionFrame.parent, 0, step)
 		elseif key == "DOWN" then
-			if selectionFrame.SetPropagateKeyboardInput then
-				selectionFrame:SetPropagateKeyboardInput(false)
-			end
+			setPropagateKeyboardInputSafe(selectionFrame, false)
 			adjustPosition(selectionFrame.parent, 0, -step)
 		elseif key == "LEFT" then
-			if selectionFrame.SetPropagateKeyboardInput then
-				selectionFrame:SetPropagateKeyboardInput(false)
-			end
+			setPropagateKeyboardInputSafe(selectionFrame, false)
 			adjustPosition(selectionFrame.parent, -step, 0)
 		elseif key == "RIGHT" then
-			if selectionFrame.SetPropagateKeyboardInput then
-				selectionFrame:SetPropagateKeyboardInput(false)
-			end
+			setPropagateKeyboardInputSafe(selectionFrame, false)
 			adjustPosition(selectionFrame.parent, step, 0)
 		else
-			if selectionFrame.SetPropagateKeyboardInput then
-				selectionFrame:SetPropagateKeyboardInput(true)
-			end
+			setPropagateKeyboardInputSafe(selectionFrame, true)
 		end
 	end)
 	selection:SetScript("OnKeyUp", function(selectionFrame)
-		if selectionFrame.SetPropagateKeyboardInput then
-			selectionFrame:SetPropagateKeyboardInput(true)
-		end
+		setPropagateKeyboardInputSafe(selectionFrame, true)
 	end)
-	selection:EnableKeyboard(true)
-	if selection.SetPropagateKeyboardInput then
-		selection:SetPropagateKeyboardInput(true)
-	end
+	updateSelectionKeyboard(selection)
 	selection:Hide()
 
 	selection.labelHidden = false
@@ -2662,6 +2790,31 @@ function lib:IsInEditMode()
 	return not not lib.isEditing
 end
 
+function lib:GetLayouts()
+	if not State.layoutSnapshot then
+		updateActiveLayoutFromAPI()
+	end
+	local layoutInfo = C_EditMode_GetLayouts and C_EditMode_GetLayouts()
+	local customLayouts = layoutInfo and layoutInfo.layouts
+	local modernType = Enum and Enum.EditModeLayoutType and Enum.EditModeLayoutType.Modern
+	local classicType = Enum and Enum.EditModeLayoutType and Enum.EditModeLayoutType.Classic
+	local activeLayout = layoutInfo and layoutInfo.activeLayout
+	local results = {}
+	results[1] = { index = 1, name = layoutNames[1], layoutType = modernType, isActive = activeLayout == 1 and 1 or 0 }
+	results[2] = { index = 2, name = layoutNames[2], layoutType = classicType, isActive = activeLayout == 2 and 1 or 0 }
+	for i, name in ipairs(State.layoutSnapshot or {}) do
+		local uiIndex = i + 2
+		local entry = customLayouts and customLayouts[i]
+		results[#results + 1] = {
+			index = uiIndex,
+			name = name or layoutNames[uiIndex],
+			layoutType = entry and entry.layoutType,
+			isActive = activeLayout == uiIndex and 1 or 0,
+		}
+	end
+	return results
+end
+
 function lib:GetFrameDefaultPosition(frame)
 	return State.defaultPositions[frame]
 end
@@ -2731,7 +2884,7 @@ function Internal:RefreshSettings()
 	end
 end
 
-function Internal:RefreshSettingValues()
+function Internal:RefreshSettingValues(targetSettings)
 	if not (Internal.dialog and Internal.dialog:IsShown()) then
 		return
 	end
@@ -2748,6 +2901,25 @@ function Internal:RefreshSettingValues()
 	if not settings or num == 0 then
 		return
 	end
+	local targets
+	if type(targetSettings) == "table" then
+		targets = {}
+		for _, entry in ipairs(targetSettings) do
+			if type(entry) == "table" then
+				targets[entry] = true
+			end
+		end
+		for key, value in pairs(targetSettings) do
+			if type(key) == "table" and value then
+				targets[key] = true
+			elseif type(value) == "table" then
+				targets[value] = true
+			end
+		end
+		if next(targets) == nil then
+			targets = nil
+		end
+	end
 	for _, child in ipairs({ parent:GetChildren() }) do
 		local data
 		if child.layoutIndex and settings[child.layoutIndex] then
@@ -2755,7 +2927,7 @@ function Internal:RefreshSettingValues()
 		elseif child.setting then
 			data = child.setting
 		end
-		if data and child.Setup then
+		if data and child.Setup and (not targets or targets[data]) then
 			child:Setup(data, selection)
 			child.setting = data
 			if child.SetEnabled then

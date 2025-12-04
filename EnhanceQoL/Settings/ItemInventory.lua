@@ -1624,7 +1624,7 @@ end
 ---- END REGION
 
 ---- REGION SETTINGS
-local cInventory = addon.functions.SettingsCreateCategory(nil, L["ItemsInventory"])
+local cInventory = addon.functions.SettingsCreateCategory(nil, L["ItemsInventory"], nil, "ItemsInventory")
 addon.SettingsLayout.inventoryCategory = cInventory
 addon.functions.SettingsCreateHeadline(cInventory, BAGSLOT)
 
@@ -1846,6 +1846,12 @@ data = {
 		text = L["confirmSocketReplace"],
 		desc = L["confirmSocketReplaceDesc"],
 		func = function(value) addon.db["confirmSocketReplace"] = value end,
+	},
+	{
+		var = "confirmHighCostItem",
+		text = L["confirmHighCostItem"],
+		desc = L["confirmHighCostItemDesc"],
+		func = function(value) addon.db["confirmHighCostItem"] = value end,
 	},
 }
 

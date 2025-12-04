@@ -462,7 +462,9 @@ addon.MythicPlus.variables.portalCompendium = {
 
 	[9999] = {
 		headline = HOME,
-		spells = {},
+		spells = {
+			-- [1233637] = { zoneID = 2352 },
+		},
 	},
 	[130] = {
 		headline = EXPANSION_NAME11 or "Midnight",

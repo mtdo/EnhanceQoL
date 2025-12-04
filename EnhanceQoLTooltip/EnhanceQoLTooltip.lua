@@ -614,8 +614,21 @@ local function checkUnit(tooltip)
 	checkAdditionalTooltip(tooltip)
 end
 
+local lastEntry
 local function checkItem(tooltip, id, name, guid)
 	local first = true
+
+	-- Automatically preview housing items if enabled
+	if addon.db["TooltipHousingAutoPreview"] and C_HousingCatalog and C_HousingCatalog.GetCatalogEntryInfoByItem then
+		local housingData = C_HousingCatalog.GetCatalogEntryInfoByItem(id, false)
+		if housingData and lastEntry ~= id then
+			lastEntry = id
+
+			if not HousingModelPreviewFrame and C_AddOns then C_AddOns.LoadAddOn("Blizzard_HousingModelPreview") end
+			if HousingModelPreviewFrame and HousingModelPreviewFrame.ShowCatalogEntryInfo then HousingModelPreviewFrame:ShowCatalogEntryInfo(housingData) end
+		end
+	end
+
 	-- TODO Bug in midnight beta with tooltip handling
 	if addon.db["TooltipShowItemID"] and not addon.variables.isMidnight then
 		if id then

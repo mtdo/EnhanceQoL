@@ -128,6 +128,14 @@ data = {
 		default = false,
 		type = Settings.VarType.Boolean,
 	},
+	{
+		var = "TooltipHousingAutoPreview",
+		text = L["TooltipHousingAutoPreview"],
+		desc = L["TooltipHousingAutoPreviewDesc"],
+		func = function(v) addon.db["TooltipHousingAutoPreview"] = v end,
+		default = false,
+		type = Settings.VarType.Boolean,
+	},
 }
 table.sort(data, function(a, b) return a.text < b.text end)
 
