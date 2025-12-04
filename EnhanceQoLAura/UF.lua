@@ -184,7 +184,7 @@ local defaults = {
 	},
 	target = {
 		enabled = false,
-		auraIcons = { size = 24, padding = 2, max = 16, showCooldown = true, showTooltip = true, anchor = "BOTTOM", offset = { x = 0, y = -5 } },
+		auraIcons = { size = 24, padding = 2, max = 16, showCooldown = true, showTooltip = true, hidePermanentAuras = false, anchor = "BOTTOM", offset = { x = 0, y = -5 } },
 		cast = {
 			enabled = true,
 			width = 220,
@@ -307,6 +307,15 @@ local function removeTargetAuraFromOrder(auraInstanceID)
 	targetAuraIndexById[auraInstanceID] = nil
 	reindexTargetAuraOrder(idx)
 	return idx
+end
+
+local function isPermanentAura(aura)
+	if not aura then return false end
+	local duration = aura.duration
+	local expiration = aura.expirationTime
+	if duration and duration > 0 then return false end
+	if expiration and expiration > 0 then return false end
+	return true
 end
 
 local function ensureAuraButton(index, ac)
@@ -440,31 +449,44 @@ end
 local function fullScanTargetAuras()
 	resetTargetAuras()
 	if not UnitExists or not UnitExists("target") then return end
+	local cfg = ensureDB("target")
+	local ac = cfg.auraIcons or defaults.target.auraIcons or {}
+	local hidePermanent = ac.hidePermanentAuras == true or ac.hidePermanent == true
 	if C_UnitAuras and C_UnitAuras.GetUnitAuras then
 		local helpful = C_UnitAuras.GetUnitAuras("target", "HELPFUL|CANCELABLE")
 		for i = 1, #helpful do
-			cacheTargetAura(helpful[i])
-			addTargetAuraToOrder(helpful[i].auraInstanceID)
+			local aura = helpful[i]
+			if aura and (not hidePermanent or not isPermanentAura(aura)) then
+				cacheTargetAura(aura)
+				addTargetAuraToOrder(aura.auraInstanceID)
+			end
 		end
 		local harmful = C_UnitAuras.GetUnitAuras("target", "HARMFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY")
 		for i = 1, #harmful do
-			cacheTargetAura(harmful[i])
-			addTargetAuraToOrder(harmful[i].auraInstanceID)
+			local aura = harmful[i]
+			if aura and (not hidePermanent or not isPermanentAura(aura)) then
+				cacheTargetAura(aura)
+				addTargetAuraToOrder(aura.auraInstanceID)
+			end
 		end
 	elseif C_UnitAuras and C_UnitAuras.GetAuraSlots then
 		local helpful = { C_UnitAuras.GetAuraSlots("target", "HELPFUL|CANCELABLE") }
 		for i = 2, #helpful do
 			local slot = helpful[i]
 			local aura = C_UnitAuras.GetAuraDataBySlot("target", slot)
-			cacheTargetAura(aura)
-			addTargetAuraToOrder(aura and aura.auraInstanceID)
+			if aura and (not hidePermanent or not isPermanentAura(aura)) then
+				cacheTargetAura(aura)
+				addTargetAuraToOrder(aura.auraInstanceID)
+			end
 		end
 		local harmful = { C_UnitAuras.GetAuraSlots("target", "HARMFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY") }
 		for i = 2, #harmful do
 			local slot = harmful[i]
 			local aura = C_UnitAuras.GetAuraDataBySlot("target", slot)
-			cacheTargetAura(aura)
-			addTargetAuraToOrder(aura and aura.auraInstanceID)
+			if aura and (not hidePermanent or not isPermanentAura(aura)) then
+				cacheTargetAura(aura)
+				addTargetAuraToOrder(aura.auraInstanceID)
+			end
 		end
 	end
 	updateTargetAuraIcons()
@@ -660,7 +682,7 @@ do
 	targetDefaults.enabled = false
 	targetDefaults.anchor = targetDefaults.anchor and CopyTable(targetDefaults.anchor) or { point = "CENTER", relativeTo = "UIParent", relativePoint = "CENTER", x = 0, y = -200 }
 	targetDefaults.anchor.x = (targetDefaults.anchor.x or 0) + 260
-	targetDefaults.auraIcons = { size = 24, padding = 2, max = 16, showCooldown = true, showTooltip = true }
+	targetDefaults.auraIcons = { size = 24, padding = 2, max = 16, showCooldown = true, showTooltip = true, hidePermanentAuras = false, anchor = "BOTTOM", offset = { x = 0, y = -5 } }
 	defaults.target = targetDefaults
 
 	local totDefaults = CopyTable(targetDefaults)
@@ -1709,6 +1731,7 @@ local function onEvent(self, event, unit, arg1)
 		ac.padding = ac.padding or 0
 		ac.max = ac.max or 16
 		if ac.max < 1 then ac.max = 1 end
+		local hidePermanent = ac.hidePermanentAuras == true or ac.hidePermanent == true
 		local st = states.target
 		if not st or not st.auraContainer then return end
 		local width = st.frame and st.frame:GetWidth() or 0
@@ -1716,13 +1739,21 @@ local function onEvent(self, event, unit, arg1)
 		local firstChanged
 		if eventInfo.addedAuras then
 			for _, aura in ipairs(eventInfo.addedAuras) do
-				if not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, "HARMFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY") then
+				if aura and hidePermanent and isPermanentAura(aura) then
+					if targetAuras[aura.auraInstanceID] then
+						targetAuras[aura.auraInstanceID] = nil
+						local idx = removeTargetAuraFromOrder(aura.auraInstanceID)
+						if idx and idx <= (ac.max + 1) then
+							if not firstChanged or idx < firstChanged then firstChanged = idx end
+						end
+					end
+				elseif aura and not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, "HARMFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY") then
 					cacheTargetAura(aura)
 					local idx = addTargetAuraToOrder(aura.auraInstanceID)
 					if idx and idx <= ac.max then
 						if not firstChanged or idx < firstChanged then firstChanged = idx end
 					end
-				elseif not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, "HELPFUL|CANCELABLE") then
+				elseif aura and not C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, aura.auraInstanceID, "HELPFUL|CANCELABLE") then
 					cacheTargetAura(aura)
 					local idx = addTargetAuraToOrder(aura.auraInstanceID)
 					if idx and idx <= ac.max then
@@ -1898,4 +1929,5 @@ UF.EnsureDB = ensureDB
 UF.GetConfig = ensureDB
 UF.EnsureFrames = ensureFrames
 UF.StopEventsIfInactive = function() ensureEventHandling() end
+UF.FullScanTargetAuras = fullScanTargetAuras
 return UF

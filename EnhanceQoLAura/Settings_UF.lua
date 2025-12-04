@@ -952,37 +952,65 @@ local function buildUnitSettings(unit)
 
 	if isPlayer then
 		local ciDef = statusDef.combatIndicator or {}
-		list[#list + 1] = checkbox(L["UFCombatIndicator"] or "Show combat indicator", function()
-			return getValue(unit, { "status", "combatIndicator", "enabled" }, ciDef.enabled ~= false)
-		end, function(val)
-			setValue(unit, { "status", "combatIndicator", "enabled" }, val and true or false)
-			refresh()
-		end, ciDef.enabled ~= false, "status")
+		list[#list + 1] = checkbox(
+			L["UFCombatIndicator"] or "Show combat indicator",
+			function() return getValue(unit, { "status", "combatIndicator", "enabled" }, ciDef.enabled ~= false) end,
+			function(val)
+				setValue(unit, { "status", "combatIndicator", "enabled" }, val and true or false)
+				refresh()
+			end,
+			ciDef.enabled ~= false,
+			"status"
+		)
 
-		list[#list + 1] = slider(L["UFCombatIndicatorSize"] or "Combat indicator size", 10, 64, 1, function()
-			return getValue(unit, { "status", "combatIndicator", "size" }, ciDef.size or 18)
-		end, function(val)
-			setValue(unit, { "status", "combatIndicator", "size" }, val or ciDef.size or 18)
-			refresh()
-		end, ciDef.size or 18, "status", true)
+		list[#list + 1] = slider(
+			L["UFCombatIndicatorSize"] or "Combat indicator size",
+			10,
+			64,
+			1,
+			function() return getValue(unit, { "status", "combatIndicator", "size" }, ciDef.size or 18) end,
+			function(val)
+				setValue(unit, { "status", "combatIndicator", "size" }, val or ciDef.size or 18)
+				refresh()
+			end,
+			ciDef.size or 18,
+			"status",
+			true
+		)
 
-		list[#list + 1] = slider(L["UFCombatIndicatorOffsetX"] or "Combat indicator X offset", -300, 300, 1, function()
-			return getValue(unit, { "status", "combatIndicator", "offset", "x" }, (ciDef.offset and ciDef.offset.x) or -8)
-		end, function(val)
-			local off = getValue(unit, { "status", "combatIndicator", "offset" }, { x = -8, y = 0 }) or {}
-			off.x = val or -8
-			setValue(unit, { "status", "combatIndicator", "offset" }, off)
-			refresh()
-		end, (ciDef.offset and ciDef.offset.x) or -8, "status", true)
+		list[#list + 1] = slider(
+			L["UFCombatIndicatorOffsetX"] or "Combat indicator X offset",
+			-300,
+			300,
+			1,
+			function() return getValue(unit, { "status", "combatIndicator", "offset", "x" }, (ciDef.offset and ciDef.offset.x) or -8) end,
+			function(val)
+				local off = getValue(unit, { "status", "combatIndicator", "offset" }, { x = -8, y = 0 }) or {}
+				off.x = val or -8
+				setValue(unit, { "status", "combatIndicator", "offset" }, off)
+				refresh()
+			end,
+			(ciDef.offset and ciDef.offset.x) or -8,
+			"status",
+			true
+		)
 
-		list[#list + 1] = slider(L["UFCombatIndicatorOffsetY"] or "Combat indicator Y offset", -300, 300, 1, function()
-			return getValue(unit, { "status", "combatIndicator", "offset", "y" }, (ciDef.offset and ciDef.offset.y) or 0)
-		end, function(val)
-			local off = getValue(unit, { "status", "combatIndicator", "offset" }, { x = -8, y = 0 }) or {}
-			off.y = val or 0
-			setValue(unit, { "status", "combatIndicator", "offset" }, off)
-			refresh()
-		end, (ciDef.offset and ciDef.offset.y) or 0, "status", true)
+		list[#list + 1] = slider(
+			L["UFCombatIndicatorOffsetY"] or "Combat indicator Y offset",
+			-300,
+			300,
+			1,
+			function() return getValue(unit, { "status", "combatIndicator", "offset", "y" }, (ciDef.offset and ciDef.offset.y) or 0) end,
+			function(val)
+				local off = getValue(unit, { "status", "combatIndicator", "offset" }, { x = -8, y = 0 }) or {}
+				off.y = val or 0
+				setValue(unit, { "status", "combatIndicator", "offset" }, off)
+				refresh()
+			end,
+			(ciDef.offset and ciDef.offset.y) or 0,
+			"status",
+			true
+		)
 	end
 
 	list[#list + 1] = checkbox(L["UFShowLevel"] or "Show level", function() return getValue(unit, { "status", "levelEnabled" }, statusDef.levelEnabled ~= false) end, function(val)
@@ -1165,11 +1193,17 @@ local function buildUnitSettings(unit)
 		end, auraDef.showCooldown ~= false, "auras")
 
 		list[#list + 1] = checkbox(L["UFHidePermanentAuras"] or "Hide permanent auras", function()
-			return getValue(unit, { "auraIcons", "hidePermanent" }, auraDef.hidePermanent == true)
+			local val = getValue(unit, { "auraIcons", "hidePermanentAuras" })
+			if val == nil then val = getValue(unit, { "auraIcons", "hidePermanent" }) end
+			if val == nil then val = auraDef.hidePermanentAuras end
+			if val == nil then val = auraDef.hidePermanent end
+			return val == true
 		end, function(val)
-			setValue(unit, { "auraIcons", "hidePermanent" }, val and true or false)
+			setValue(unit, { "auraIcons", "hidePermanentAuras" }, val and true or false)
+			setValue(unit, { "auraIcons", "hidePermanent" }, nil)
 			refresh()
-		end, auraDef.hidePermanent == true, "auras")
+			if UF and UF.FullScanTargetAuras then UF.FullScanTargetAuras() end
+		end, (auraDef.hidePermanentAuras or auraDef.hidePermanent) == true, "auras")
 
 		local anchorOpts = {
 			{ value = "TOP", label = L["Top"] or "Top" },
