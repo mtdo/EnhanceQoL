@@ -151,6 +151,7 @@ local defaults = {
 			texture = "DEFAULT",
 		},
 		power = {
+			enabled = true,
 			color = { 0.1, 0.45, 1, 1 },
 			backdrop = { enabled = true, color = { 0, 0, 0, 0.6 } },
 			useCustomColor = false,
@@ -1218,6 +1219,15 @@ local function updatePower(cfg, unit)
 	if not st then return end
 	local bar = st.power
 	if not bar then return end
+	local pcfg = cfg.power or {}
+	if pcfg.enabled == false then
+		bar:Hide()
+		bar:SetValue(0)
+		if st.powerTextLeft then st.powerTextLeft:SetText("") end
+		if st.powerTextRight then st.powerTextRight:SetText("") end
+		return
+	end
+	bar:Show()
 	local powerEnum, powerToken = getMainPower(unit)
 	powerEnum = powerEnum or 0
 	local cur = UnitPower(unit, powerEnum)
@@ -1228,7 +1238,6 @@ local function updatePower(cfg, unit)
 		bar:SetMinMaxValues(0, maxv > 0 and maxv or 1)
 	end
 	bar:SetValue(cur or 0)
-	local pcfg = cfg.power or {}
 	local percentVal
 	if addon.variables and addon.variables.isMidnight and UnitPowerPercent then
 		percentVal = UnitPowerPercent(unit, powerEnum, true, true)
@@ -1358,11 +1367,13 @@ local function layoutFrame(cfg, unit)
 	local st = states[unit]
 	if not st or not st.frame then return end
 	local def = defaults[unit] or defaults.player or {}
+	local pcfg = cfg.power or {}
+	local powerEnabled = pcfg.enabled ~= false
 	local width = max(MIN_WIDTH, cfg.width or def.width)
 	local statusHeight = (cfg.status and cfg.status.enabled == false) and 0 or (cfg.statusHeight or def.statusHeight)
 	local healthHeight = cfg.healthHeight or def.healthHeight
-	local powerHeight = cfg.powerHeight or def.powerHeight
-	local barGap = cfg.barGap or def.barGap or 0
+	local powerHeight = powerEnabled and (cfg.powerHeight or def.powerHeight) or 0
+	local barGap = powerEnabled and (cfg.barGap or def.barGap or 0) or 0
 	local borderInset = 0
 	if cfg.border and cfg.border.enabled then borderInset = (cfg.border.edgeSize or 1) end
 	st.frame:SetWidth(width + borderInset * 2)
@@ -1381,6 +1392,7 @@ local function layoutFrame(cfg, unit)
 	st.status:SetHeight(statusHeight)
 	st.health:SetSize(width, healthHeight)
 	st.power:SetSize(width, powerHeight)
+	st.power:SetShown(powerEnabled)
 
 	st.status:ClearAllPoints()
 	if st.barGroup then st.barGroup:ClearAllPoints() end
@@ -1561,16 +1573,24 @@ local function applyBars(cfg, unit)
 	if not st or not st.health or not st.power then return end
 	local hc = cfg.health or {}
 	local pcfg = cfg.power or {}
+	local powerEnabled = pcfg.enabled ~= false
 	st.health:SetStatusBarTexture(resolveTexture(hc.texture))
 	if st.health.SetStatusBarDesaturated then st.health:SetStatusBarDesaturated(false) end
 	configureSpecialTexture(st.health, "HEALTH", hc.texture, hc)
 	applyBarBackdrop(st.health, hc)
-	st.power:SetStatusBarTexture(resolveTexture(pcfg.texture))
-	if st.power.SetStatusBarDesaturated then st.power:SetStatusBarDesaturated(pcfg.useCustomColor == true) end
-	if unit == PLAYER_UNIT then refreshMainPower(unit) end
-	local _, powerToken = getMainPower(unit)
-	configureSpecialTexture(st.power, powerToken, pcfg.texture, pcfg)
-	applyBarBackdrop(st.power, pcfg)
+	if powerEnabled then
+		st.power:SetStatusBarTexture(resolveTexture(pcfg.texture))
+		if st.power.SetStatusBarDesaturated then st.power:SetStatusBarDesaturated(pcfg.useCustomColor == true) end
+		if unit == PLAYER_UNIT then refreshMainPower(unit) end
+		local _, powerToken = getMainPower(unit)
+		configureSpecialTexture(st.power, powerToken, pcfg.texture, pcfg)
+		applyBarBackdrop(st.power, pcfg)
+		st.power:Show()
+	else
+		st.power:Hide()
+		if st.powerTextLeft then st.powerTextLeft:SetText("") end
+		if st.powerTextRight then st.powerTextRight:SetText("") end
+	end
 	local absorbTextureKey = hc.absorbTexture or hc.texture
 	st.absorb:SetStatusBarTexture(resolveTexture(absorbTextureKey))
 	if st.absorb.SetStatusBarDesaturated then st.absorb:SetStatusBarDesaturated(false) end
@@ -1763,12 +1783,18 @@ local function ensureToTTicker()
 		local st = states[TARGET_TARGET_UNIT]
 		local cfg = st and st.cfg
 		if not cfg or not cfg.enabled then return end
+		local pcfg = cfg.power or {}
+		local powerEnabled = pcfg.enabled ~= false
 		if not UnitExists(TARGET_TARGET_UNIT) or not st.frame or not st.frame:IsShown() then return end
-		local _, powerToken = UnitPowerType(TARGET_TARGET_UNIT)
-		if st.power and powerToken and powerToken ~= st._lastPowerToken then
-			if st.power.SetStatusBarDesaturated then st.power:SetStatusBarDesaturated((cfg.power or {}).useCustomColor == true) end
-			configureSpecialTexture(st.power, powerToken, (cfg.power or {}).texture, cfg.power)
-			st._lastPowerToken = powerToken
+		if powerEnabled then
+			local _, powerToken = UnitPowerType(TARGET_TARGET_UNIT)
+			if st.power and powerToken and powerToken ~= st._lastPowerToken then
+				if st.power.SetStatusBarDesaturated then st.power:SetStatusBarDesaturated((cfg.power or {}).useCustomColor == true) end
+				configureSpecialTexture(st.power, powerToken, (cfg.power or {}).texture, cfg.power)
+				st._lastPowerToken = powerToken
+			end
+		else
+			if st.power then st.power:Hide() end
 		end
 		updateHealth(cfg, TARGET_TARGET_UNIT)
 		updatePower(cfg, TARGET_TARGET_UNIT)
@@ -1796,13 +1822,17 @@ local function updateTargetTargetFrame(cfg, forceApply)
 		if st then
 			if st.barGroup then st.barGroup:Show() end
 			if st.status then st.status:Show() end
-			local _, powerToken = getMainPower(TARGET_TARGET_UNIT)
+			local pcfg = cfg.power or {}
+			local powerEnabled = pcfg.enabled ~= false
 			updateNameAndLevel(cfg, TARGET_TARGET_UNIT)
 			updateHealth(cfg, TARGET_TARGET_UNIT)
-			if st.power then
+			if st.power and powerEnabled then
+				local _, powerToken = getMainPower(TARGET_TARGET_UNIT)
 				if st.power.SetStatusBarDesaturated then st.power:SetStatusBarDesaturated((cfg.power or {}).useCustomColor == true) end
 				configureSpecialTexture(st.power, powerToken, (cfg.power or {}).texture, cfg.power)
 				st._lastPowerToken = powerToken
+			elseif st.power then
+				st.power:Hide()
 			end
 			updatePower(cfg, TARGET_TARGET_UNIT)
 		end
@@ -1848,10 +1878,16 @@ local function onEvent(self, event, unit, arg1)
 		if UnitExists(unitToken) then
 			refreshMainPower(unitToken)
 			fullScanTargetAuras()
-			local _, powerToken = getMainPower(unitToken)
+			local pcfg = targetCfg.power or {}
+			local powerEnabled = pcfg.enabled ~= false
 			updateNameAndLevel(targetCfg, unitToken)
 			updateHealth(targetCfg, unitToken)
-			if st.power then configureSpecialTexture(st.power, powerToken, (targetCfg.power or {}).texture, targetCfg.power) end
+			if st.power and powerEnabled then
+				local _, powerToken = getMainPower(unitToken)
+				configureSpecialTexture(st.power, powerToken, (targetCfg.power or {}).texture, targetCfg.power)
+			elseif st.power then
+				st.power:Hide()
+			end
 			updatePower(targetCfg, unitToken)
 			st.barGroup:Show()
 			st.status:Show()
@@ -1943,14 +1979,24 @@ local function onEvent(self, event, unit, arg1)
 	elseif event == "UNIT_DISPLAYPOWER" then
 		if unit == PLAYER_UNIT then
 			refreshMainPower(unit)
-			local _, powerToken = getMainPower(unit)
 			local st = states[unit]
-			if st and st.power then configureSpecialTexture(st.power, powerToken, (playerCfg.power or {}).texture, playerCfg.power) end
+			local pcfg = playerCfg.power or {}
+			if st and st.power and pcfg.enabled ~= false then
+				local _, powerToken = getMainPower(unit)
+				configureSpecialTexture(st.power, powerToken, (playerCfg.power or {}).texture, playerCfg.power)
+			elseif st and st.power then
+				st.power:Hide()
+			end
 			updatePower(playerCfg, "player")
 		elseif unit == "target" then
-			local _, powerToken = getMainPower(unit)
 			local st = states[unit]
-			if st and st.power then configureSpecialTexture(st.power, powerToken, (targetCfg.power or {}).texture, targetCfg.power) end
+			local pcfg = targetCfg.power or {}
+			if st and st.power and pcfg.enabled ~= false then
+				local _, powerToken = getMainPower(unit)
+				configureSpecialTexture(st.power, powerToken, (targetCfg.power or {}).texture, targetCfg.power)
+			elseif st and st.power then
+				st.power:Hide()
+			end
 			updatePower(targetCfg, "target")
 		end
 	elseif event == "UNIT_POWER_UPDATE" and not FREQUENT[arg1] then

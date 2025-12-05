@@ -250,9 +250,12 @@ local function calcLayout(unit, frame)
 	local cfg = ensureConfig(unit)
 	local def = defaultsFor(unit)
 	local anchor = cfg.anchor or def.anchor or {}
+	local powerEnabled = getValue(unit, { "power", "enabled" }, (def.power and def.power.enabled) ~= false)
 	local statusHeight = (cfg.status and cfg.status.enabled ~= false) and (cfg.statusHeight or def.statusHeight or 18) or 0
 	local width = cfg.width or def.width or frame:GetWidth() or 200
-	local height = statusHeight + (cfg.healthHeight or def.healthHeight or 24) + (cfg.powerHeight or def.powerHeight or 16) + (cfg.barGap or def.barGap or 0)
+	local barGap = powerEnabled and (cfg.barGap or def.barGap or 0) or 0
+	local powerHeight = powerEnabled and (cfg.powerHeight or def.powerHeight or 16) or 0
+	local height = statusHeight + (cfg.healthHeight or def.healthHeight or 24) + powerHeight + barGap
 	return {
 		point = anchor.point or "CENTER",
 		relativePoint = anchor.relativePoint or anchor.point or "CENTER",
@@ -579,6 +582,13 @@ local function buildUnitSettings(unit)
 
 	list[#list + 1] = { name = L["PowerBar"] or "Power Bar", kind = settingType.Collapsible, id = "power", defaultCollapsed = true }
 	local powerDef = def.power or {}
+	local function isPowerEnabled() return getValue(unit, { "power", "enabled" }, powerDef.enabled ~= false) ~= false end
+
+	list[#list + 1] = checkbox(L["Show power bar"] or "Show power bar", isPowerEnabled, function(val)
+		setValue(unit, { "power", "enabled" }, val and true or false)
+		refreshSelf()
+		refreshSettingsUI()
+	end, powerDef.enabled ~= false, "power")
 
 	list[#list + 1] = slider(L["UFPowerHeight"] or "Power height", 6, 60, 1, function() return getValue(unit, { "powerHeight" }, def.powerHeight or 16) end, function(val)
 		debounced(unit .. "_powerHeight", function()
@@ -614,6 +624,7 @@ local function buildUnitSettings(unit)
 			b = (powerDef.color and powerDef.color[3]) or 1,
 			a = (powerDef.color and powerDef.color[4]) or 1,
 		},
+		isEnabled = isPowerEnabled,
 	})
 
 	list[#list + 1] = radioDropdown(L["TextLeft"] or "Left text", textOptions, function() return getValue(unit, { "power", "textLeft" }, powerDef.textLeft or "PERCENT") end, function(val)
@@ -723,7 +734,7 @@ local function buildUnitSettings(unit)
 	list[#list + 1] = checkbox(L["Use short numbers"] or "Use short numbers", function() return getValue(unit, { "power", "useShortNumbers" }, powerDef.useShortNumbers ~= false) end, function(val)
 		setValue(unit, { "power", "useShortNumbers" }, val and true or false)
 		refresh()
-	end, powerDef.useShortNumbers ~= false, "power")
+	end, powerDef.useShortNumbers ~= false, "power", isPowerEnabled)
 
 	list[#list + 1] = radioDropdown(L["Bar Texture"] or "Bar Texture", textureOpts, function() return getValue(unit, { "power", "texture" }, powerDef.texture or "DEFAULT") end, function(val)
 		setValue(unit, { "power", "texture" }, val)
@@ -752,6 +763,7 @@ local function buildUnitSettings(unit)
 			end)
 		end,
 		colorDefault = { r = 0, g = 0, b = 0, a = 0.6 },
+		isEnabled = isPowerEnabled,
 	})
 
 	if unit == "target" then
