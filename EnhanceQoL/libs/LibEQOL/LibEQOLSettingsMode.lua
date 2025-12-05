@@ -1,4 +1,4 @@
-local MODULE_MAJOR, MINOR = "LibEQOLSettingsMode-1.0", 6000001
+local MODULE_MAJOR, MINOR = "LibEQOLSettingsMode-1.0", 5000001
 local LibStub = _G.LibStub
 assert(LibStub, MODULE_MAJOR .. " requires LibStub")
 
@@ -15,6 +15,14 @@ local SettingsCategoryListButtonMixin = _G.SettingsCategoryListButtonMixin
 local SettingsCheckboxControlMixin = _G.SettingsCheckboxControlMixin
 local SettingsDropdownControlMixin = _G.SettingsDropdownControlMixin
 local SettingsSliderControlMixin = _G.SettingsSliderControlMixin
+local CreateSettingsExpandableSectionInitializer = _G.CreateSettingsExpandableSectionInitializer
+local TextureKitConstants = _G.TextureKitConstants
+local HIGHLIGHT_FONT_COLOR = _G.HIGHLIGHT_FONT_COLOR
+local DISABLED_FONT_COLOR = _G.DISABLED_FONT_COLOR
+
+local function isSearchActive()
+	return SettingsPanel and SettingsPanel.SearchBox and SettingsPanel.SearchBox:HasText()
+end
 
 local State = {
 	rootCategory = nil,
@@ -257,7 +265,12 @@ local function applyExpandablePredicate(initializer, data)
 
 	local predicate = normalizeSectionPredicate(data.parentSection or data.section or data.expandWith)
 	if predicate and initializer.AddShownPredicate then
-		initializer:AddShownPredicate(predicate)
+		initializer:AddShownPredicate(function()
+			if isSearchActive() then
+				return true
+			end
+			return predicate()
+		end)
 	end
 end
 
@@ -507,7 +520,7 @@ function lib:CreateMultiDropdown(cat, data)
 	return initializer, setting
 end
 
-function lib:CreateExpandableSection(cat, data)
+function lib.CreateExpandableSection(_, cat, data)
 	assert(cat and data and (data.name or data.text), "category and data.name required")
 
 	local nameGetter = data.name or data.text or data.key or "Section"
@@ -528,13 +541,15 @@ function lib:CreateExpandableSection(cat, data)
 
 	initializer.data.nameGetter = nameGetter
 	initializer.data.expanded = data.expanded ~= false
+	initializer.data.colorizeTitle = data.colorizeTitle == true
+	initializer.data.titleColor = data.titleColor
 
 	function initializer:GetExtent()
 		return data.extent or 25
 	end
 
 	function initializer:IsExpanded()
-		return self.data and self.data.expanded ~= false
+		return isSearchActive() or (self.data and self.data.expanded ~= false)
 	end
 
 	local origInitFrame = initializer.InitFrame
@@ -551,22 +566,27 @@ function lib:CreateExpandableSection(cat, data)
 			end
 
 			if frame.Button and frame.Button.Text then
-				local color = expanded and HIGHLIGHT_FONT_COLOR or DISABLED_FONT_COLOR
+				local color
+				if initializer.data.colorizeTitle then
+					color = expanded and HIGHLIGHT_FONT_COLOR or DISABLED_FONT_COLOR
+				else
+					color = initializer.data.titleColor or HIGHLIGHT_FONT_COLOR
+				end
 				frame.Button.Text:SetTextColor(color:GetRGB())
 			end
 		end
 
-		function frame:OnExpandedChanged(expanded)
-			applyVisuals(expanded)
-			refreshSettingsLayout()
-		end
+			function frame:OnExpandedChanged(expanded)
+				applyVisuals(frame:GetElementData():IsExpanded())
+				refreshSettingsLayout()
+			end
 
-		function frame:CalculateHeight()
-			local elementData = self:GetElementData()
-			return elementData:GetExtent()
-		end
+			function frame:CalculateHeight()
+				local elementData = frame:GetElementData()
+				return elementData:GetExtent()
+			end
 
-		applyVisuals(self.data.expanded)
+		applyVisuals(self:IsExpanded())
 	end
 
 	addSearchTags(initializer, data.searchtags, resolvedName)
