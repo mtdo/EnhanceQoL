@@ -1315,20 +1315,6 @@ local function buildUnitSettings(unit)
 			refresh()
 		end, auraDef.anchor or "BOTTOM", "auras")
 
-		list[#list + 1] = checkbox(L["UFSeparateDebuffAnchor"] or "Separate debuff anchor", function()
-			return getValue(unit, { "auraIcons", "separateDebuffAnchor" }, auraDef.separateDebuffAnchor == true)
-		end, function(val)
-			setValue(unit, { "auraIcons", "separateDebuffAnchor" }, val and true or false)
-			refresh()
-		end, auraDef.separateDebuffAnchor == true, "auras")
-
-		list[#list + 1] = radioDropdown(L["UFDebuffAnchor"] or "Debuff anchor", anchorOpts, function()
-			return debuffAnchorValue()
-		end, function(val)
-			setValue(unit, { "auraIcons", "debuffAnchor" }, val or nil)
-			refresh()
-		end, auraDef.debuffAnchor or auraDef.anchor or "BOTTOM", "auras")
-
 		list[#list + 1] = slider(
 			L["Aura Offset X"] or "Aura Offset X",
 			-200,
@@ -1359,25 +1345,47 @@ local function buildUnitSettings(unit)
 			true
 		)
 
-		list[#list + 1] = slider(
-			L["Debuff Offset X"] or "Debuff Offset X",
-			-200,
-			200,
-			1,
+		list[#list + 1] = checkbox(L["UFSeparateDebuffAnchor"] or "Separate debuff anchor", function()
+			return getValue(unit, { "auraIcons", "separateDebuffAnchor" }, auraDef.separateDebuffAnchor == true)
+		end, function(val)
+			setValue(unit, { "auraIcons", "separateDebuffAnchor" }, val and true or false)
+			refresh()
+			refreshSettingsUI()
+		end, auraDef.separateDebuffAnchor == true, "auras")
+
+		local function isSeparateDebuffEnabled()
+			return getValue(unit, { "auraIcons", "separateDebuffAnchor" }, auraDef.separateDebuffAnchor == true) == true
+		end
+
+		local debuffAnchorSetting = radioDropdown(L["UFDebuffAnchor"] or "Debuff anchor", anchorOpts, function()
+			return debuffAnchorValue()
+		end, function(val)
+			setValue(unit, { "auraIcons", "debuffAnchor" }, val or nil)
+			refresh()
+		end, auraDef.debuffAnchor or auraDef.anchor or "BOTTOM", "auras")
+		debuffAnchorSetting.isEnabled = isSeparateDebuffEnabled
+		list[#list + 1] = debuffAnchorSetting
+
+			list[#list + 1] = slider(
+				L["Debuff Offset X"] or "Debuff Offset X",
+				-200,
+				200,
+				1,
 			function() return getValue(unit, { "auraIcons", "debuffOffset", "x" }, (auraDef.debuffOffset and auraDef.debuffOffset.x) or (auraDef.offset and auraDef.offset.x) or 0) end,
 			function(val)
 				setValue(unit, { "auraIcons", "debuffOffset", "x" }, val or 0)
 				refresh()
 			end,
 			(auraDef.debuffOffset and auraDef.debuffOffset.x) or (auraDef.offset and auraDef.offset.x) or 0,
-			"auras",
-			true
-		)
+				"auras",
+				true
+			)
+			list[#list].isEnabled = isSeparateDebuffEnabled
 
-		list[#list + 1] = slider(
-			L["Debuff Offset Y"] or "Debuff Offset Y",
-			-200,
-			200,
+			list[#list + 1] = slider(
+				L["Debuff Offset Y"] or "Debuff Offset Y",
+				-200,
+				200,
 			1,
 			function()
 				return getValue(
@@ -1392,13 +1400,14 @@ local function buildUnitSettings(unit)
 				refresh()
 			end,
 			(auraDef.debuffOffset and auraDef.debuffOffset.y) or debuffOffsetYDefault(),
-			"auras",
-			true
-		)
-	end
+				"auras",
+				true
+			)
+			list[#list].isEnabled = isSeparateDebuffEnabled
+		end
 
-	return list
-end
+		return list
+	end
 
 local function registerUnitFrame(unit, info)
 	if UF.EnsureFrames then UF.EnsureFrames(unit) end
