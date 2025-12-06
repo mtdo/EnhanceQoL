@@ -870,6 +870,22 @@ local function ensureInnerFrame(frame)
 	return inner
 end
 
+local function ensureTextOverlayFrame(bar)
+	if not bar then return nil end
+	local overlay = bar._rbTextOverlay
+	if not overlay then
+		overlay = CreateFrame("Frame", nil, bar)
+		overlay:SetAllPoints(bar)
+		overlay:EnableMouse(false)
+		bar._rbTextOverlay = overlay
+	end
+	local baseLevel = bar:GetFrameLevel() or 1
+	local borderLevel = bar._rbBorder and bar._rbBorder:GetFrameLevel() or baseLevel
+	overlay:SetFrameStrata(bar:GetFrameStrata())
+	overlay:SetFrameLevel(max(borderLevel + 1, baseLevel + 1))
+	return overlay
+end
+
 local function applyStatusBarInsets(frame, inset, force)
 	if not frame then return end
 	inset = inset or ZERO_INSETS
@@ -1037,6 +1053,9 @@ local function applyTextPosition(bar, cfg, baseX, baseY)
 	local offset = ensureTextOffsetTable(cfg)
 	local ox = (baseX or 0) + (offset.x or 0)
 	local oy = (baseY or 0) + (offset.y or 0)
+	local textParent = ensureTextOverlayFrame(bar) or bar
+	if bar.text:GetParent() ~= textParent then bar.text:SetParent(textParent) end
+	bar.text:SetDrawLayer("OVERLAY")
 	bar.text:ClearAllPoints()
 	bar.text:SetPoint("CENTER", bar, "CENTER", ox, oy)
 end
