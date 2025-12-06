@@ -17,10 +17,6 @@ local sampleAbsorb = addon.variables.ufSampleAbsorb
 addon.variables.ufSampleCast = addon.variables.ufSampleCast or {}
 local sampleCast = addon.variables.ufSampleCast
 
-local bossHiddenContainer
-local bossFramesHidden
-
-
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Aura")
 local LSM = LibStub("LibSharedMedia-3.0")
 local AceGUI = addon.AceGUI or LibStub("AceGUI-3.0")
@@ -747,29 +743,6 @@ local function applyFrameRuleOverride(frameName, enabled)
 		end
 	end
 	UpdateUnitFrameMouseover(info.name, info)
-end
-
-local function bossFramesEnabled()
-	if not addon.db or not addon.db.ufFrames then return false end
-	for i = 1, 5 do
-		local cfg = addon.db.ufFrames["boss" .. i]
-		if cfg and cfg.enabled then return true end
-	end
-	return false
-end
-
-local function hideBossFrames()
-	if bossFramesHidden then return end
-	local container = _G.BossTargetFrameContainer
-	if not container then return end
-	bossHiddenContainer = bossHiddenContainer or CreateFrame("Frame")
-	-- Boss frames misbehave in Edit Mode when :Hide() is used, so reparent them.
-	container:SetParent(bossHiddenContainer)
-	bossFramesHidden = true
-end
-
-local function applyBossFrameHiding()
-	if bossFramesEnabled() then hideBossFrames() end
 end
 
 local function addTreeNode(path, node, parentPath)
@@ -1500,25 +1473,25 @@ local function updateCombatIndicator(cfg)
 	end
 end
 
-	local function layoutFrame(cfg, unit)
-		local st = states[unit]
-		if not st or not st.frame then return end
-		local def = defaults[unit] or defaults.player or {}
-		local scfg = cfg.status or {}
-		local defStatus = def.status or {}
-		local ciCfg = scfg.combatIndicator or defStatus.combatIndicator or {}
-		local showName = scfg.enabled ~= false
-		local showLevel = scfg.levelEnabled ~= false
-		local showStatus = showName or showLevel or (unit == PLAYER_UNIT and ciCfg.enabled ~= false)
-		local pcfg = cfg.power or {}
-		local powerEnabled = pcfg.enabled ~= false
-		local width = max(MIN_WIDTH, cfg.width or def.width)
-		local statusHeight = showStatus and (cfg.statusHeight or def.statusHeight) or 0
-		local healthHeight = cfg.healthHeight or def.healthHeight
-		local powerHeight = powerEnabled and (cfg.powerHeight or def.powerHeight) or 0
-		local barGap = powerEnabled and (cfg.barGap or def.barGap or 0) or 0
-		local borderInset = 0
-		if cfg.border and cfg.border.enabled then borderInset = (cfg.border.edgeSize or 1) end
+local function layoutFrame(cfg, unit)
+	local st = states[unit]
+	if not st or not st.frame then return end
+	local def = defaults[unit] or defaults.player or {}
+	local scfg = cfg.status or {}
+	local defStatus = def.status or {}
+	local ciCfg = scfg.combatIndicator or defStatus.combatIndicator or {}
+	local showName = scfg.enabled ~= false
+	local showLevel = scfg.levelEnabled ~= false
+	local showStatus = showName or showLevel or (unit == PLAYER_UNIT and ciCfg.enabled ~= false)
+	local pcfg = cfg.power or {}
+	local powerEnabled = pcfg.enabled ~= false
+	local width = max(MIN_WIDTH, cfg.width or def.width)
+	local statusHeight = showStatus and (cfg.statusHeight or def.statusHeight) or 0
+	local healthHeight = cfg.healthHeight or def.healthHeight
+	local powerHeight = powerEnabled and (cfg.powerHeight or def.powerHeight) or 0
+	local barGap = powerEnabled and (cfg.barGap or def.barGap or 0) or 0
+	local borderInset = 0
+	if cfg.border and cfg.border.enabled then borderInset = (cfg.border.edgeSize or 1) end
 	st.frame:SetWidth(width + borderInset * 2)
 	if cfg.strata then
 		st.frame:SetFrameStrata(cfg.strata)
@@ -1983,7 +1956,7 @@ local function updateTargetTargetFrame(cfg, forceApply)
 		st = states[TARGET_TARGET_UNIT]
 	end
 	if st then st.cfg = st.cfg or cfg end
-	local lHealth =  UnitHealth("target") 
+	local lHealth = UnitHealth("target")
 	if UnitExists("target") and UnitExists(TARGET_TARGET_UNIT) and (issecretvalue and issecretvalue(lHealth) or lHealth > 0) then
 		if st then
 			if st.barGroup then st.barGroup:Show() end
@@ -2043,9 +2016,7 @@ local function updateFocusFrame(cfg, forceApply)
 				st.power:Hide()
 			end
 			updatePower(cfg, FOCUS_UNIT)
-			if st.castBar then
-				setCastInfoFromUnit(FOCUS_UNIT)
-			end
+			if st.castBar then setCastInfoFromUnit(FOCUS_UNIT) end
 		end
 	else
 		if st then
@@ -2307,7 +2278,6 @@ function UF.Enable()
 	local cfg = ensureDB("player")
 	cfg.enabled = true
 	ensureEventHandling()
-	applyBossFrameHiding()
 	applyConfig("player")
 	if ensureDB("target").enabled then applyConfig("target") end
 	local totCfg = ensureDB(TARGET_TARGET_UNIT)
@@ -2330,7 +2300,6 @@ function UF.Disable()
 end
 
 function UF.Refresh()
-	applyBossFrameHiding()
 	ensureEventHandling()
 	if not anyUFEnabled() then return end
 	applyConfig("player")
@@ -2396,7 +2365,6 @@ if not addon.Aura.UFInitialized then
 		ensureEventHandling()
 		updateFocusFrame(fcfg, true)
 	end
-	applyBossFrameHiding()
 end
 
 UF.targetAuras = targetAuras

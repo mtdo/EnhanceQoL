@@ -5,7 +5,6 @@ local SettingsLib = LibStub("LibEQOLSettingsMode-1.0")
 
 -- Optional: Prefix für Settings-Variablen
 local prefix = "EQOL_"
-SettingsLib:SetVariablePrefix(prefix)
 
 -- Optional: New-Badge-Resolver (Kategorie-ID oder Variablenname)
 -- Ersetze addon.variables.NewVersionTableEQOL nach Bedarf
@@ -19,7 +18,7 @@ addon.functions = addon.functions or {}
 ---------------------------------------------------------
 function addon.functions.SettingsCreateCategory(parent, treeName, sort, newTagID)
 	if nil == parent then parent = addon.SettingsLayout.rootCategory end
-	local cat, layout = SettingsLib:CreateCategory(parent, treeName, sort, newTagID)
+	local cat, layout = SettingsLib:CreateCategory(parent, treeName, sort, newTagID, prefix)
 	addon.SettingsLayout.knownCategoryID = addon.SettingsLayout.knownCategoryID or {}
 	addon.SettingsLayout.knownCategoryID[cat:GetID()] = true
 	return cat, layout
@@ -42,6 +41,7 @@ function addon.functions.SettingsCreateCheckbox(cat, cbData)
 		parent = cbData.element,
 		parentCheck = cbData.parentCheck,
 		parentSection = cbData.parentSection,
+		prefix = prefix,
 	})
 	addon.SettingsLayout.elements = addon.SettingsLayout.elements or {}
 	addon.SettingsLayout.elements[cbData.var] = { setting = setting, element = element }
@@ -108,6 +108,7 @@ function addon.functions.SettingsCreateSlider(cat, cbData)
 		parentCheck = cbData.parentCheck,
 		searchtags = cbData.searchtags,
 		parentSection = cbData.parentSection,
+		prefix = prefix,
 	})
 	addon.SettingsLayout.elements = addon.SettingsLayout.elements or {}
 	addon.SettingsLayout.elements[cbData.var] = { setting = setting, element = element }
@@ -131,6 +132,7 @@ function addon.functions.SettingsCreateDropdown(cat, cbData)
 		parent = cbData.element,
 		parentCheck = cbData.parentCheck,
 		parentSection = cbData.parentSection,
+		prefix = prefix,
 	})
 	addon.SettingsLayout.elements = addon.SettingsLayout.elements or {}
 	addon.SettingsLayout.elements[cbData.var] = { setting = setting, element = element }
@@ -179,7 +181,8 @@ function addon.functions.SettingsCreateMultiDropdown(cat, cbData)
 		parentCheck = cbData.parentCheck,
 		notify = cbData.notify,
 		parentSection = cbData.parentSection,
-		isEnabled = cbData.isEnabled
+		isEnabled = cbData.isEnabled,
+		prefix = prefix,
 	})
 
 	addon.SettingsLayout.elements = addon.SettingsLayout.elements or {}
@@ -213,6 +216,7 @@ function addon.functions.SettingsCreateSoundDropdown(cat, cbData)
 		parentCheck = cbData.parentCheck,
 		searchtags = cbData.searchtags,
 		parentSection = cbData.parentSection,
+		prefix = prefix,
 	})
 	addon.SettingsLayout.elements = addon.SettingsLayout.elements or {}
 	addon.SettingsLayout.elements[cbData.var] = { initializer = initializer, setting = setting }
@@ -242,6 +246,7 @@ function addon.functions.SettingsCreateColorOverrides(cat, cbData)
 		searchtags = cbData.searchtags,
 		notify = cbData.notify,
 		parentSection = cbData.parentSection,
+		prefix = prefix,
 	})
 	addon.SettingsLayout.elements = addon.SettingsLayout.elements or {}
 	addon.SettingsLayout.elements[cbData.var or cbData.key or "ColorOverrides"] = { initializer = initializer }
@@ -264,6 +269,7 @@ function addon.functions.SettingsCreateButton(cat, cbData)
 		parent = cbData.element,
 		parentCheck = cbData.parentCheck,
 		parentSection = cbData.parentSection,
+		prefix = prefix,
 	})
 	addon.SettingsLayout.elements = addon.SettingsLayout.elements or {}
 	addon.SettingsLayout.elements[cbData.var or cbData.text] = { element = btn }
@@ -296,6 +302,7 @@ function addon.functions.SettingsCreateColorPicker(cat, cbData)
 		searchtags = cbData.searchtags,
 		notify = cbData.notify,
 		parentSection = cbData.parentSection,
+		prefix = prefix,
 	})
 
 	addon.SettingsLayout = addon.SettingsLayout or {}
@@ -308,6 +315,7 @@ function addon.functions.SettingsCreateExpandableSection(cat, cbData)
 	local section = SettingsLib:CreateExpandableSection(cat, {
 		name = cbData.name,
 		expanded = true,
+		prefix = prefix,
 	})
 	if cbData.var then
 		addon.SettingsLayout = addon.SettingsLayout or {}
