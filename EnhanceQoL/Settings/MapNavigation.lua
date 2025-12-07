@@ -34,6 +34,27 @@ local data = {
 		default = false,
 		children = {
 			{
+				var = "enableSquareMinimapLayout",
+				text = L["enableSquareMinimapLayout"],
+				desc = L["enableSquareMinimapLayoutDesc"],
+				func = function(key)
+					addon.db["enableSquareMinimapLayout"] = key
+					if addon.functions.applySquareMinimapLayout then addon.functions.applySquareMinimapLayout() end
+					addon.variables.requireReload = true
+					addon.functions.checkReloadFrame()
+				end,
+				get = function() return addon.db["enableSquareMinimapLayout"] or true end,
+				default = true,
+				sType = "checkbox",
+				parentCheck = function()
+					return addon.SettingsLayout.elements["enableSquareMinimap"]
+						and addon.SettingsLayout.elements["enableSquareMinimap"].setting
+						and addon.SettingsLayout.elements["enableSquareMinimap"].setting:GetValue() == true
+				end,
+				parent = true,
+				notify = "enableSquareMinimap",
+			},
+			{
 				var = "enableSquareMinimapBorder",
 				text = L["enableSquareMinimapBorder"],
 				desc = L["enableSquareMinimapBorderDesc"],
@@ -622,7 +643,63 @@ addon.functions.SettingsCreateCheckboxes(cMapNav, data)
 
 ----- REGION END
 
-function addon.functions.initMapNav() end
+local function applySquareMinimapLayout(self, underneath)
+	if not addon.db or not addon.db.enableSquareMinimap or not addon.db.enableSquareMinimapLayout then
+		return
+	end
+	if not Minimap or not MinimapCluster or not Minimap.ZoomIn or not Minimap.ZoomOut then return end
+
+	local addonCompartment = _G.AddonCompartmentFrame
+	local instanceDifficulty = MinimapCluster and MinimapCluster.InstanceDifficulty
+
+	local headerUnderneath = underneath
+	if headerUnderneath == nil then
+		if MinimapCluster.GetHeaderUnderneath then
+			headerUnderneath = MinimapCluster:GetHeaderUnderneath()
+		elseif MinimapCluster.headerUnderneath ~= nil then
+			headerUnderneath = MinimapCluster.headerUnderneath
+		end
+	end
+
+	Minimap:ClearAllPoints()
+	Minimap.ZoomIn:ClearAllPoints()
+	Minimap.ZoomOut:ClearAllPoints()
+	MinimapCluster.IndicatorFrame:ClearAllPoints()
+	if addonCompartment then addonCompartment:ClearAllPoints() end
+	if instanceDifficulty then instanceDifficulty:ClearAllPoints() end
+
+	if not headerUnderneath then
+		Minimap:SetPoint("TOP", MinimapCluster, "TOP", 14, -25)
+		if instanceDifficulty then instanceDifficulty:SetPoint("TOPRIGHT", MinimapCluster, "TOPRIGHT", -10, -25) end
+
+		Minimap.ZoomIn:SetPoint("BOTTOMRIGHT", Minimap, "BOTTOMRIGHT", 0, 0)
+		Minimap.ZoomOut:SetPoint("RIGHT", Minimap.ZoomIn, "LEFT", -6, 0)
+		if addonCompartment then addonCompartment:SetPoint("BOTTOM", Minimap.ZoomIn, "BOTTOM", 0, 20) end
+	else
+		Minimap:SetPoint("BOTTOM", MinimapCluster, "BOTTOM", 14, 25)
+		if instanceDifficulty then instanceDifficulty:SetPoint("BOTTOMRIGHT", MinimapCluster, "BOTTOMRIGHT", -10, 22) end
+
+		Minimap.ZoomIn:SetPoint("TOPRIGHT", Minimap, "TOPRIGHT", 0, 0)
+		Minimap.ZoomOut:SetPoint("RIGHT", Minimap.ZoomIn, "LEFT", -6, 0)
+		if addonCompartment then addonCompartment:SetPoint("TOP", Minimap.ZoomIn, "TOP", 0, -20) end
+	end
+	MinimapCluster.IndicatorFrame:SetPoint("RIGHT", MinimapCluster.Tracking.Button, "LEFT", -10, 0)
+
+	if addonCompartment then addonCompartment:SetFrameStrata("MEDIUM") end
+end
+
+function addon.functions.applySquareMinimapLayout(forceUnderneath)
+	addon.variables = addon.variables or {}
+	applySquareMinimapLayout(nil, forceUnderneath)
+	if addon.db and addon.db.enableSquareMinimap and addon.db.enableSquareMinimapLayout and MinimapCluster and not addon.variables.squareMinimapLayoutHooked then
+		hooksecurefunc(MinimapCluster, "SetHeaderUnderneath", applySquareMinimapLayout)
+		addon.variables.squareMinimapLayoutHooked = true
+	end
+end
+
+function addon.functions.initMapNav()
+	addon.functions.applySquareMinimapLayout()
+end
 
 local eventHandlers = {}
 
