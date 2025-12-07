@@ -400,22 +400,6 @@ local function ensureBossContainer()
 	bossContainer:SetMovable(true)
 	bossContainer:EnableMouse(true)
 	bossContainer:RegisterForDrag("LeftButton")
-	bossContainer:SetScript("OnDragStart", function(self)
-		if InCombatLockdown() then return end
-		if IsShiftKeyDown() then self:StartMoving() end
-	end)
-	bossContainer:SetScript("OnDragStop", function(self)
-		if InCombatLockdown() then return end
-		self:StopMovingOrSizing()
-		local point, rel, relPoint, x, y = self:GetPoint(1)
-		local cfg = ensureDB("boss")
-		cfg.anchor = cfg.anchor or {}
-		cfg.anchor.point = point
-		cfg.anchor.relativeTo = (rel and rel.GetName and rel:GetName()) or "UIParent"
-		cfg.anchor.relativePoint = relPoint
-		cfg.anchor.x = x
-		cfg.anchor.y = y
-	end)
 	bossContainer:Hide()
 	anchorBossContainer()
 	return bossContainer
@@ -1806,25 +1790,6 @@ local function ensureFrames(unit)
 	st.frame:SetMovable(true)
 	st.frame:EnableMouse(true)
 	st.frame:RegisterForDrag("LeftButton")
-	local dragFrame = isBossUnit(unit) and ensureBossContainer() or st.frame
-	st.frame:SetScript("OnDragStart", function(self)
-		if InCombatLockdown() then return end
-		if isBossUnit(unit) and addon.EditModeLib and addon.EditModeLib:IsInEditMode() then return end
-		if IsShiftKeyDown() and dragFrame then dragFrame:StartMoving() end
-	end)
-	st.frame:SetScript("OnDragStop", function(self)
-		if InCombatLockdown() then return end
-		if dragFrame then dragFrame:StopMovingOrSizing() end
-		local point, rel, relPoint, x, y = (dragFrame or self):GetPoint(1)
-		local cfg = ensureDB(unit)
-		cfg.anchor = cfg.anchor or {}
-		cfg.anchor.point = point
-		cfg.anchor.relativeTo = (rel and rel.GetName and rel:GetName()) or "UIParent"
-		cfg.anchor.relativePoint = relPoint
-		cfg.anchor.x = x
-		cfg.anchor.y = y
-		if isBossUnit(unit) then anchorBossContainer(cfg) end
-	end)
 	hookTextFrameLevels(st)
 end
 
