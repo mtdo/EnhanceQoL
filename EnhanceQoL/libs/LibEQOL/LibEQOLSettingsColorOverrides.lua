@@ -27,6 +27,10 @@ function LibEQOL_ColorOverridesMixin:OnLoad()
 	self.container = self.ItemQualities or self.List or self
 	self.ColorOverrideFramePool = CreateFramePool("FRAME", self.container, "ColorOverrideTemplate")
 	self.colorOverrideFrames = {}
+	-- Disable the default hover background from SettingsListElementTemplate; Blizzard's color overrides rows don't highlight.
+	if self.Tooltip and self.Tooltip.HoverBackground then
+		self.Tooltip.HoverBackground:SetAlpha(0)
+	end
 end
 
 function LibEQOL_ColorOverridesMixin:Init(initializer)
@@ -45,6 +49,7 @@ function LibEQOL_ColorOverridesMixin:Init(initializer)
 	self.fixedSpacing = initializer.data.spacing
 	self.parentCheck = initializer.data.parentCheck
 	self.colorizeLabel = initializer.data.colorizeLabel or initializer.data.colorizeText
+	self.hasOpacity = initializer.data.hasOpacity == true
 
 	if self.Header then
 		self.Header:SetText(self.headerText)
@@ -68,6 +73,9 @@ end
 
 function LibEQOL_ColorOverridesMixin:GetSpacing()
 	local container = self.container
+	if self.fixedSpacing then
+		return self.fixedSpacing
+	end
 	if container and container.spacing then
 		return container.spacing
 	end
@@ -162,9 +170,9 @@ function LibEQOL_ColorOverridesMixin:ResetToDefaults()
 		return
 	end
 	for _, entry in ipairs(self.entries or {}) do
-		local r, g, b = self.getDefaultColor(entry.key)
+		local r, g, b, a = self.getDefaultColor(entry.key)
 		r, g, b = r or 1, g or 1, b or 1
-		self.setColor(entry.key, r, g, b)
+		self.setColor(entry.key, r, g, b, a)
 	end
 	self:RefreshAll()
 end
@@ -173,24 +181,41 @@ function LibEQOL_ColorOverridesMixin:OpenColorPicker(frame)
 	if not self.setColor then
 		return
 	end
-	local currentR, currentG, currentB = self.getColor(frame.data.key)
+	local currentR, currentG, currentB, currentA = self.getColor(frame.data.key)
 	currentR, currentG, currentB = currentR or 1, currentG or 1, currentB or 1
+	local hasOpacity = self.hasOpacity
+	if hasOpacity then
+		currentA = currentA or 1
+	else
+		currentA = nil
+	end
+
+	local function apply(r, g, b, a)
+		self.setColor(frame.data.key, r, g, b, hasOpacity and a or nil)
+		self:RefreshRow(frame)
+	end
 
 	ColorPickerFrame:SetupColorPickerAndShow({
 		r = currentR,
 		g = currentG,
 		b = currentB,
-		hasOpacity = false,
+		opacity = currentA,
+		hasOpacity = hasOpacity,
 		swatchFunc = function()
 			local r, g, b = ColorPickerFrame:GetColorRGB()
-			self.setColor(frame.data.key, r, g, b)
-			self:RefreshRow(frame)
+			local a = hasOpacity and (ColorPickerFrame.GetColorAlpha and ColorPickerFrame:GetColorAlpha() or currentA) or nil
+			apply(r, g, b, a)
 		end,
+		opacityFunc = hasOpacity and function()
+			local r, g, b = ColorPickerFrame:GetColorRGB()
+			local a = ColorPickerFrame.GetColorAlpha and ColorPickerFrame:GetColorAlpha() or currentA
+			apply(r, g, b, a)
+		end or nil,
 		cancelFunc = function()
-			local r, g, b = ColorPickerFrame:GetPreviousValues()
+			local r, g, b, a = ColorPickerFrame:GetPreviousValues()
 			r, g, b = r or currentR, g or currentG, b or currentB
-			self.setColor(frame.data.key, r, g, b)
-			self:RefreshRow(frame)
+			a = hasOpacity and (a or currentA) or nil
+			apply(r, g, b, a)
 		end,
 	})
 end

@@ -1784,6 +1784,8 @@ powertypeClasses = {
 	},
 }
 
+local EnumPowerType = Enum.PowerType
+
 local POWER_ENUM = {
 	MANA = (EnumPowerType and EnumPowerType.Mana) or 0,
 	RAGE = (EnumPowerType and EnumPowerType.Rage) or 1,
@@ -2313,7 +2315,7 @@ function updatePowerBar(type, runeSlot)
 			local br, bgc, bb, ba = base[1] or 1, base[2] or 1, base[3] or 1, base[4] or 1
 			local targetR, targetG, targetB, targetA = br, bgc, bb, ba
 			local useMaxColor = cfg.useMaxColor == true
-			local reachedCap = curPower >= max(maxPower, 1)
+			local reachedCap = (issecretvalue and not issecretvalue(curPower) or not addon.variables.isMidnight) and curPower >= max(maxPower, 1)
 			if useMaxColor and reachedCap then
 				local maxCol = cfg.maxColor or WHITE
 				targetR, targetG, targetB, targetA = maxCol[1] or br, maxCol[2] or bgc, maxCol[3] or bb, maxCol[4] or ba
