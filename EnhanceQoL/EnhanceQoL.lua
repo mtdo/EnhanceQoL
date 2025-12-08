@@ -1191,7 +1191,7 @@ local function applyCooldownViewerMode(frameName, mode)
 			addon.variables = addon.variables or {}
 			addon.variables.pendingCooldownViewerShow = addon.variables.pendingCooldownViewerShow or {}
 			addon.variables.pendingCooldownViewerShow[frame] = true
-			EnsureCooldownViewerWatcher()
+			addon.functions.EnsureCooldownViewerWatcher()
 		elseif frame.Show and not frame:IsShown() then
 			frame:Show()
 		end
@@ -1289,7 +1289,6 @@ end
 addon.functions.EnsureCooldownViewerWatcher = EnsureCooldownViewerWatcher
 
 local hookedButtons = {}
-local EnsureCooldownViewerWatcher -- forward declaration
 
 -- Keep action bars visible while interacting with SpellFlyout
 local EQOL_LastMouseoverBar
