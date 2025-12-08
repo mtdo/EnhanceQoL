@@ -19,14 +19,12 @@ local CreateMacro = CreateMacro
 
 local healthMacroName = "EnhanceQoLHealthMacro"
 
--- TODO completely remove healthAllowOther
 -- TODO always reorder by cooldown and remove the setting (more convinient)
 -- DB defaults
 addon.functions.InitDBValue("healthMacroEnabled", false)
 addon.functions.InitDBValue("healthUseBoth", false)
 addon.functions.InitDBValue("healthPreferStoneFirst", true)
 addon.functions.InitDBValue("healthReset", "combat")
-addon.functions.InitDBValue("healthAllowOther", false)
 addon.functions.InitDBValue("healthReorderByCooldown", true)
 addon.functions.InitDBValue("healthUseRecuperate", false)
 -- Allow using combat potions (from EnhanceQoLDrinkMacro/Health.lua entries tagged with isCombatPotion)
