@@ -342,6 +342,13 @@ local function maybeChainSecondaryAnchor(cfg, prevType)
 	}
 end
 
+local function mainTemplateMatches(store, barType)
+	if not store or not store.MAIN then return nil end
+	local tag = store._MAIN_TYPE or (store.MAIN and store.MAIN._rbType)
+	if tag and tag ~= barType then return nil end
+	return store.MAIN
+end
+
 local function resolveGlobalTemplate(barType, specIndex)
 	if not barType then return nil end
 	local store = addon.db.globalResourceBarSettings
@@ -351,7 +358,10 @@ local function resolveGlobalTemplate(barType, specIndex)
 	if not specInfo then return nil end
 
 	-- MAIN fallback
-	if specInfo.MAIN == barType and store and store.MAIN then return store.MAIN end
+	if specInfo.MAIN == barType then
+		local main = mainTemplateMatches(store, barType)
+		if main then return main end
+	end
 
 	-- Secondary fallback
 	local idx = secondaryIndex(specInfo, barType)
@@ -360,7 +370,7 @@ local function resolveGlobalTemplate(barType, specIndex)
 	return nil
 end
 
-local function saveGlobalProfile(barType, specIndex)
+local function saveGlobalProfile(barType, specIndex, targetKey)
 	if not barType then return false, "NO_BAR" end
 	local specCfg = ensureSpecCfg(specIndex or addon.variables.unitSpec)
 	if not specCfg then return false, "NO_SPEC" end
@@ -383,28 +393,62 @@ local function saveGlobalProfile(barType, specIndex)
 	end
 
 	local normalized = normalizeSize(cfg)
+	normalized._rbType = barType
 	local store = ensureGlobalStore()
-	store[barType] = normalized
-
-	-- Also keep generic MAIN/SECONDARY templates for cross-bar reuse
 	local specInfo = getSpecInfo(specIndex)
-	if specInfo then
-		if specInfo.MAIN == barType then store.MAIN = CopyTable(normalized) end
-		local secondaries = specSecondaries(specInfo)
-		if secondaries[1] == barType then store.SECONDARY = CopyTable(normalized) end
+	local function assign(key)
+		if not key then return end
+		if key == "MAIN" then
+			store.MAIN = CopyTable(normalized)
+			store._MAIN_TYPE = barType
+		elseif key == "SECONDARY" then
+			store.SECONDARY = CopyTable(normalized)
+		else
+			store[key] = normalized
+		end
+	end
+
+	if targetKey then
+		assign(targetKey)
+	else
+		store[barType] = normalized
+		-- Also keep generic MAIN/SECONDARY templates for cross-bar reuse
+		if specInfo then
+			if specInfo.MAIN == barType then assign("MAIN") end
+			local secondaries = specSecondaries(specInfo)
+			if secondaries[1] == barType then assign("SECONDARY") end
+		end
 	end
 	return true
 end
 
-local function applyGlobalProfile(barType, specIndex, cosmeticOnly)
+local function applyGlobalProfile(barType, specIndex, cosmeticOnly, sourceKey)
 	if not barType then return false, "NO_BAR" end
-	local globalCfg, secondaryIdx = resolveGlobalTemplate(barType, specIndex)
-	if not globalCfg then
-		local store = addon.db and addon.db.globalResourceBarSettings
-		if store and store.MAIN then
-			globalCfg = store.MAIN
-			local specInfo = getSpecInfo(specIndex)
-			secondaryIdx = specInfo and secondaryIndex(specInfo, barType)
+	local store = addon.db and addon.db.globalResourceBarSettings
+	local specInfo = getSpecInfo(specIndex)
+	local globalCfg
+	local secondaryIdx
+
+	local function resolveExplicit(key)
+		if not key then return nil end
+		if key == "MAIN" then return mainTemplateMatches(store, barType) end
+		if key == "SECONDARY" then
+			secondaryIdx = secondaryIndex(specInfo, barType)
+			return store and store.SECONDARY
+		end
+		return store and store[key]
+	end
+
+	if sourceKey then
+		globalCfg = resolveExplicit(sourceKey)
+	else
+		globalCfg, secondaryIdx = resolveGlobalTemplate(barType, specIndex)
+		if not globalCfg then
+			local main = mainTemplateMatches(store, barType)
+			if main then
+				globalCfg = main
+				secondaryIdx = specInfo and secondaryIndex(specInfo, barType)
+			end
 		end
 	end
 	if not globalCfg then return false, "NO_GLOBAL" end
