@@ -326,5 +326,3 @@ if Lib and Lib.RegisterCallback then
 	end)
 	Lib.internal.debugEnabled = true
 end
-
-   
