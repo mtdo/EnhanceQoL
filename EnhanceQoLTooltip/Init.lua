@@ -42,6 +42,14 @@ addon.functions.InitDBValue("TooltipItemHideInCombat", false)
 addon.functions.InitDBValue("TooltipItemHideInDungeon", false)
 addon.functions.InitDBValue("TooltipShowItemID", false)
 addon.functions.InitDBValue("TooltipHousingAutoPreview", false)
+addon.functions.InitDBValue("TooltipShowItemIcon", false)
+addon.functions.InitDBValue("TooltipItemIconSize", 16)
+addon.functions.InitDBValue("TooltipShowGuildRank", false)
+addon.functions.InitDBValue("TooltipGuildRankColor", { r = 1, g = 1, b = 1 })
+addon.functions.InitDBValue("TooltipColorGuildName", false)
+addon.functions.InitDBValue("TooltipGuildNameColor", { r = 0.11, g = 1, b = 0.11 }) -- Blizzard guild green
+addon.functions.InitDBValue("TooltipHideFaction", false)
+addon.functions.InitDBValue("TooltipHidePVP", false)
 
 -- Buff
 addon.functions.InitDBValue("TooltipBuffHideType", 1)

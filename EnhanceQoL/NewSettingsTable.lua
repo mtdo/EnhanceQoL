@@ -18,6 +18,13 @@ addon.variables.NewVersionTableEQOL = {
 
 	["EQOL_Tooltip"] = true,
 	["EQOL_TooltipHousingAutoPreview"] = true,
+	["EQOL_TooltipScale"] = true,
+	["EQOL_TooltipShowGuildRank"] = true,
+	["EQOL_TooltipGuildRankColor"] = true,
+	["EQOL_TooltipColorGuildName"] = true,
+	["EQOL_TooltipGuildNameColor"] = true,
+	["EQOL_TooltipHideFaction"] = true,
+	["EQOL_TooltipHidePVP"] = true,
 
 	["EQOL_ActionBar"] = true,
 	["EQOL_actionBarHideBorders"] = true,

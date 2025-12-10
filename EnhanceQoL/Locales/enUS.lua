@@ -187,7 +187,6 @@ L["showIlvlOnBagItems"] = "Display ilvl on equipment in all bags"
 L["showDurabilityOnCharframe"] = "Display Durability on Character Equipment Frame"
 L["showCloakUpgradeButton"] = "Display cloak upgrade button" -- Todo remove on midnight release
 L["cloakUpgradeTooltip"] = "Open cloak skill upgrades"
-L["hideOrderHallBar"] = "Hide Order Hall Command Bar"
 L["MissingEnchant"] = "Enchant"
 L["hideHitIndicatorPlayer"] = "Hide floating combat text (damage and healing) over your character"
 L["hideHitIndicatorPet"] = "Hide floating combat text (damage and healing) over your pet"
@@ -642,7 +641,6 @@ L["persistAuctionHouseFilter"] = "Remember Auction House filters for this sessio
 L["alwaysUserCurExpAuctionHouse"] = 'Always set the filter for "%s"'
 
 L["Excluded NPCs"] = "Excluded NPCs"
-L["hideDynamicFlightBar"] = "Hide %s Vigor bar while on the ground"
 L["Presence"] = "Presence"
 
 -- Ignore module

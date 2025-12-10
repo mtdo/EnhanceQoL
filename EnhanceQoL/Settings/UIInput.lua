@@ -264,14 +264,6 @@ data = {
 		func = function(v) addon.db["ignoreTalkingHead"] = v end,
 	},
 	{
-		var = "hideDynamicFlightBar",
-		text = L["hideDynamicFlightBar"]:format(DYNAMIC_FLIGHT),
-		func = function(v)
-			addon.db["hideDynamicFlightBar"] = v
-			addon.functions.toggleDynamicFlightBar(addon.db["hideDynamicFlightBar"])
-		end,
-	},
-	{
 		var = "hideQuickJoinToast",
 		text = HIDE .. " " .. COMMUNITIES_NOTIFICATION_SETTINGS_DIALOG_QUICK_JOIN_LABEL,
 		func = function(v)
@@ -285,20 +277,6 @@ data = {
 		func = function(v)
 			addon.db["hideZoneText"] = v
 			addon.functions.toggleZoneText(addon.db["hideZoneText"])
-		end,
-	},
-	{
-		var = "hideOrderHallBar",
-		text = L["hideOrderHallBar"],
-		func = function(v)
-			addon.db["hideOrderHallBar"] = v
-			if OrderHallCommandBar then
-				if v then
-					OrderHallCommandBar:Hide()
-				else
-					OrderHallCommandBar:Show()
-				end
-			end
 		end,
 	},
 	{

@@ -2568,7 +2568,6 @@ local function initUI()
 	addon.functions.InitDBValue("hiddenMinimapElements", addon.db["hiddenMinimapElements"] or {})
 	addon.functions.InitDBValue("persistAuctionHouseFilter", false)
 	addon.functions.InitDBValue("alwaysUserCurExpAuctionHouse", false)
-	addon.functions.InitDBValue("hideDynamicFlightBar", false)
 	addon.functions.InitDBValue("enableExtendedMerchant", false)
 	addon.functions.InitDBValue("showInstanceDifficulty", false)
 	-- anchor no longer used; position controlled by offsets from CENTER
@@ -2783,28 +2782,6 @@ local function initUI()
 	-- Apply merchant extension on load if enabled
 	if addon.db["enableExtendedMerchant"] and addon.Merchant and addon.Merchant.Enable then addon.Merchant:Enable() end
 
-	function addon.functions.toggleDynamicFlightBar(value)
-		addon.variables = addon.variables or {}
-		local bar = UIWidgetPowerBarContainerFrame
-		if not bar then return end
-		if InCombatLockdown and InCombatLockdown() then
-			-- Defer secure attribute updates until combat lockdown ends.
-			addon.variables.pendingDynamicFlightBar = value
-			return
-		end
-
-		addon.variables.pendingDynamicFlightBar = nil
-		if value then
-			if not bar.alphaDriverSet then
-				RegisterAttributeDriver(bar, "state-visibility", "[flying]show;hide;")
-				bar.alphaDriverSet = true
-			end
-		else
-			addon.variables.requireReload = true
-		end
-	end
-	if addon.db["hideDynamicFlightBar"] then addon.functions.toggleDynamicFlightBar(addon.db["hideDynamicFlightBar"]) end
-
 	local eventFrame = CreateFrame("Frame")
 	eventFrame:SetScript("OnUpdate", function(self)
 		addon.functions.toggleMinimapButton(addon.db["hideMinimapButton"])
@@ -2864,9 +2841,7 @@ local function initUI()
 		local bagHeight = bagFrame:GetHeight()
 
 		local preferredAnchor = "AUTO"
-		if bagFrame == addon.variables.buttonSink and addon.db and type(addon.db.buttonSinkAnchorPreference) == "string" then
-			preferredAnchor = string.upper(addon.db.buttonSinkAnchorPreference)
-		end
+		if bagFrame == addon.variables.buttonSink and addon.db and type(addon.db.buttonSinkAnchorPreference) == "string" then preferredAnchor = string.upper(addon.db.buttonSinkAnchorPreference) end
 
 		local function getButtonPointCoords(point)
 			if point == "TOPLEFT" then return bLeft, bTop end
@@ -2886,18 +2861,10 @@ local function initUI()
 			if bagPoint == "TOPRIGHT" then return anchorX - bagWidth, anchorX, anchorY, anchorY - bagHeight end
 			if bagPoint == "BOTTOMLEFT" then return anchorX, anchorX + bagWidth, anchorY + bagHeight, anchorY end
 			if bagPoint == "BOTTOMRIGHT" then return anchorX - bagWidth, anchorX, anchorY + bagHeight, anchorY end
-			if bagPoint == "TOP" then
-				return anchorX - bagWidth / 2, anchorX + bagWidth / 2, anchorY, anchorY - bagHeight
-			end
-			if bagPoint == "BOTTOM" then
-				return anchorX - bagWidth / 2, anchorX + bagWidth / 2, anchorY + bagHeight, anchorY
-			end
-			if bagPoint == "LEFT" then
-				return anchorX, anchorX + bagWidth, anchorY + bagHeight / 2, anchorY - bagHeight / 2
-			end
-			if bagPoint == "RIGHT" then
-				return anchorX - bagWidth, anchorX, anchorY + bagHeight / 2, anchorY - bagHeight / 2
-			end
+			if bagPoint == "TOP" then return anchorX - bagWidth / 2, anchorX + bagWidth / 2, anchorY, anchorY - bagHeight end
+			if bagPoint == "BOTTOM" then return anchorX - bagWidth / 2, anchorX + bagWidth / 2, anchorY + bagHeight, anchorY end
+			if bagPoint == "LEFT" then return anchorX, anchorX + bagWidth, anchorY + bagHeight / 2, anchorY - bagHeight / 2 end
+			if bagPoint == "RIGHT" then return anchorX - bagWidth, anchorX, anchorY + bagHeight / 2, anchorY - bagHeight / 2 end
 		end
 
 		local function fitsOnScreen(left, right, top, bottom)
@@ -4301,7 +4268,6 @@ local eventHandlers = {
 	["ACCOUNT_MONEY"] = function() addon.db["warbandGold"] = C_Bank.FetchDepositedMoney(Enum.BankType.Account) end,
 	["PLAYER_REGEN_ENABLED"] = function()
 		if addon.variables then
-			if addon.variables.pendingDynamicFlightBar ~= nil then addon.functions.toggleDynamicFlightBar(addon.variables.pendingDynamicFlightBar) end
 			if addon.variables.pendingActionBarAnchorRefresh then
 				addon.variables.pendingActionBarAnchorRefresh = nil
 				RefreshAllActionBarAnchors()

@@ -1608,17 +1608,6 @@ function addon.functions.initItemInventory()
 		addon.functions.setCharFrame()
 		if not addon.variables.isMidnight then addon.functions.updateCloakUpgradeButton() end --todo remove on midnight release
 	end)
-
-	if OrderHallCommandBar then
-		OrderHallCommandBar:HookScript("OnShow", function(self)
-			if addon.db["hideOrderHallBar"] then
-				self:Hide()
-			else
-				self:Show()
-			end
-		end)
-		if addon.db["hideOrderHallBar"] then OrderHallCommandBar:Hide() end
-	end
 end
 
 ---- END REGION
@@ -1922,22 +1911,6 @@ local eventHandlers = {
 	end,
 	["SOCKET_INFO_UPDATE"] = function()
 		if PaperDollFrame:IsShown() and CharOpt("gems") then C_Timer.After(0.5, function() setCharFrame() end) end
-	end,
-	["ZONE_CHANGED_NEW_AREA"] = function()
-		if addon.variables.hookedOrderHall == false then
-			local ohcb = OrderHallCommandBar
-			if ohcb then
-				ohcb:HookScript("OnShow", function(self)
-					if addon.db["hideOrderHallBar"] then
-						self:Hide()
-					else
-						self:Show()
-					end
-				end)
-				addon.variables.hookedOrderHall = true
-				if addon.db["hideOrderHallBar"] then OrderHallCommandBar:Hide() end
-			end
-		end
 	end,
 }
 

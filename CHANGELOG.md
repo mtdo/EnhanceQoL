@@ -30,6 +30,12 @@ Changing minimap Button behaviour
   - Custom frames with Edit Mode controls for size, strata/level, borders, health/power bars (colors, fonts, textures, text formats), cast bars, and status line options
   - Target auras get anchor/offset controls and an optional separate debuff anchor; boss frames have container anchor, growth, and spacing
   - New “Settings” group adds a copy dropdown + confirmation popup to duplicate another frame’s settings while keeping your current position/enable state
+- Resource Bars: Health bar absorb configuration (enable/disable, custom color, custom texture, sample preview)
+- Tooltip: Item icon toggle with configurable size for item tooltips (icon inline before the item name)
+- Tooltip: Optional guild name line (configurable color) on unit tooltips
+- Tooltip: Scale slider to resize tooltips
+- Tooltip: Optional guild rank line (configurable color) on unit tooltips
+- Tooltip: Optional hide faction/PvP lines on unit tooltips
 
 ### 🔄 Changed
 
