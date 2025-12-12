@@ -168,7 +168,7 @@ if cPotion then
 		return sorted
 	end
 
-	addon.functions.SettingsCreateDropdown(cPotion, {
+	addon.functions.SettingsCreateScrollDropdown(cPotion, {
 		var = "potionTrackerBarTexture",
 		text = L["Bar Texture"],
 		default = "DEFAULT",

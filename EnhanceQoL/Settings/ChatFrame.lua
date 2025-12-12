@@ -314,7 +314,7 @@ data = {
 	var = "ChatIMHistoryClear",
 	type = Settings.VarType.String,
 }
-addon.functions.SettingsCreateDropdown(cChatFrame, data)
+addon.functions.SettingsCreateScrollDropdown(cChatFrame, data)
 
 data = {
 	var = "ChatIMHistoryClearAll",

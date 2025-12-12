@@ -266,7 +266,7 @@ local function createLabelControls(category)
 
 	local function macroParentCheck() return macroOverride.setting and macroOverride.setting:GetValue() == true and hideMacro.setting and hideMacro.setting:GetValue() ~= true end
 
-	addon.functions.SettingsCreateDropdown(category, {
+	addon.functions.SettingsCreateScrollDropdown(category, {
 		var = "actionBarMacroFontFace",
 		text = L["actionBarMacroFontLabel"] or "Macro name font",
 		listFunc = buildFontDropdown,
@@ -343,7 +343,7 @@ local function createLabelControls(category)
 
 	local function hotkeyParentCheck() return hotkeyOverride.setting and hotkeyOverride.setting:GetValue() == true end
 
-	addon.functions.SettingsCreateDropdown(category, {
+	addon.functions.SettingsCreateScrollDropdown(category, {
 		var = "actionBarHotkeyFontFace",
 		text = L["actionBarHotkeyFontLabel"] or "Keybind font",
 		listFunc = buildFontDropdown,

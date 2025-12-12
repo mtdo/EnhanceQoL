@@ -55,6 +55,8 @@ function addon.functions.SettingsCreateCheckbox(cat, cbData)
 			local sType = v.sType or v.type
 			if sType == "dropdown" then
 				addon.functions.SettingsCreateDropdown(cat, v)
+			elseif sType == "scrolldropdown" then
+				addon.functions.SettingsCreateScrollDropdown(cat, v)
 			elseif sType == "checkbox" then
 				addon.functions.SettingsCreateCheckbox(cat, v)
 			elseif sType == "multidropdown" then
@@ -139,6 +141,41 @@ function addon.functions.SettingsCreateDropdown(cat, cbData)
 	addon.SettingsLayout.elements[cbData.var] = { setting = setting, element = element }
 	if cbData.notify then SettingsLib:AttachNotify(setting, cbData.notify) end
 	return addon.SettingsLayout.elements[cbData.var]
+end
+
+---------------------------------------------------------
+-- Scroll Dropdown
+---------------------------------------------------------
+function addon.functions.SettingsCreateScrollDropdown(cat, cbData)
+	if not SettingsLib.CreateScrollDropdown then
+		return addon.functions.SettingsCreateDropdown(cat, cbData)
+	end
+
+	local key = cbData.var or cbData.key
+	local initializer, setting = SettingsLib:CreateScrollDropdown(cat, {
+		key = key,
+		name = cbData.text,
+		default = cbData.default,
+		values = cbData.options or cbData.list or cbData.values,
+		optionfunc = cbData.optionfunc or cbData.listFunc,
+		generator = cbData.generator,
+		order = cbData.order,
+		height = cbData.height or cbData.menuHeight or 200,
+		customText = cbData.customText,
+		customDefaultText = cbData.customDefaultText,
+		callback = cbData.callback,
+		get = cbData.get or function() return addon.db[key] end,
+		set = cbData.set or function(_, v) addon.db[key] = v end,
+		searchtags = cbData.searchtags,
+		parent = cbData.element,
+		parentCheck = cbData.parentCheck,
+		parentSection = cbData.parentSection,
+		prefix = prefix,
+	})
+	addon.SettingsLayout.elements = addon.SettingsLayout.elements or {}
+	addon.SettingsLayout.elements[key] = { initializer = initializer, setting = setting }
+	if cbData.notify then SettingsLib:AttachNotify(setting, cbData.notify) end
+	return initializer
 end
 
 function addon.functions.SettingsAttachNotify(setting, notify)

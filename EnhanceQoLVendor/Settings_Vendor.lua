@@ -107,6 +107,13 @@ local function removeItemFromList(listKey, value)
 	end
 end
 
+local function clearDropdownSelection(var)
+	local entry = addon.SettingsLayout.elements and addon.SettingsLayout.elements[var]
+	if entry and entry.setting then
+		entry.setting:SetValue("")
+	end
+end
+
 local function showAddPopup(dialogKey, prompt, listKey)
 	StaticPopupDialogs[dialogKey] = StaticPopupDialogs[dialogKey]
 		or {
@@ -136,6 +143,25 @@ local function showAddPopup(dialogKey, prompt, listKey)
 		}
 	StaticPopupDialogs[dialogKey].text = prompt
 	StaticPopup_Show(dialogKey)
+end
+
+local function showRemovePopup(dialogKey, prompt, listKey, label, id)
+	StaticPopupDialogs[dialogKey] = StaticPopupDialogs[dialogKey]
+		or {
+			text = prompt,
+			button1 = ACCEPT,
+			button2 = CANCEL,
+			timeout = 0,
+			whileDead = true,
+			hideOnEscape = true,
+			preferredIndex = 3,
+		}
+	StaticPopupDialogs[dialogKey].text = prompt
+	StaticPopupDialogs[dialogKey].OnAccept = function(_, data)
+		removeItemFromList(listKey, data)
+	end
+
+	StaticPopup_Show(dialogKey, label, nil, id)
 end
 
 local cVendor = addon.functions.SettingsCreateCategory(nil, L["SellingAndShopping"] or "Selling & Shopping", nil, "Vendor")
@@ -371,14 +397,23 @@ addon.functions.SettingsCreateButton(cVendor, {
 	text = ADD,
 	func = function() showAddPopup("EQOL_VENDOR_INCLUDE_ADD", L["vendorAddItemToInclude"], "vendorIncludeSellList") end,
 })
-addon.functions.SettingsCreateDropdown(cVendor, {
+
+addon.functions.SettingsCreateScrollDropdown(cVendor, {
 	var = "vendorIncludeRemove",
 	text = REMOVE,
 	listFunc = function() return buildList("vendorIncludeSellList") end,
 	order = listOrders.vendorIncludeSellList,
 	default = "",
 	get = function() return "" end,
-	set = function(value) removeItemFromList("vendorIncludeSellList", value) end,
+	set = function(value)
+		if not value or value == "" then return end
+		local id = tonumber(value)
+		if not id then return end
+		addon.db.vendorIncludeSellList = addon.db.vendorIncludeSellList or {}
+		local label = addon.db.vendorIncludeSellList[id] or tostring(id)
+		showRemovePopup("EQOL_VENDOR_INCLUDE_REMOVE", L["vendorIncludeRemoveConfirm"], "vendorIncludeSellList", label, id)
+		clearDropdownSelection("vendorIncludeRemove")
+	end,
 })
 
 addon.functions.SettingsCreateHeadline(cVendor, L["Exclude"] or "Exclude")
@@ -388,14 +423,23 @@ addon.functions.SettingsCreateButton(cVendor, {
 	text = ADD,
 	func = function() showAddPopup("EQOL_VENDOR_EXCLUDE_ADD", L["vendorAddItemToExclude"], "vendorExcludeSellList") end,
 })
-addon.functions.SettingsCreateDropdown(cVendor, {
+
+addon.functions.SettingsCreateScrollDropdown(cVendor, {
 	var = "vendorExcludeRemove",
 	text = REMOVE,
 	listFunc = function() return buildList("vendorExcludeSellList") end,
 	order = listOrders.vendorExcludeSellList,
 	default = "",
 	get = function() return "" end,
-	set = function(value) removeItemFromList("vendorExcludeSellList", value) end,
+	set = function(value)
+		if not value or value == "" then return end
+		local id = tonumber(value)
+		if not id then return end
+		addon.db.vendorExcludeSellList = addon.db.vendorExcludeSellList or {}
+		local label = addon.db.vendorExcludeSellList[id] or tostring(id)
+		showRemovePopup("EQOL_VENDOR_EXCLUDE_REMOVE", L["vendorExcludeRemoveConfirm"], "vendorExcludeSellList", label, id)
+		clearDropdownSelection("vendorExcludeRemove")
+	end,
 })
 
 addon.functions.SettingsCreateHeadline(cVendor, L["vendorDestroy"] or "Destroy")
@@ -442,7 +486,7 @@ local destroyChildren = {
 	{
 		var = "vendorDestroyRemove",
 		text = L["vendorDestroyRemove"],
-		sType = "dropdown",
+		sType = "scrolldropdown",
 		parent = true,
 		parentCheck = function() return isChecked("vendorDestroyEnable") end,
 		listFunc = function() return buildList("vendorIncludeDestroyList") end,
@@ -463,6 +507,7 @@ addon.functions.SettingsCreateCheckboxes(cVendor, {
 			refreshSellMarks()
 			refreshDestroyButton()
 		end,
+		
 		default = false,
 		children = destroyChildren,
 	},

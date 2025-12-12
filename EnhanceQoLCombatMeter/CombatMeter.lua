@@ -172,7 +172,7 @@ if addon.SettingsLayout and addon.SettingsLayout.characterInspectCategory then
 		return sorted
 	end
 
-	addon.functions.SettingsCreateDropdown(cCM, {
+	addon.functions.SettingsCreateScrollDropdown(cCM, {
 		var = "combatMeterBarTexture",
 		text = L["Bar Texture"],
 		default = TEXTURE_PATH .. "eqol_base_flat_8x8.tga",
