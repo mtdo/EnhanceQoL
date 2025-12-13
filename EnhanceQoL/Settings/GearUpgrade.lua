@@ -20,8 +20,13 @@ local data = {
 			{
 				list = {
 					TOPLEFT = L["topLeft"],
+					TOP = L["top"],
 					TOPRIGHT = L["topRight"],
+					LEFT = L["left"],
+					CENTER = L["center"],
+					RIGHT = L["right"],
 					BOTTOMLEFT = L["bottomLeft"],
+					BOTTOM = L["bottom"],
 					BOTTOMRIGHT = L["bottomRight"],
 				},
 				text = L["charIlvlPosition"],

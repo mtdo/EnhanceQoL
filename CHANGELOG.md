@@ -1,10 +1,18 @@
 # Changelog
 
-## [6.2.1] – 2025-12-13
+## [6.3.0] – 2025-12-13
+
+### 🔄 Changed
+
+- Character frame and bag item level dropdowns now offer explicit TOP/CENTER/BOTTOM and LEFT/RIGHT anchors (including top/bottom center) so you can place the text in the middle as well as the corners.
 
 ### 🐛 Fixed
 
+- Changed some removed API-calls to the new once introduced in 12.0.1
 - `/way` parser now accepts two coordinate values followed by descriptive text (e.g., `/way 26.90 28.89 Melody 2nd`) without treating the note as extra arguments.
+- Castbar in midnight fixed for UF Plus
+
+---
 
 ## [6.2.0] – 2025-12-11
 

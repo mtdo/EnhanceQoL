@@ -496,6 +496,50 @@ local function getTooltipInfo(bag, slot, classID, tBindType)
 	return bType, bKey, upgradeKey, bAuc
 end
 
+local bagIlvlAnchors = {
+	TOPLEFT = { point = "TOPLEFT", x = 2, y = -2 },
+	TOP = { point = "TOP", x = 0, y = -2 },
+	TOPRIGHT = { point = "TOPRIGHT", x = 0, y = -2 },
+	LEFT = { point = "LEFT", x = 2, y = 0 },
+	CENTER = { point = "CENTER", x = 0, y = 0 },
+	RIGHT = { point = "RIGHT", x = 0, y = 0 },
+	BOTTOMLEFT = { point = "BOTTOMLEFT", x = 2, y = 2 },
+	BOTTOM = { point = "BOTTOM", x = 0, y = 2 },
+	BOTTOMRIGHT = { point = "BOTTOMRIGHT", x = 0, y = 2 },
+}
+
+function addon.functions.ApplyBagItemLevelPosition(target, anchorFrame, position)
+	if not target or not anchorFrame then return end
+	local anchor = bagIlvlAnchors[position] or bagIlvlAnchors.TOPRIGHT
+	target:ClearAllPoints()
+	target:SetPoint(anchor.point, anchorFrame, anchor.point, anchor.x, anchor.y)
+end
+
+local function resolveBoundAnchor(position)
+	if position == "BOTTOMLEFT" then
+		return "TOPLEFT"
+	elseif position == "BOTTOMRIGHT" then
+		return "TOPRIGHT"
+	elseif position == "BOTTOM" then
+		return "TOP"
+	elseif position == "LEFT" then
+		return "TOPRIGHT"
+	elseif position == "TOPLEFT" or position == "TOPRIGHT" or position == "TOP" then
+		return "BOTTOMLEFT"
+	elseif position == "RIGHT" then
+		return "BOTTOMLEFT"
+	else
+		return "BOTTOMLEFT"
+	end
+end
+
+function addon.functions.ApplyBagBoundPosition(target, anchorFrame, position)
+	if not target or not anchorFrame then return end
+	local anchor = bagIlvlAnchors[resolveBoundAnchor(position)] or bagIlvlAnchors.BOTTOMLEFT
+	target:ClearAllPoints()
+	target:SetPoint(anchor.point, anchorFrame, anchor.point, anchor.x, anchor.y)
+end
+
 local function updateButtonInfo(itemButton, bag, slot, frameName)
 	itemButton:SetAlpha(1)
 	if itemButton.ItemContextOverlay then itemButton.ItemContextOverlay:Hide() end
@@ -591,15 +635,7 @@ local function updateButtonInfo(itemButton, bag, slot, frameName)
 
 			itemButton.ItemLevelText:ClearAllPoints()
 			local pos = addon.db["bagIlvlPosition"] or "TOPRIGHT"
-			if pos == "TOPLEFT" then
-				itemButton.ItemLevelText:SetPoint("TOPLEFT", itemButton, "TOPLEFT", 2, -2)
-			elseif pos == "BOTTOMLEFT" then
-				itemButton.ItemLevelText:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
-			elseif pos == "BOTTOMRIGHT" then
-				itemButton.ItemLevelText:SetPoint("BOTTOMRIGHT", itemButton, "BOTTOMRIGHT", 0, 2)
-			else
-				itemButton.ItemLevelText:SetPoint("TOPRIGHT", itemButton, "TOPRIGHT", 0, -2)
-			end
+			addon.functions.ApplyBagItemLevelPosition(itemButton.ItemLevelText, itemButton, pos)
 			if nil ~= addon.variables.allowedEquipSlotsBagIlvl[itemEquipLoc] then
 				local r, g, b = C_Item.GetItemQualityColor(itemQuality)
 				local itemLevelText = C_Item.GetDetailedItemLevelInfo(itemLink)
@@ -705,23 +741,17 @@ local function updateButtonInfo(itemButton, bag, slot, frameName)
 						itemButton.ItemBoundType = itemButton:CreateFontString(nil, "ARTWORK")
 						itemButton.ItemBoundType:SetDrawLayer("ARTWORK", 1)
 						itemButton.ItemBoundType:SetFont(addon.variables.defaultFont, 10, "OUTLINE")
-						itemButton.ItemBoundType:SetShadowOffset(2, 2)
-						itemButton.ItemBoundType:SetShadowColor(0, 0, 0, 1)
-					end
-
-					itemButton.ItemBoundType:ClearAllPoints()
-					if addon.db["bagIlvlPosition"] == "BOTTOMLEFT" then
-						itemButton.ItemBoundType:SetPoint("TOPLEFT", itemButton, "TOPLEFT", 2, -2)
-					elseif addon.db["bagIlvlPosition"] == "BOTTOMRIGHT" then
-						itemButton.ItemBoundType:SetPoint("TOPRIGHT", itemButton, "TOPRIGHT", -1, -2)
-					else
-						itemButton.ItemBoundType:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
-					end
-					itemButton.ItemBoundType:SetFormattedText(bType)
-					itemButton.ItemBoundType:Show()
-				elseif itemButton.ItemBoundType then
-					itemButton.ItemBoundType:Hide()
+					itemButton.ItemBoundType:SetShadowOffset(2, 2)
+					itemButton.ItemBoundType:SetShadowColor(0, 0, 0, 1)
 				end
+
+				itemButton.ItemBoundType:ClearAllPoints()
+				addon.functions.ApplyBagBoundPosition(itemButton.ItemBoundType, itemButton, addon.db["bagIlvlPosition"])
+				itemButton.ItemBoundType:SetFormattedText(bType)
+				itemButton.ItemBoundType:Show()
+			elseif itemButton.ItemBoundType then
+				itemButton.ItemBoundType:Hide()
+			end
 			elseif itemButton.ItemLevelText then
 				if itemButton.ItemBoundType then itemButton.ItemBoundType:Hide() end
 				if itemButton.ItemUpgradeIcon then itemButton.ItemUpgradeIcon:Hide() end

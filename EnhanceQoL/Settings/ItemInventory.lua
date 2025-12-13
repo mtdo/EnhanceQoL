@@ -62,6 +62,28 @@ local function AnyInspectEnabled()
 	return t.ilvl or t.gems or t.enchants or t.gemtip
 end
 
+local charIlvlAnchors = {
+	TOPLEFT = { bgPoint = "TOPLEFT", bgX = -1, bgY = 1, textPoint = "TOPLEFT", textX = 1, textY = -2 },
+	TOP = { bgPoint = "TOP", bgX = 0, bgY = 1, textPoint = "TOP", textX = 0, textY = -2 },
+	TOPRIGHT = { bgPoint = "TOPRIGHT", bgX = 1, bgY = 1, textPoint = "TOPRIGHT", textX = -1, textY = -2 },
+	LEFT = { bgPoint = "LEFT", bgX = -1, bgY = 0, textPoint = "LEFT", textX = 1, textY = 0 },
+	CENTER = { bgPoint = "CENTER", bgX = 0, bgY = 0, textPoint = "CENTER", textX = 0, textY = 0 },
+	RIGHT = { bgPoint = "RIGHT", bgX = 1, bgY = 0, textPoint = "RIGHT", textX = -1, textY = 0 },
+	BOTTOMLEFT = { bgPoint = "BOTTOMLEFT", bgX = -1, bgY = -1, textPoint = "BOTTOMLEFT", textX = 1, textY = 1 },
+	BOTTOM = { bgPoint = "BOTTOM", bgX = 0, bgY = -1, textPoint = "BOTTOM", textX = 0, textY = 1 },
+	BOTTOMRIGHT = { bgPoint = "BOTTOMRIGHT", bgX = 1, bgY = -1, textPoint = "BOTTOMRIGHT", textX = -1, textY = 1 },
+}
+
+local function applyCharIlvlPosition(element)
+	if not element or not element.ilvlBackground or not element.ilvl then return end
+	local pos = addon.db["charIlvlPosition"] or "TOPRIGHT"
+	local anchor = charIlvlAnchors[pos] or charIlvlAnchors.TOPRIGHT
+	element.ilvlBackground:ClearAllPoints()
+	element.ilvl:ClearAllPoints()
+	element.ilvlBackground:SetPoint(anchor.bgPoint, element, anchor.bgPoint, anchor.bgX, anchor.bgY)
+	element.ilvl:SetPoint(anchor.textPoint, element.ilvlBackground, anchor.textPoint, anchor.textX, anchor.textY)
+end
+
 local function CheckItemGems(element, itemLink, emptySocketsCount, key, pdElement, attempts)
 	attempts = attempts or 1 -- Anzahl der Versuche
 	if attempts > 10 then -- Abbruch nach 5 Versuchen, um Endlosschleifen zu vermeiden
@@ -358,22 +380,7 @@ local function onInspect(arg1)
 								element.ilvl:SetFont(addon.variables.defaultFont, 14, "OUTLINE") -- Setzt die Schriftart, -größe und -stil (OUTLINE)
 							end
 
-							local cpos = addon.db["charIlvlPosition"] or "TOPRIGHT"
-							element.ilvlBackground:ClearAllPoints()
-							element.ilvl:ClearAllPoints()
-							if cpos == "TOPLEFT" then
-								element.ilvlBackground:SetPoint("TOPLEFT", element, "TOPLEFT", -1, 1)
-								element.ilvl:SetPoint("TOPLEFT", element.ilvlBackground, "TOPLEFT", 1, -2)
-							elseif cpos == "BOTTOMLEFT" then
-								element.ilvlBackground:SetPoint("BOTTOMLEFT", element, "BOTTOMLEFT", -1, -1)
-								element.ilvl:SetPoint("BOTTOMLEFT", element.ilvlBackground, "BOTTOMLEFT", 1, 1)
-							elseif cpos == "BOTTOMRIGHT" then
-								element.ilvlBackground:SetPoint("BOTTOMRIGHT", element, "BOTTOMRIGHT", 1, -1)
-								element.ilvl:SetPoint("BOTTOMRIGHT", element.ilvlBackground, "BOTTOMRIGHT", -1, 1)
-							else
-								element.ilvlBackground:SetPoint("TOPRIGHT", element, "TOPRIGHT", 1, 1)
-								element.ilvl:SetPoint("TOPRIGHT", element.ilvlBackground, "TOPRIGHT", -1, -2)
-							end
+							applyCharIlvlPosition(element)
 							element.ilvlBackground:SetSize(30, 16) -- Größe des Hintergrunds (muss ggf. angepasst werden)
 
 							local color = eItem:GetItemQualityColor()
@@ -514,22 +521,7 @@ local function setIlvlText(element, slot)
 					local color = eItem:GetItemQualityColor()
 					local itemLevelText = eItem:GetCurrentItemLevel()
 
-					local cpos = addon.db["charIlvlPosition"] or "TOPRIGHT"
-					element.ilvlBackground:ClearAllPoints()
-					element.ilvl:ClearAllPoints()
-					if cpos == "TOPLEFT" then
-						element.ilvlBackground:SetPoint("TOPLEFT", element, "TOPLEFT", -1, 1)
-						element.ilvl:SetPoint("TOPLEFT", element.ilvlBackground, "TOPLEFT", 1, -2)
-					elseif cpos == "BOTTOMLEFT" then
-						element.ilvlBackground:SetPoint("BOTTOMLEFT", element, "BOTTOMLEFT", -1, -1)
-						element.ilvl:SetPoint("BOTTOMLEFT", element.ilvlBackground, "BOTTOMLEFT", 1, 1)
-					elseif cpos == "BOTTOMRIGHT" then
-						element.ilvlBackground:SetPoint("BOTTOMRIGHT", element, "BOTTOMRIGHT", 1, -1)
-						element.ilvl:SetPoint("BOTTOMRIGHT", element.ilvlBackground, "BOTTOMRIGHT", -1, 1)
-					else
-						element.ilvlBackground:SetPoint("TOPRIGHT", element, "TOPRIGHT", 1, 1)
-						element.ilvl:SetPoint("TOPRIGHT", element.ilvlBackground, "TOPRIGHT", -1, -2)
-					end
+					applyCharIlvlPosition(element)
 
 					element.ilvl:SetFormattedText(itemLevelText)
 					element.ilvl:SetTextColor(color.r, color.g, color.b, 1)
@@ -723,17 +715,7 @@ local function updateFlyoutButtonInfo(button)
 						button.ItemLevelText = button:CreateFontString(nil, "OVERLAY")
 						button.ItemLevelText:SetFont(addon.variables.defaultFont, 16, "OUTLINE")
 					end
-					button.ItemLevelText:ClearAllPoints()
-					local pos = addon.db["bagIlvlPosition"] or "TOPRIGHT"
-					if pos == "TOPLEFT" then
-						button.ItemLevelText:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
-					elseif pos == "BOTTOMLEFT" then
-						button.ItemLevelText:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 2, 2)
-					elseif pos == "BOTTOMRIGHT" then
-						button.ItemLevelText:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 2)
-					else
-						button.ItemLevelText:SetPoint("TOPRIGHT", button, "TOPRIGHT", -1, -1)
-					end
+					addon.functions.ApplyBagItemLevelPosition(button.ItemLevelText, button, addon.db["bagIlvlPosition"])
 
 					-- Setze den Text und die Farbe
 					button.ItemLevelText:SetText(itemLevel)
@@ -859,13 +841,7 @@ local function updateFlyoutButtonInfo(button)
 							button.ItemBoundType:SetShadowColor(0, 0, 0, 1)
 						end
 						button.ItemBoundType:ClearAllPoints()
-						if addon.db["bagIlvlPosition"] == "BOTTOMLEFT" then
-							button.ItemBoundType:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
-						elseif addon.db["bagIlvlPosition"] == "BOTTOMRIGHT" then
-							button.ItemBoundType:SetPoint("TOPRIGHT", button, "TOPRIGHT", -1, -2)
-						else
-							button.ItemBoundType:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 2, 2)
-						end
+						addon.functions.ApplyBagBoundPosition(button.ItemBoundType, button, addon.db["bagIlvlPosition"])
 						button.ItemBoundType:SetFormattedText(bType)
 						button.ItemBoundType:Show()
 					elseif button.ItemBoundType then
@@ -1168,17 +1144,7 @@ local function applyMerchantButtonInfo()
 								itemButton.ItemLevelText:SetShadowOffset(1, -1)
 								itemButton.ItemLevelText:SetShadowColor(0, 0, 0, 1)
 							end
-							itemButton.ItemLevelText:ClearAllPoints()
-							local pos = addon.db["bagIlvlPosition"] or "TOPRIGHT"
-							if pos == "TOPLEFT" then
-								itemButton.ItemLevelText:SetPoint("TOPLEFT", itemButton, "TOPLEFT", 2, -2)
-							elseif pos == "BOTTOMLEFT" then
-								itemButton.ItemLevelText:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
-							elseif pos == "BOTTOMRIGHT" then
-								itemButton.ItemLevelText:SetPoint("BOTTOMRIGHT", itemButton, "BOTTOMRIGHT", -1, 2)
-							else
-								itemButton.ItemLevelText:SetPoint("TOPRIGHT", itemButton, "TOPRIGHT", -1, -1)
-							end
+							addon.functions.ApplyBagItemLevelPosition(itemButton.ItemLevelText, itemButton, addon.db["bagIlvlPosition"])
 
 							local color = eItem:GetItemQualityColor()
 							local candidateIlvl = eItem:GetCurrentItemLevel()
@@ -1285,13 +1251,7 @@ local function applyMerchantButtonInfo()
 									itemButton.ItemBoundType:SetShadowColor(0, 0, 0, 1)
 								end
 								itemButton.ItemBoundType:ClearAllPoints()
-								if addon.db["bagIlvlPosition"] == "BOTTOMLEFT" then
-									itemButton.ItemBoundType:SetPoint("TOPLEFT", itemButton, "TOPLEFT", 2, -2)
-								elseif addon.db["bagIlvlPosition"] == "BOTTOMRIGHT" then
-									itemButton.ItemBoundType:SetPoint("TOPRIGHT", itemButton, "TOPRIGHT", -1, -2)
-								else
-									itemButton.ItemBoundType:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
-								end
+								addon.functions.ApplyBagBoundPosition(itemButton.ItemBoundType, itemButton, addon.db["bagIlvlPosition"])
 								itemButton.ItemBoundType:SetFormattedText(bType)
 								itemButton.ItemBoundType:Show()
 							elseif itemButton.ItemBoundType then
@@ -1362,17 +1322,7 @@ local function updateBuybackButtonInfo()
 							itemButton.ItemLevelText:SetShadowOffset(1, -1)
 							itemButton.ItemLevelText:SetShadowColor(0, 0, 0, 1)
 						end
-						itemButton.ItemLevelText:ClearAllPoints()
-						local pos = addon.db["bagIlvlPosition"] or "TOPRIGHT"
-						if pos == "TOPLEFT" then
-							itemButton.ItemLevelText:SetPoint("TOPLEFT", itemButton, "TOPLEFT", 2, -2)
-						elseif pos == "BOTTOMLEFT" then
-							itemButton.ItemLevelText:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
-						elseif pos == "BOTTOMRIGHT" then
-							itemButton.ItemLevelText:SetPoint("BOTTOMRIGHT", itemButton, "BOTTOMRIGHT", -1, 2)
-						else
-							itemButton.ItemLevelText:SetPoint("TOPRIGHT", itemButton, "TOPRIGHT", -1, -1)
-						end
+						addon.functions.ApplyBagItemLevelPosition(itemButton.ItemLevelText, itemButton, addon.db["bagIlvlPosition"])
 
 						local color = eItem:GetItemQualityColor()
 						itemButton.ItemLevelText:SetText(eItem:GetCurrentItemLevel())
@@ -1403,13 +1353,7 @@ local function updateBuybackButtonInfo()
 								itemButton.ItemBoundType:SetShadowColor(0, 0, 0, 1)
 							end
 							itemButton.ItemBoundType:ClearAllPoints()
-							if addon.db["bagIlvlPosition"] == "BOTTOMLEFT" then
-								itemButton.ItemBoundType:SetPoint("TOPLEFT", itemButton, "TOPLEFT", 2, -2)
-							elseif addon.db["bagIlvlPosition"] == "BOTTOMRIGHT" then
-								itemButton.ItemBoundType:SetPoint("TOPRIGHT", itemButton, "TOPRIGHT", -1, -2)
-							else
-								itemButton.ItemBoundType:SetPoint("BOTTOMLEFT", itemButton, "BOTTOMLEFT", 2, 2)
-							end
+							addon.functions.ApplyBagBoundPosition(itemButton.ItemBoundType, itemButton, addon.db["bagIlvlPosition"])
 							itemButton.ItemBoundType:SetFormattedText(bType)
 							itemButton.ItemBoundType:Show()
 						elseif itemButton.ItemBoundType then
@@ -1637,8 +1581,13 @@ local data = {
 			{
 				list = {
 					TOPLEFT = L["topLeft"],
+					TOP = L["top"],
 					TOPRIGHT = L["topRight"],
+					LEFT = L["left"],
+					CENTER = L["center"],
+					RIGHT = L["right"],
 					BOTTOMLEFT = L["bottomLeft"],
+					BOTTOM = L["bottom"],
 					BOTTOMRIGHT = L["bottomRight"],
 				},
 				text = L["bagIlvlPosition"],
