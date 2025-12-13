@@ -1440,8 +1440,24 @@ local function setCastInfoFromUnit(unit)
 	if issecretvalue and ((startTimeMS and issecretvalue(startTimeMS)) or (endTimeMS and issecretvalue(endTimeMS))) then
 		if type(startTimeMS) ~= "nil" and type(endTimeMS) ~= "nil" then
 			st.castBar:Show()
-			st.castBar:SetMinMaxValues(startTimeMS, endTimeMS)
-			st.castBar:SetScript("OnUpdate", function() st.castBar:SetValue(GetTime() * 1000) end)
+
+			local durObj
+			if isChannel then
+				durObj = UnitChannelDuration(unit)
+			else
+				durObj = UnitCastingDuration(unit)
+			end
+			st.castBar:SetTimerDuration(durObj)
+			if st.castName then
+				local showName = ccfg.showName ~= false
+				st.castName:SetShown(showName)
+				st.castName:SetText(showName and (text or name or "") or "")
+			end
+			if st.castIcon then
+				local showIcon = ccfg.showIcon ~= false and texture ~= nil
+				st.castIcon:SetShown(showIcon)
+				if showIcon then st.castIcon:SetTexture(texture) end
+			end
 		else
 			stopCast(unit)
 		end
