@@ -4,8 +4,7 @@
 
 ### 🔄 Changed
 
-- Character frame and bag item level dropdowns now offer explicit TOP/CENTER/BOTTOM and LEFT/RIGHT anchors (including top/bottom center) so you can place the text in the middle as well as the corners.
-- Tooltip: Item ID display now respects its toggle (no ID when disabled), and item icon size defaults are aligned to 16.
+- Character frame and bag item level dropdowns now offer explicit TOP/CENTER/BOTTOM and LEFT/RIGHT anchors.
 - Unit Frames (Target auras): stack text is now configurable (position, X/Y offsets, font size, and outline).
 - TOC Update for midnight 12.0.1
 - World Map: Optional player/cursor coordinates near the title (updates only while the map is open).
@@ -15,6 +14,7 @@
 - Changed some removed API-calls to the new once introduced in 12.0.1
 - `/way` parser now accepts two coordinate values followed by descriptive text (e.g., `/way 26.90 28.89 Melody 2nd`) without treating the note as extra arguments.
 - Castbar in midnight fixed for UF Plus
+- Tooltip: Item ID display now respects its toggle (no ID when disabled), and item icon size defaults are aligned to 16.
 
 ---
 
