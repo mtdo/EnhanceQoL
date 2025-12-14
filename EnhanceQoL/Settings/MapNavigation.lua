@@ -138,6 +138,28 @@ addon.functions.SettingsCreateMultiDropdown(cMapNav, {
 	end,
 })
 
+addon.functions.SettingsCreateHeadline(cMapNav, WORLD_MAP)
+
+data = {
+	{
+		var = "showWorldMapCoordinates",
+		text = L["showWorldMapCoordinates"],
+		desc = L["showWorldMapCoordinatesDesc"],
+		func = function(value)
+			addon.db["showWorldMapCoordinates"] = value
+			if value then
+				addon.functions.EnableWorldMapCoordinates()
+			else
+				addon.functions.DisableWorldMapCoordinates()
+			end
+		end,
+		default = false,
+	},
+}
+
+table.sort(data, function(a, b) return a.text < b.text end)
+addon.functions.SettingsCreateCheckboxes(cMapNav, data)
+
 addon.functions.SettingsCreateHeadline(cMapNav, SPECIALIZATION)
 
 data = {
@@ -712,6 +734,103 @@ addon.functions.SettingsCreateCheckboxes(cMapNav, data)
 
 ----- REGION END
 
+local worldMapCoordInterval = 0.2
+
+local function ensureWorldMapCoordFrames()
+	addon.variables = addon.variables or {}
+	local container = WorldMapFrame and WorldMapFrame.BorderFrame and WorldMapFrame.BorderFrame.TitleContainer
+	if not container then return nil end
+
+	if not addon.variables.worldMapPlayerCoords then
+		addon.variables.worldMapPlayerCoords = container:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		addon.variables.worldMapPlayerCoords:SetPoint("RIGHT", container, "RIGHT", -200, 0)
+		addon.variables.worldMapPlayerCoords:SetJustifyH("LEFT")
+	end
+
+	if not addon.variables.worldMapCursorCoords then
+		addon.variables.worldMapCursorCoords = container:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		addon.variables.worldMapCursorCoords:SetPoint("RIGHT", container, "RIGHT", -40, 0)
+		addon.variables.worldMapCursorCoords:SetJustifyH("RIGHT")
+	end
+
+	return true
+end
+
+local function formatCoords(x, y)
+	if not x or not y then return nil end
+	return string.format("%.2f, %.2f", x * 100, y * 100)
+end
+
+local function getPlayerCoords()
+	local mapID = C_Map.GetBestMapForUnit("player")
+	if not mapID then return nil end
+	if IsInInstance() then return nil end
+	local pos = C_Map.GetPlayerMapPosition(mapID, "player")
+	if not pos then return nil end
+	return pos.x, pos.y
+end
+
+local function getCursorCoords()
+	if not WorldMapFrame or not WorldMapFrame.ScrollContainer or not WorldMapFrame.ScrollContainer.GetNormalizedCursorPosition then return nil end
+	local x, y = WorldMapFrame.ScrollContainer:GetNormalizedCursorPosition()
+	if not x or not y or x < 0 or x > 1 or y < 0 or y > 1 then return nil end
+	return x, y
+end
+
+local function updateWorldMapCoordinates()
+	if not addon.db or not addon.db["showWorldMapCoordinates"] then return end
+	if not WorldMapFrame or not WorldMapFrame:IsShown() then return end
+	if not ensureWorldMapCoordFrames() then return end
+
+	local px, py = getPlayerCoords()
+	local cx, cy = getCursorCoords()
+
+	local playerText = formatCoords(px, py)
+	local cursorText = formatCoords(cx, cy)
+
+	if addon.variables.worldMapPlayerCoords then addon.variables.worldMapPlayerCoords:SetText(playerText and (PLAYER .. ": " .. playerText) or "") end
+	if addon.variables.worldMapCursorCoords then
+		local cursorLabel = MOUSE_LABEL
+		addon.variables.worldMapCursorCoords:SetText(cursorText and (cursorLabel .. ": " .. cursorText) or "")
+	end
+end
+
+local function startWorldMapCoordinates()
+	if addon.variables.worldMapCoordTicker or not addon.db or not addon.db["showWorldMapCoordinates"] then return end
+	updateWorldMapCoordinates()
+	addon.variables.worldMapCoordTicker = C_Timer.NewTicker(worldMapCoordInterval, function()
+		if not addon.db or not addon.db["showWorldMapCoordinates"] then
+			addon.functions.DisableWorldMapCoordinates()
+			return
+		end
+		if WorldMapFrame and WorldMapFrame:IsShown() then updateWorldMapCoordinates() end
+	end)
+end
+
+function addon.functions.DisableWorldMapCoordinates()
+	if addon.variables.worldMapCoordTicker then
+		addon.variables.worldMapCoordTicker:Cancel()
+		addon.variables.worldMapCoordTicker = nil
+		if addon.variables.worldMapPlayerCoords then addon.variables.worldMapPlayerCoords:SetText("") end
+		if addon.variables.worldMapCursorCoords then addon.variables.worldMapCursorCoords:SetText("") end
+	end
+end
+
+local function ensureWorldMapHooks()
+	if addon.variables.worldMapCoordsHooked or not WorldMapFrame then return end
+	WorldMapFrame:HookScript("OnShow", function()
+		if addon.db and addon.db["showWorldMapCoordinates"] then startWorldMapCoordinates() end
+	end)
+	WorldMapFrame:HookScript("OnHide", addon.functions.DisableWorldMapCoordinates)
+	addon.variables.worldMapCoordsHooked = true
+end
+
+function addon.functions.EnableWorldMapCoordinates()
+	if not addon.db or not addon.db["showWorldMapCoordinates"] then return end
+	ensureWorldMapHooks()
+	if WorldMapFrame and WorldMapFrame:IsShown() then startWorldMapCoordinates() end
+end
+
 local function applySquareMinimapLayout(self, underneath)
 	if not addon.db or not addon.db.enableSquareMinimap or not addon.db.enableSquareMinimapLayout then return end
 	if not Minimap or not MinimapCluster or not Minimap.ZoomIn or not Minimap.ZoomOut then return end
@@ -764,7 +883,10 @@ function addon.functions.applySquareMinimapLayout(forceUnderneath)
 	end
 end
 
-function addon.functions.initMapNav() addon.functions.applySquareMinimapLayout() end
+function addon.functions.initMapNav()
+	addon.functions.applySquareMinimapLayout()
+	addon.functions.EnableWorldMapCoordinates()
+end
 
 local eventHandlers = {}
 

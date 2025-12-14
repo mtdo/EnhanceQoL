@@ -8,6 +8,7 @@
 - Tooltip: Item ID display now respects its toggle (no ID when disabled), and item icon size defaults are aligned to 16.
 - Unit Frames (Target auras): stack text is now configurable (position, X/Y offsets, font size, and outline).
 - TOC Update for midnight 12.0.1
+- World Map: Optional player/cursor coordinates near the title (updates only while the map is open).
 
 ### 🐛 Fixed
 
