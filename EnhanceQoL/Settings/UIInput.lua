@@ -1,4 +1,4 @@
--- luacheck: globals C_Timer C_MountJournal LE_MOUNT_JOURNAL_FILTER_COLLECTED LE_MOUNT_JOURNAL_FILTER_UNUSABLE C_PetJournal CollectionsMicroButton MainMenuMicroButton_HideAlert CollectionsMicroButton_SetAlertShown MicroButtonPulseStop CreateFrame
+-- luacheck: globals C_Timer C_MountJournal LE_MOUNT_JOURNAL_FILTER_COLLECTED LE_MOUNT_JOURNAL_FILTER_UNUSABLE C_PetJournal C_ToyBox C_ToyBoxInfo ToyBox CollectionsMicroButton MainMenuMicroButton_HideAlert CollectionsMicroButton_SetAlertShown MicroButtonPulseStop CreateFrame
 
 local addonName, addon = ...
 
@@ -63,6 +63,34 @@ local function ClearPetFanfare()
 	return cleared
 end
 
+local function ClearToyFanfare()
+	if not C_ToyBoxInfo or not C_ToyBoxInfo.ClearFanfare or not C_ToyBoxInfo.NeedsFanfare then return false end
+	local cleared = false
+
+	if ToyBox and ToyBox.fanfareToys then
+		for toyID, needs in pairs(ToyBox.fanfareToys) do
+			if needs and toyID and C_ToyBoxInfo.NeedsFanfare(toyID) then
+				C_ToyBoxInfo.ClearFanfare(toyID)
+				cleared = true
+			end
+		end
+		if cleared then return true end
+	end
+
+	if C_ToyBox and C_ToyBox.GetNumToys and C_ToyBox.GetToyFromIndex then
+		local numToys = C_ToyBox.GetNumToys()
+		for i = 1, numToys do
+			local toyID = C_ToyBox.GetToyFromIndex(i)
+			if toyID and C_ToyBoxInfo.NeedsFanfare(toyID) then
+				C_ToyBoxInfo.ClearFanfare(toyID)
+				cleared = true
+			end
+		end
+	end
+
+	return cleared
+end
+
 local function AutoUnwrapMounts(microButton, text, force)
 	if not ShouldAutoUnwrapMounts() then return end
 	local hideAlert = force or text == COLLECTION_UNOPENED_PLURAL or text == COLLECTION_UNOPENED_SINGULAR
@@ -76,7 +104,8 @@ local function AutoUnwrapMounts(microButton, text, force)
 		end
 		local mountCleared = ClearMountFanfare()
 		local petCleared = ClearPetFanfare()
-		if mountCleared or petCleared or hideAlert then StopCollectionAlert(microButton or CollectionsMicroButton) end
+		local toyCleared = ClearToyFanfare()
+		if mountCleared or petCleared or toyCleared or hideAlert then StopCollectionAlert(microButton or CollectionsMicroButton) end
 		mountUnwrapDebounce = false
 	end)
 end
@@ -88,7 +117,7 @@ local function UpdateAutoUnwrapWatcher()
 	if not autoUnwrapEventFrame then
 		autoUnwrapEventFrame = CreateFrame("Frame")
 		autoUnwrapEventFrame:SetScript("OnEvent", function(_, event)
-			if event == "NEW_PET_ADDED" or event == "NEW_MOUNT_ADDED" then AutoUnwrapMounts(CollectionsMicroButton, nil, true) end
+			if event == "NEW_PET_ADDED" or event == "NEW_MOUNT_ADDED" or event == "NEW_TOY_ADDED" then AutoUnwrapMounts(CollectionsMicroButton, nil, true) end
 			if event == "PLAYER_LOGIN" then AutoUnwrapMounts(CollectionsMicroButton, nil, true) end
 		end)
 	end
@@ -98,6 +127,7 @@ local function UpdateAutoUnwrapWatcher()
 		autoUnwrapEventFrame:RegisterEvent("PLAYER_LOGIN")
 		autoUnwrapEventFrame:RegisterEvent("NEW_PET_ADDED")
 		autoUnwrapEventFrame:RegisterEvent("NEW_MOUNT_ADDED")
+		autoUnwrapEventFrame:RegisterEvent("NEW_TOY_ADDED")
 	end
 end
 

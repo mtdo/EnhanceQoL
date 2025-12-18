@@ -986,6 +986,7 @@ local hearthstoneID = {
 	{ isToy = true, icon = 5524923, id = 212337, spellID = 401802 }, -- Stone of the Hearth
 	{ isToy = true, icon = 5891370, id = 228940, spellID = 463481 }, -- Notorious Thread's Hearthstone
 	{ isToy = true, icon = 6383489, id = 236687, spellID = 1220729 }, -- Explosive Hearthstone
+	{ isToy = true, icon = 1029741, id = 263489, spellID = 1298582 }, -- Naaru's Enfold
 	{
 		isToy = true,
 		icon = 1686574,
