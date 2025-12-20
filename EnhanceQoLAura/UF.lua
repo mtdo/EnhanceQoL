@@ -424,6 +424,11 @@ local function applyRaidIconLayout(unit, cfg)
 	if not enabled then st.raidIcon:Hide() end
 end
 
+local function hardHideBlizzFrame(frameName)
+	local frame = frameName and _G[frameName]
+	if frame and frame.SetAlpha then frame:SetAlpha(0) end
+end
+
 local function checkRaidTargetIcon(unitToken, st)
 	if not st or not st.raidIcon then return end
 	local cfg = st.cfg or ensureDB(unitToken)
@@ -1109,6 +1114,13 @@ local function applyFrameRuleOverride(frameName, enabled)
 			return
 		end
 	end
+	local function frameNameFor(unitToken)
+		if unitToken == PLAYER_UNIT then return BLIZZ_PLAYER_FRAME_NAME end
+		if unitToken == TARGET_UNIT then return BLIZZ_TARGET_FRAME_NAME end
+		if unitToken == TARGET_TARGET_UNIT then return BLIZZ_TARGET_TARGET_FRAME_NAME end
+		if unitToken == FOCUS_UNIT then return BLIZZ_FOCUS_FRAME_NAME end
+		if unitToken == PET_UNIT then return BLIZZ_PET_FRAME_NAME end
+	end
 	local NormalizeUnitFrameVisibilityConfig = addon.functions and addon.functions.NormalizeUnitFrameVisibilityConfig
 	local UpdateUnitFrameMouseover = addon.functions and addon.functions.UpdateUnitFrameMouseover
 	if not NormalizeUnitFrameVisibilityConfig or not UpdateUnitFrameMouseover then return end
@@ -1143,6 +1155,7 @@ local function applyFrameRuleOverride(frameName, enabled)
 		end
 	end
 	UpdateUnitFrameMouseover(info.name, info)
+	if enabled then hardHideBlizzFrame(info.name or frameNameFor(info.unitToken)) end
 end
 
 local function addTreeNode(path, node, parentPath)
@@ -3050,7 +3063,10 @@ function UF.Disable()
 	stopToTTicker()
 	addon.variables.requireReload = true
 	if addon.functions and addon.functions.checkReloadFrame then addon.functions.checkReloadFrame() end
-	if _G.PlayerFrame and not InCombatLockdown() then _G.PlayerFrame:Show() end
+	if _G.PlayerFrame and not InCombatLockdown() then
+		_G.PlayerFrame:SetAlpha(1)
+		_G.PlayerFrame:Show()
+	end
 	ensureEventHandling()
 end
 

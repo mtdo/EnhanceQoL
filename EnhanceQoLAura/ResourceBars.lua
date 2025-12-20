@@ -2601,7 +2601,7 @@ function updatePowerBar(type, runeSlot)
 		local shownStacks = (visualMax and visualMax > 0) and ((stacks <= 0) and 0 or (((stacks - 1) % visualMax) + 1)) or stacks
 		if not addon.variables.isMidnight and smooth then
 			bar._smoothTarget = shownStacks
-			bar._smoothDeadzone = cfg.smoothDeadzone or bar._smoot - hDeadzone or RB.DEFAULT_SMOOTH_DEADZONE
+			bar._smoothDeadzone = cfg.smoothDeadzone or bar._smoothDeadzone or RB.DEFAULT_SMOOTH_DEADZONE
 			bar._smoothSpeed = RB.SMOOTH_SPEED
 			if not bar._smoothInitialized then
 				bar:SetValue(shownStacks)
@@ -2692,6 +2692,7 @@ function updatePowerBar(type, runeSlot)
 	local pType = POWER_ENUM[type]
 	if not pType then return end
 	local cfg = getBarSettings(type) or {}
+	local cfgDef = (RB.POWER_CONFIG and RB.POWER_CONFIG[type]) or {}
 	local maxPower = bar._lastMax
 	if not maxPower then
 		maxPower = UnitPowerMax("player", pType)
