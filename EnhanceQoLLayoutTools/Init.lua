@@ -17,7 +17,7 @@ local function initDbValue(key, defaultValue)
 	if db[key] == nil then db[key] = defaultValue end
 end
 
-initDbValue("enabled", true)
+initDbValue("enabled", false)
 initDbValue("requireModifier", true)
 initDbValue("modifier", "SHIFT")
 initDbValue("frames", {})
