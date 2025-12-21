@@ -279,6 +279,22 @@ local frames = {
 		defaultEnabled = true,
 	},
 	{
+		id = "CommunitiesFrame",
+		label = L["Communities"] or "Communities",
+		group = "activities",
+		names = { "CommunitiesFrame" },
+		addon = "Blizzard_Communities",
+		defaultEnabled = true,
+	},
+	{
+		id = "CommunitiesGuildLogFrame",
+		label = L["Guild Log"] or "Guild Log",
+		group = "activities",
+		names = { "CommunitiesGuildLogFrame" },
+		addon = "Blizzard_Communities",
+		defaultEnabled = true,
+	},
+	{
 		id = "GossipFrame",
 		label = L["Gossip"] or "Gossip",
 		group = "world",
