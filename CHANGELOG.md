@@ -21,6 +21,7 @@
 
 - Rune cooldown text now renders above the border to avoid clipping at small bar heights
 - Rune ready colors now refresh reliably after spec or color setting changes
+- Dungeon Journal loot spec icon scale no longer crashes when the saved value is 0
 - Unit Frame status line settings now correctly gate name/level options and combat indicator sub-options
 
 ## [6.4.0] – 2025-12-17

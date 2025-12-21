@@ -206,6 +206,14 @@ local frames = {
 		defaultEnabled = true,
 	},
 	{
+		id = "EncounterJournal",
+		label = ADVENTURE_JOURNAL,
+		group = "activities",
+		names = { "EncounterJournal" },
+		addon = "Blizzard_EncounterJournal",
+		defaultEnabled = true,
+	},
+	{
 		id = "LFGDungeonReadyDialog",
 		label = L["Dungeon Ready Dialog"] or "Dungeon Ready Dialog",
 		group = "activities",
