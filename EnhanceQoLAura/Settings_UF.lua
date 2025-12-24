@@ -694,8 +694,8 @@ local function buildUnitSettings(unit)
 	list[#list + 1] = portraitSize
 
 	local portraitSideOptions = {
-		{ value = "LEFT", label = LEFT or "Left" },
-		{ value = "RIGHT", label = RIGHT or "Right" },
+		{ value = "LEFT", label = HUD_EDIT_MODE_SETTING_AURA_FRAME_ICON_DIRECTION_LEFT or "Left" },
+		{ value = "RIGHT", label = HUD_EDIT_MODE_SETTING_AURA_FRAME_ICON_DIRECTION_RIGHT or "Right" },
 	}
 	local portraitSide = radioDropdown(
 		L["UFPortraitSide"] or "Portrait side",

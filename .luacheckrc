@@ -848,6 +848,8 @@ globals = {
 	"BossTargetFrameContainer",
 	"FocusFrameDropDown",
 	"PetFrameDropDown",
+	"HUD_EDIT_MODE_SETTING_AURA_FRAME_ICON_DIRECTION_LEFT",
+	"HUD_EDIT_MODE_SETTING_AURA_FRAME_ICON_DIRECTION_RIGHT",
 	"RunNextFrame",
 	"TalentFrameUtil",
 	"C_Garrison.GetFollowerAbilityIcon",
