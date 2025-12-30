@@ -33,6 +33,12 @@ local atlasByPower = {
 	HEALTH = "UI-HUD-UnitFrame-Player-PortraitOn-Bar-Health",
 }
 
+local npcColorDefaults = {
+	enemy = { 0.95, 0.15, 0.15, 1 },
+	neutral = { 1, 1, 0, 1 },
+	friendly = { 0.2, 1, 0.2, 1 },
+}
+
 local nameWidthCache = {}
 
 function H.clamp(value, minV, maxV)
@@ -262,4 +268,21 @@ function H.isPowerDesaturated(pToken)
 	if not pToken then return false end
 	local overrides = addon.db and addon.db.ufPowerColorOverrides
 	return overrides and overrides[pToken] ~= nil
+end
+
+function H.getNPCColorDefault(key)
+	local c = key and npcColorDefaults[key]
+	if not c then return nil end
+	return c[1], c[2], c[3], c[4]
+end
+
+function H.getNPCColor(key)
+	if not key then return nil end
+	local overrides = addon.db and addon.db.ufNPCColorOverrides
+	local override = overrides and overrides[key]
+	if override then
+		if override.r then return override.r, override.g, override.b, override.a or 1 end
+		if override[1] then return override[1], override[2], override[3], override[4] or 1 end
+	end
+	return H.getNPCColorDefault(key)
 end

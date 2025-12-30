@@ -16,6 +16,7 @@ local GetVisibilityRuleMetadata = addon.functions and addon.functions.GetVisibil
 local NormalizeUnitFrameVisibilityConfig = addon.functions and addon.functions.NormalizeUnitFrameVisibilityConfig
 
 local UF = addon.Aura and addon.Aura.UF
+local UFHelper = addon.Aura and addon.Aura.UFHelper
 if not (UF and settingType) then return end
 
 local MIN_WIDTH = 50
@@ -184,6 +185,38 @@ local function clearPowerOverride(token)
 	overrides[token] = nil
 	if not next(overrides) then addon.db.ufPowerColorOverrides = nil end
 end
+
+local function getDefaultNPCColor(key)
+	if UFHelper and UFHelper.getNPCColorDefault then
+		local r, g, b, a = UFHelper.getNPCColorDefault(key)
+		if r then return r, g, b, a end
+	end
+	return 0, 0.8, 0, 1
+end
+
+local function getNPCOverride(key)
+	local overrides = addon.db and addon.db.ufNPCColorOverrides
+	return overrides and overrides[key]
+end
+
+local function setNPCOverride(key, r, g, b, a)
+	addon.db = addon.db or {}
+	addon.db.ufNPCColorOverrides = addon.db.ufNPCColorOverrides or {}
+	addon.db.ufNPCColorOverrides[key] = { r or 1, g or 1, b or 1, a or 1 }
+end
+
+local function clearNPCOverride(key)
+	local overrides = addon.db and addon.db.ufNPCColorOverrides
+	if not overrides then return end
+	overrides[key] = nil
+	if not next(overrides) then addon.db.ufNPCColorOverrides = nil end
+end
+
+local npcColorEntries = {
+	{ key = "enemy", label = L["UFNPCEnemy"] or "Enemy NPC" },
+	{ key = "neutral", label = L["UFNPCNeutral"] or "Neutral" },
+	{ key = "friendly", label = L["UFNPCFriendly"] or "Friendly NPC" },
+}
 
 local function ensureConfig(unit)
 	if UF.GetConfig then return UF.GetConfig(unit) end
@@ -879,7 +912,7 @@ local function buildUnitSettings(unit)
 
 	if not isBoss then
 		list[#list + 1] = checkbox(
-			L["UFUseClassColor"] or "Use class color",
+			L["UFUseClassColor"] or "Use class color (players)",
 			function() return getValue(unit, { "health", "useClassColor" }, healthDef.useClassColor == true) == true end,
 			function(val)
 				setValue(unit, { "health", "useClassColor" }, val and true or false)
@@ -1463,6 +1496,41 @@ local function buildUnitSettings(unit)
 		end
 	end
 
+	local showNPCColors = unit == "target" or unit == "targettarget" or unit == "focus" or isBoss
+	if showNPCColors then
+		list[#list + 1] = { name = L["UFNPCColors"] or "NPC colors", kind = settingType.Collapsible, id = "npcColors", defaultCollapsed = true }
+		for _, entry in ipairs(npcColorEntries) do
+			local dr, dg, db, da = getDefaultNPCColor(entry.key)
+			local defaultColor = { dr, dg, db, da }
+			list[#list + 1] = checkboxColor({
+				name = entry.label,
+				parentId = "npcColors",
+				defaultChecked = false,
+				isChecked = function() return getNPCOverride(entry.key) ~= nil end,
+				onChecked = function(val)
+					debounced("uf_npccolor_toggle_" .. entry.key, function()
+						if val then
+							setNPCOverride(entry.key, dr, dg, db, da)
+						else
+							clearNPCOverride(entry.key)
+						end
+						if UF and UF.Refresh then UF.Refresh() end
+						refreshSettingsUI()
+					end)
+				end,
+				getColor = function() return toRGBA(getNPCOverride(entry.key) or defaultColor, defaultColor) end,
+				onColor = function(color)
+					debounced("uf_npccolor_pick_" .. entry.key, function()
+						setNPCOverride(entry.key, color.r, color.g, color.b, color.a)
+						if UF and UF.Refresh then UF.Refresh() end
+						refreshSettingsUI()
+					end)
+				end,
+				colorDefault = { r = dr, g = dg, b = db, a = da },
+			})
+		end
+	end
+
 	if isPlayer and classHasResource then
 		local crDef = def.classResource or {}
 		list[#list + 1] = { name = L["ClassResource"] or "Class Resource", kind = settingType.Collapsible, id = "classResource", defaultCollapsed = true }
@@ -1882,12 +1950,16 @@ local function buildUnitSettings(unit)
 	end, statusDef.levelEnabled ~= false, "status")
 	list[#list + 1] = showLevelToggle
 
-	local hideLevelAtMaxToggle = checkbox(L["UFHideLevelAtMax"] or "Hide at max level", function()
-		return getValue(unit, { "status", "hideLevelAtMax" }, statusDef.hideLevelAtMax == true)
-	end, function(val)
-		setValue(unit, { "status", "hideLevelAtMax" }, val and true or false)
-		refresh()
-	end, statusDef.hideLevelAtMax == true, "status")
+	local hideLevelAtMaxToggle = checkbox(
+		L["UFHideLevelAtMax"] or "Hide at max level",
+		function() return getValue(unit, { "status", "hideLevelAtMax" }, statusDef.hideLevelAtMax == true) end,
+		function(val)
+			setValue(unit, { "status", "hideLevelAtMax" }, val and true or false)
+			refresh()
+		end,
+		statusDef.hideLevelAtMax == true,
+		"status"
+	)
 	hideLevelAtMaxToggle.isEnabled = isLevelEnabled
 	list[#list + 1] = hideLevelAtMaxToggle
 

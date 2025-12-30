@@ -1921,6 +1921,52 @@ local function getPowerPercent(unit, powerEnum, cur, maxv)
 	return nil
 end
 
+local npcColorUnits = {
+	target = true,
+	targettarget = true,
+	focus = true,
+	boss = true,
+}
+for i = 1, maxBossFrames do
+	npcColorUnits["boss" .. i] = true
+end
+
+local function shouldUseNPCColors(unit) return npcColorUnits[unit] == true end
+
+local selectionKeyByType = {
+	[0] = "enemy",
+	[1] = "enemy",
+	[2] = "neutral",
+	[3] = "friendly",
+}
+
+local function getNPCSelectionKey(unit)
+	if not shouldUseNPCColors(unit) then return nil end
+	if UnitIsPlayer and UnitIsPlayer(unit) then return nil end
+	local t = UnitSelectionType and UnitSelectionType(unit)
+	return selectionKeyByType[t]
+end
+
+local function getNPCOverrideColor(unit)
+	local overrides = addon.db and addon.db.ufNPCColorOverrides
+	if not overrides then return nil end
+
+	local key = getNPCSelectionKey(unit)
+	if not key then return nil end
+	local override = overrides[key]
+	if override then
+		if override.r then return override.r, override.g, override.b, override.a or 1 end
+		if override[1] then return override[1], override[2], override[3], override[4] or 1 end
+	end
+	return nil
+end
+
+local function getNPCHealthColor(unit)
+	if not (UFHelper and UFHelper.getNPCColor) then return nil end
+	local key = getNPCSelectionKey(unit)
+	return key and UFHelper.getNPCColor(key) or nil
+end
+
 local function updateHealth(cfg, unit)
 	cfg = cfg or (states[unit] and states[unit].cfg) or ensureDB(unit)
 	if cfg and cfg.enabled == false then return end
@@ -1946,13 +1992,30 @@ local function updateHealth(cfg, unit)
 		percentVal = getHealthPercent(unit, cur, maxv)
 	end
 	local hr, hg, hb, ha
-	if hc.useCustomColor and hc.color then
-		hr, hg, hb, ha = hc.color[1], hc.color[2], hc.color[3], hc.color[4] or 1
-	elseif hc.useClassColor then
+	local useCustom = hc.useCustomColor == true
+	local isPlayerUnit = UnitIsPlayer and UnitIsPlayer(unit)
+	if useCustom then
+		if not isPlayerUnit then
+			local nr, ng, nb, na = getNPCOverrideColor(unit)
+			if nr then
+				hr, hg, hb, ha = nr, ng, nb, na
+			elseif hc.color then
+				hr, hg, hb, ha = hc.color[1], hc.color[2], hc.color[3], hc.color[4] or 1
+			end
+		elseif hc.color then
+			hr, hg, hb, ha = hc.color[1], hc.color[2], hc.color[3], hc.color[4] or 1
+		end
+	elseif hc.useClassColor and isPlayerUnit then
 		local class = select(2, UnitClass(unit))
 		local c = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[class]) or (RAID_CLASS_COLORS and RAID_CLASS_COLORS[class])
 		if c then
 			hr, hg, hb, ha = c.r or c[1], c.g or c[2], c.b or c[3], c.a or c[4]
+		end
+	end
+	if not hr and not useCustom then
+		local nr, ng, nb, na = getNPCHealthColor(unit)
+		if nr then
+			hr, hg, hb, ha = nr, ng, nb, na
 		end
 	end
 	if not hr then
@@ -2644,7 +2707,7 @@ local function ensureFrames(unit)
 	st.status = _G[info.statusName] or CreateFrame("Frame", info.statusName, st.frame)
 	st.barGroup = st.barGroup or CreateFrame("Frame", nil, st.frame, "BackdropTemplate")
 	st.health = _G[info.healthName] or CreateFrame("StatusBar", info.healthName, st.barGroup, "BackdropTemplate")
-	if st.health.SetStatusBarDesaturated then st.health:SetStatusBarDesaturated(false) end
+	if st.health.SetStatusBarDesaturated then st.health:SetStatusBarDesaturated(true) end
 	st.power = _G[info.powerName] or CreateFrame("StatusBar", info.powerName, st.barGroup, "BackdropTemplate")
 	local _, powerToken = getMainPower(unit)
 	if st.power.SetStatusBarDesaturated then st.power:SetStatusBarDesaturated(UFHelper.isPowerDesaturated(powerToken)) end
@@ -2751,7 +2814,7 @@ local function applyBars(cfg, unit)
 	local pcfg = cfg.power or {}
 	local powerEnabled = pcfg.enabled ~= false
 	st.health:SetStatusBarTexture(UFHelper.resolveTexture(hc.texture))
-	if st.health.SetStatusBarDesaturated then st.health:SetStatusBarDesaturated(false) end
+	if st.health.SetStatusBarDesaturated then st.health:SetStatusBarDesaturated(true) end
 	UFHelper.configureSpecialTexture(st.health, "HEALTH", hc.texture, hc)
 	applyBarBackdrop(st.health, hc)
 	if powerEnabled then
