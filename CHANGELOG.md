@@ -1,5 +1,13 @@
 # Changelog
 
+## [6.6.1] – 2025-12-31
+
+### 🐛 Fixed
+
+- Frame level of absorb on UF Plus was behind the bar
+
+---
+
 ## [6.6.0] – 2025-12-30
 
 ### ✨ Added

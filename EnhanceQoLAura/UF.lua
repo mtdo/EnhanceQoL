@@ -1556,7 +1556,7 @@ local function ensureBorderFrame(frame)
 	end
 	border:SetFrameStrata(frame:GetFrameStrata())
 	local baseLevel = frame:GetFrameLevel() or 0
-	border:SetFrameLevel(baseLevel + 2)
+	border:SetFrameLevel(baseLevel + 3)
 	border:ClearAllPoints()
 	border:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
 	border:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
@@ -2150,11 +2150,11 @@ end
 
 local function syncTextFrameLevels(st)
 	if not st then return end
-	setFrameLevelAbove(st.healthTextLayer, st.health, 2)
-	setFrameLevelAbove(st.powerTextLayer, st.power, 2)
-	setFrameLevelAbove(st.statusTextLayer, st.status, 2)
+	setFrameLevelAbove(st.healthTextLayer, st.health, 5)
+	setFrameLevelAbove(st.powerTextLayer, st.power, 5)
+	setFrameLevelAbove(st.statusTextLayer, st.status, 5)
 	if st.restLoop and st.statusTextLayer then setFrameLevelAbove(st.restLoop, st.statusTextLayer, 3) end
-	if st.castTextLayer then setFrameLevelAbove(st.castTextLayer, st.castBar, 2) end
+	if st.castTextLayer then setFrameLevelAbove(st.castTextLayer, st.castBar, 5) end
 end
 
 local function hookTextFrameLevels(st)
@@ -2837,16 +2837,8 @@ local function applyBars(cfg, unit)
 		if st.absorb.SetStatusBarDesaturated then st.absorb:SetStatusBarDesaturated(false) end
 		UFHelper.configureSpecialTexture(st.absorb, "HEALTH", absorbTextureKey, hc)
 		st.absorb:SetAllPoints(st.health)
-		local healthLevel = st.health:GetFrameLevel() or 0
 		local borderFrame = st.barGroup and st.barGroup._ufBorder
-		local borderLevel = borderFrame and borderFrame.GetFrameLevel and borderFrame:GetFrameLevel() or nil
-		if borderLevel then
-			local targetLevel = borderLevel - 1
-			if targetLevel < healthLevel then targetLevel = healthLevel end
-			st.absorb:SetFrameLevel(targetLevel)
-		else
-			st.absorb:SetFrameLevel(healthLevel + 1)
-		end
+		setFrameLevelAbove(st.absorb, st.health, 1)
 		st.absorb:SetMinMaxValues(0, 1)
 		st.absorb:SetValue(0)
 		if st.overAbsorbGlow then
