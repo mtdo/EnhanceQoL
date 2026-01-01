@@ -2451,6 +2451,44 @@ local function scheduleAutoReleasePvP(popup)
 	end
 end
 
+local function resolveResurrectOffererUnit(offerer)
+	if issecretvalue and issecretvalue(offerer) then return nil end
+	if not offerer or offerer == "" then return nil end
+	if UnitExists(offerer) then return offerer end
+
+	local function matches(unit)
+		local name, realm = UnitName(unit)
+		if not name then return false end
+		if realm and realm ~= "" and offerer == (name .. "-" .. realm) then return true end
+		return offerer == name
+	end
+
+	if matches("player") then return "player" end
+	if IsInRaid() then
+		for i = 1, GetNumGroupMembers() do
+			local unit = "raid" .. i
+			if matches(unit) then return unit end
+		end
+	elseif IsInGroup() then
+		for i = 1, GetNumSubgroupMembers() do
+			local unit = "party" .. i
+			if matches(unit) then return unit end
+		end
+	end
+
+	return nil
+end
+
+local function shouldAutoAcceptResurrection(offerer)
+	if not addon.db or not addon.db["autoAcceptResurrection"] then return false end
+	if addon.db["autoAcceptResurrectionExcludeCombat"] and UnitAffectingCombat("player") then return false end
+	if addon.db["autoAcceptResurrectionExcludeAfterlife"] then
+		local unit = resolveResurrectOffererUnit(offerer)
+		if unit and UnitIsDeadOrGhost(unit) then return false end
+	end
+	return true
+end
+
 local function initMisc()
 	addon.functions.InitDBValue("confirmTimerRemovalTrade", false)
 	addon.functions.InitDBValue("confirmPatronOrderDialog", false)
@@ -2461,6 +2499,9 @@ local function initMisc()
 	addon.functions.InitDBValue("confirmPurchaseTokenItem", false)
 	addon.functions.InitDBValue("timeoutRelease", false)
 	addon.functions.InitDBValue("timeoutReleaseModifier", "SHIFT")
+	addon.functions.InitDBValue("autoAcceptResurrection", false)
+	addon.functions.InitDBValue("autoAcceptResurrectionExcludeCombat", true)
+	addon.functions.InitDBValue("autoAcceptResurrectionExcludeAfterlife", true)
 	addon.functions.InitDBValue("autoReleasePvP", false)
 	addon.functions.InitDBValue("autoReleasePvPDelay", 0)
 	addon.functions.InitDBValue("autoReleasePvPExcludeAlterac", false)
@@ -4859,6 +4900,13 @@ local eventHandlers = {
 			StaticPopup_Hide("CONFIRM_SUMMON_SCENARIO")
 			StaticPopup_Hide("CONFIRM_SUMMON_STARTING_AREA")
 		end)
+	end,
+	["RESURRECT_REQUEST"] = function(offerer)
+		if not shouldAutoAcceptResurrection(offerer) then return end
+		AcceptResurrect()
+		StaticPopup_Hide("RESURRECT")
+		StaticPopup_Hide("RESURRECT_NO_SICKNESS")
+		StaticPopup_Hide("RESURRECT_NO_TIMER")
 	end,
 	["PARTY_INVITE_REQUEST"] = function(unitName, arg2, arg3, arg4, arg5, arg6, unitID, arg8)
 		if addon.db["autoAcceptGroupInvite"] then

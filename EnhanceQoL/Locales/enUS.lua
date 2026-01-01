@@ -367,6 +367,10 @@ L["autoReleasePvPExcludeAlterac"] = "Exclude Alterac Valley"
 L["autoReleasePvPExcludeWintergrasp"] = "Exclude Wintergrasp"
 L["autoReleasePvPExcludeTolBarad"] = "Exclude Tol Barad (PvP)"
 L["autoReleasePvPExcludeAshran"] = "Exclude Ashran"
+L["autoAcceptResurrection"] = "Automatically accept resurrection"
+L["autoAcceptResurrectionDesc"] = "Accepts resurrection requests automatically. Use the exclusions below to avoid combat or afterlife resurrections."
+L["autoAcceptResurrectionExcludeCombat"] = "Don't accept while in combat"
+L["autoAcceptResurrectionExcludeAfterlife"] = "Don't accept afterlife resurrections"
 
 -- Quest
 L["ignoreTrivialQuests"] = "Don't automatically handle trivial %s"

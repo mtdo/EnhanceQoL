@@ -12,7 +12,8 @@
   - Edit Mode shows sample auras for frames with auras enabled.
 - **Misc**
   - Auto-accept summons.
-  - Auto-release in PvP/BGs
+  - Auto-accept resurrection requests.
+  - Auto-release in PvP/BGs.
   - Quick-skip cinematics option (auto-confirms the skip prompt on Esc/Space/Enter).
 
 ---

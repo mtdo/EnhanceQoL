@@ -501,6 +501,42 @@ addon.functions.SettingsCreateMultiDropdown(cChar, {
 	parentSection = sectionGeneral,
 })
 
+local function isAutoAcceptResurrectionEnabled()
+	return addon.SettingsLayout.elements["autoAcceptResurrection"]
+		and addon.SettingsLayout.elements["autoAcceptResurrection"].setting
+		and addon.SettingsLayout.elements["autoAcceptResurrection"].setting:GetValue() == true
+end
+
+addon.functions.SettingsCreateCheckbox(cChar, {
+	var = "autoAcceptResurrection",
+	text = L["autoAcceptResurrection"],
+	desc = L["autoAcceptResurrectionDesc"],
+	func = function(value) addon.db["autoAcceptResurrection"] = value end,
+	parentSection = sectionGeneral,
+	children = {
+		{
+			var = "autoAcceptResurrectionExcludeCombat",
+			text = L["autoAcceptResurrectionExcludeCombat"],
+			func = function(v) addon.db["autoAcceptResurrectionExcludeCombat"] = v end,
+			parentCheck = isAutoAcceptResurrectionEnabled,
+			parent = true,
+			default = true,
+			type = Settings.VarType.Boolean,
+			sType = "checkbox",
+		},
+		{
+			var = "autoAcceptResurrectionExcludeAfterlife",
+			text = L["autoAcceptResurrectionExcludeAfterlife"],
+			func = function(v) addon.db["autoAcceptResurrectionExcludeAfterlife"] = v end,
+			parentCheck = isAutoAcceptResurrectionEnabled,
+			parent = true,
+			default = true,
+			type = Settings.VarType.Boolean,
+			sType = "checkbox",
+		},
+	},
+})
+
 local function isAutoReleasePvPEnabled()
 	return addon.SettingsLayout.elements["autoReleasePvP"] and addon.SettingsLayout.elements["autoReleasePvP"].setting and addon.SettingsLayout.elements["autoReleasePvP"].setting:GetValue() == true
 end
