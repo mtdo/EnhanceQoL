@@ -1659,9 +1659,7 @@ end
 
 local function ShouldShowActionBarOnMouseover(bar)
 	if MouseIsOver(bar) or EQOL_ShouldKeepVisibleByFlyout() then return true end
-	if IsActionBarMouseoverGroupEnabled() then
-		return IsActionBarGroupHoverActive()
-	end
+	if IsActionBarMouseoverGroupEnabled() then return IsActionBarGroupHoverActive() end
 	return false
 end
 
@@ -1770,10 +1768,10 @@ local function ApplyActionBarAlpha(bar, variable, config, combatOverride, skipFa
 	end
 end
 
-	local function EQOL_HideBarIfNotHovered(bar, variable)
-		local cfg = GetActionBarVisibilityConfig(variable)
-		if not cfg then return end
-		C_Timer.After(0, function()
+local function EQOL_HideBarIfNotHovered(bar, variable)
+	local cfg = GetActionBarVisibilityConfig(variable)
+	if not cfg then return end
+	C_Timer.After(0, function()
 		local current = GetActionBarVisibilityConfig(variable)
 		if not current then return end
 		local useFade = ShouldFadeActionBar()
@@ -1824,11 +1822,11 @@ local function EQOL_HookSpellFlyout()
 	flyout.EQOL_MouseoverHooked = true
 end
 -- Action Bars
-	local function UpdateActionBarMouseover(barName, config, variable)
-		local bar = _G[barName]
-		if not bar then return end
+local function UpdateActionBarMouseover(barName, config, variable)
+	local bar = _G[barName]
+	if not bar then return end
 
-		local btnPrefix
+	local btnPrefix
 	if barName == "MainMenuBar" or barName == "MainActionBar" then
 		-- we have to change the Vehice Leave Button behaviour
 		local leave = _G.MainMenuBarVehicleLeaveButton
@@ -2024,16 +2022,16 @@ local function ApplyExtraActionArtworkSetting()
 end
 addon.functions.ApplyExtraActionArtworkSetting = ApplyExtraActionArtworkSetting
 
-	local function ApplyActionBarVisibilityAlpha(skipFade, event)
-		if addon.variables then
-			if not IsActionBarMouseoverGroupEnabled() then
-				addon.variables._eqolActionBarGroupHoverActive = nil
-				addon.variables._eqolActionBarHoverFrames = nil
-				addon.variables._eqolActionBarHoverUpdatePending = nil
-			elseif addon.variables._eqolActionBarGroupHoverActive == nil then
-				addon.variables._eqolActionBarGroupHoverActive = EQOL_ShouldKeepVisibleByFlyout() and true or false
-			end
+local function ApplyActionBarVisibilityAlpha(skipFade, event)
+	if addon.variables then
+		if not IsActionBarMouseoverGroupEnabled() then
+			addon.variables._eqolActionBarGroupHoverActive = nil
+			addon.variables._eqolActionBarHoverFrames = nil
+			addon.variables._eqolActionBarHoverUpdatePending = nil
+		elseif addon.variables._eqolActionBarGroupHoverActive == nil then
+			addon.variables._eqolActionBarGroupHoverActive = EQOL_ShouldKeepVisibleByFlyout() and true or false
 		end
+	end
 	local combatOverride
 	if event == "PLAYER_REGEN_DISABLED" then
 		combatOverride = true
@@ -2330,6 +2328,37 @@ local function initParty()
 	end)
 end
 
+local function setupQuickSkipCinematic()
+	addon.variables = addon.variables or {}
+	if addon.variables.quickSkipCinematicHooked then return end
+	if not CinematicFrame or not CinematicFrame.HookScript then return end
+
+	CinematicFrame:HookScript("OnKeyDown", function(_, key)
+		if not addon.db or not addon.db["quickSkipCinematic"] then return end
+		if key == "ESCAPE" then
+			if CinematicFrame:IsShown() and CinematicFrame.closeDialog and CinematicFrameCloseDialogConfirmButton then CinematicFrame.closeDialog:Hide() end
+		end
+	end)
+
+	CinematicFrame:HookScript("OnKeyUp", function(_, key)
+		if not addon.db or not addon.db["quickSkipCinematic"] then return end
+		if key == "SPACE" or key == "ESCAPE" or key == "ENTER" then
+			if CinematicFrame:IsShown() and CinematicFrame.closeDialog and CinematicFrameCloseDialogConfirmButton then CinematicFrameCloseDialogConfirmButton:Click() end
+		end
+	end)
+
+	if MovieFrame and MovieFrame.HookScript then
+		MovieFrame:HookScript("OnKeyUp", function(_, key)
+			if not addon.db or not addon.db["quickSkipCinematic"] then return end
+			if key == "SPACE" or key == "ESCAPE" or key == "ENTER" then
+				if MovieFrame:IsShown() and MovieFrame.CloseDialog and MovieFrame.CloseDialog.ConfirmButton then MovieFrame.CloseDialog.ConfirmButton:Click() end
+			end
+		end)
+	end
+
+	addon.variables.quickSkipCinematicHooked = true
+end
+
 local function initMisc()
 	addon.functions.InitDBValue("confirmTimerRemovalTrade", false)
 	addon.functions.InitDBValue("confirmPatronOrderDialog", false)
@@ -2345,6 +2374,7 @@ local function initMisc()
 	addon.functions.InitDBValue("autoRepairGuildBank", false)
 	addon.functions.InitDBValue("sellAllJunk", false)
 	addon.functions.InitDBValue("autoCancelCinematic", false)
+	addon.functions.InitDBValue("quickSkipCinematic", false)
 	addon.functions.InitDBValue("ignoreTalkingHead", false)
 	addon.functions.InitDBValue("autoHideBossBanner", false)
 	addon.functions.InitDBValue("autoQuickLoot", false)
@@ -2355,6 +2385,10 @@ local function initMisc()
 	addon.functions.InitDBValue("hideMinimapButton", false)
 	addon.functions.InitDBValue("hideZoneText", false)
 	addon.functions.InitDBValue("instantCatalystEnabled", false)
+
+	if addon.db["autoCancelCinematic"] and addon.db["quickSkipCinematic"] then addon.db["quickSkipCinematic"] = false end
+
+	setupQuickSkipCinematic()
 
 	-- Hook all static popups, because not the first one has to be the one for sell all junk if another popup is already shown
 	for i = 1, 4 do
@@ -4913,7 +4947,7 @@ local eventHandlers = {
 		end
 	end,
 	["CINEMATIC_START"] = function()
-		if addon.db["autoCancelCinematic"] then
+		if addon.db["autoCancelCinematic"] and not addon.db["quickSkipCinematic"] then
 			if CinematicFrame.isRealCinematic then
 				StopCinematic()
 			elseif CanCancelScene() then
@@ -4922,7 +4956,7 @@ local eventHandlers = {
 		end
 	end,
 	["PLAY_MOVIE"] = function()
-		if addon.db["autoCancelCinematic"] then MovieFrame:Hide() end
+		if addon.db["autoCancelCinematic"] and not addon.db["quickSkipCinematic"] then MovieFrame:Hide() end
 	end,
 }
 

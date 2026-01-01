@@ -234,7 +234,28 @@ local data = {
 		var = "autoCancelCinematic",
 		text = L["autoCancelCinematic"],
 		desc = L["autoCancelCinematicDesc"],
-		func = function(key) addon.db["autoCancelCinematic"] = key end,
+		func = function(value)
+			addon.db["autoCancelCinematic"] = value and true or false
+			if value then
+				addon.db["quickSkipCinematic"] = false
+				local quickSetting = addon.SettingsLayout.elements and addon.SettingsLayout.elements["quickSkipCinematic"]
+				if quickSetting and quickSetting.setting then quickSetting.setting:SetValue(false) end
+			end
+		end,
+		default = false,
+	},
+	{
+		var = "quickSkipCinematic",
+		text = L["quickSkipCinematic"],
+		desc = L["quickSkipCinematicDesc"],
+		func = function(value)
+			addon.db["quickSkipCinematic"] = value and true or false
+			if value then
+				addon.db["autoCancelCinematic"] = false
+				local autoSetting = addon.SettingsLayout.elements and addon.SettingsLayout.elements["autoCancelCinematic"]
+				if autoSetting and autoSetting.setting then autoSetting.setting:SetValue(false) end
+			end
+		end,
 		default = false,
 	},
 	{

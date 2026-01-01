@@ -372,6 +372,9 @@ local bossAuraStates = {}
 local AURA_FILTER_HELPFUL = "HELPFUL|INCLUDE_NAME_PLATE_ONLY"
 local AURA_FILTER_HARMFUL = "HARMFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY"
 local AURA_FILTER_HARMFUL_ALL = "HARMFUL|INCLUDE_NAME_PLATE_ONLY"
+local SAMPLE_BUFF_ICONS = { 136243, 135940, 136085, 136097, 136116, 136048, 135932, 136108 }
+local SAMPLE_DEBUFF_ICONS = { 136207, 136160, 136128, 135804, 136168, 132104, 136118, 136214 }
+local SAMPLE_DISPEL_TYPES = { "Magic", "Curse", "Disease", "Poison" }
 local blizzardPlayerHooked = false
 local blizzardTargetHooked = false
 local castOnUpdateHandlers = {}
@@ -948,7 +951,7 @@ local function applyAuraToButton(btn, aura, ac, isDebuff, unitToken)
 	styleAuraCount(btn, ac)
 	if issecretvalue and issecretvalue(aura.applications) or aura.applications and aura.applications > 1 then
 		local appStacks = aura.applications
-		if C_UnitAuras.GetAuraApplicationDisplayCount then
+		if not aura.isSample and C_UnitAuras.GetAuraApplicationDisplayCount then
 			appStacks = C_UnitAuras.GetAuraApplicationDisplayCount(unitToken, aura.auraInstanceID, 2, 1000) -- TODO actual 4th param is required because otherwise it's always "*" this always get's the right stack shown
 		end
 
@@ -1127,6 +1130,67 @@ local function hideAuraContainers(st)
 	end
 end
 
+local function fillSampleAuras(unit, ac, hidePermanent)
+	local auras, order, indexById = getAuraTables(unit)
+	if not auras or not order or not indexById then return end
+	local maxCount = ac and ac.max or 16
+	if not maxCount or maxCount < 1 then maxCount = 1 end
+	local separateDebuffs = ac and ac.separateDebuffAnchor == true
+	local debuffCount = separateDebuffs and math.floor(maxCount * 0.4) or math.floor(maxCount * 0.3)
+	if maxCount > 1 and debuffCount < 1 then debuffCount = 1 end
+	if debuffCount >= maxCount then debuffCount = maxCount - 1 end
+	if debuffCount < 0 then debuffCount = 0 end
+	local buffCount = maxCount - debuffCount
+	local now = GetTime and GetTime() or 0
+	local base = unit == UNIT.PLAYER and -100000 or (unit == UNIT.TARGET or unit == "target") and -200000 or -300000
+
+	local function addSampleAura(isDebuff, idx)
+		local duration
+		if idx % 3 == 0 then
+			duration = 120
+		elseif idx % 3 == 1 then
+			duration = 30
+		else
+			duration = 0
+		end
+		if hidePermanent and duration <= 0 then duration = 45 end
+		local expiration = duration > 0 and (now + duration) or nil
+		local stacks
+		if idx % 5 == 0 then
+			stacks = 5
+		elseif idx % 3 == 0 then
+			stacks = 3
+		end
+		local iconList = isDebuff and SAMPLE_DEBUFF_ICONS or SAMPLE_BUFF_ICONS
+		local icon = iconList[((idx - 1) % #iconList) + 1]
+		local dispelName = isDebuff and SAMPLE_DISPEL_TYPES[((idx - 1) % #SAMPLE_DISPEL_TYPES) + 1] or nil
+		local auraId = base - idx
+		auras[auraId] = {
+			auraInstanceID = auraId,
+			icon = icon,
+			isHelpful = not isDebuff,
+			isHarmful = isDebuff,
+			applications = stacks,
+			duration = duration,
+			expirationTime = expiration,
+			dispelName = dispelName,
+			isSample = true,
+		}
+		order[#order + 1] = auraId
+		indexById[auraId] = #order
+	end
+
+	local idx = 0
+	for i = 1, debuffCount do
+		idx = idx + 1
+		addSampleAura(true, idx)
+	end
+	for i = 1, buffCount do
+		idx = idx + 1
+		addSampleAura(false, idx)
+	end
+end
+
 local function updateTargetAuraIcons(startIndex, unit)
 	unit = unit or "target"
 	local st = states[unit]
@@ -1262,6 +1326,12 @@ local function fullScanTargetAuras(unit)
 	local def = defaultsFor(unit)
 	local ac = cfg.auraIcons or (def and def.auraIcons) or defaults.target.auraIcons or {}
 	if ac.enabled == false then
+		updateTargetAuraIcons(nil, unit)
+		return
+	end
+	if addon.EditModeLib and addon.EditModeLib:IsInEditMode() then
+		local hidePermanent = ac.hidePermanentAuras == true or ac.hidePermanent == true
+		fillSampleAuras(unit, ac, hidePermanent)
 		updateTargetAuraIcons(nil, unit)
 		return
 	end
@@ -3138,7 +3208,11 @@ local function applyConfig(unit)
 		end
 	end
 	if unit == UNIT.TARGET and states[unit] and states[unit].auraContainer then
-		updateTargetAuraIcons(1, unit)
+		if addon.EditModeLib and addon.EditModeLib:IsInEditMode() then
+			fullScanTargetAuras(unit)
+		else
+			updateTargetAuraIcons(1, unit)
+		end
 	elseif unit == UNIT.PLAYER and states[unit] and states[unit].auraContainer then
 		fullScanTargetAuras(unit)
 	elseif isBossUnit(unit) and states[unit] and states[unit].auraContainer then
@@ -3773,6 +3847,10 @@ local function onEvent(self, event, unit, arg1)
 		local def = defaultsFor(unit)
 		local ac = cfg.auraIcons or (def and def.auraIcons) or defaults.target.auraIcons or { size = 24, padding = 2, max = 16, showCooldown = true }
 		if ac.enabled == false then return end
+		if addon.EditModeLib and addon.EditModeLib:IsInEditMode() then
+			fullScanTargetAuras(unit)
+			return
+		end
 		local helpfulFilter, harmfulFilter = getAuraFilters(unit)
 		local eventInfo = arg1
 		if not UnitExists(unit) then
@@ -4066,6 +4144,7 @@ local function ensureEventHandling()
 				updateAllRaidTargetIcons()
 				applyVisibilityRulesAll()
 				if UF.Refresh then UF.Refresh() end
+				if ensureDB("target").enabled then fullScanTargetAuras(UNIT.TARGET) end
 				if states[UNIT.TARGET] and states[UNIT.TARGET].castBar then setCastInfoFromUnit(UNIT.TARGET) end
 				if states[UNIT.FOCUS] and states[UNIT.FOCUS].castBar then setCastInfoFromUnit(UNIT.FOCUS) end
 			end)
