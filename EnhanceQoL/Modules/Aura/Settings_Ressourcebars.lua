@@ -1996,7 +1996,7 @@ end
 
 ResourceBars.RegisterEditModeFrames = registerEditModeBars
 
-local function buildSpecToggles(specIndex, specName, available)
+local function buildSpecToggles(specIndex, specName, available, expandable)
 	local specCfg = ensureSpecCfg(specIndex)
 	if not specCfg then return nil end
 
@@ -2063,12 +2063,20 @@ local function buildSpecToggles(specIndex, specName, available)
 		end,
 		parent = true,
 		parentCheck = function() return addon.db["enableResourceFrame"] == true end,
+		parentSection = expandable,
 	}
 end
 
 local function buildSettings()
-	local cat = addon.functions.SettingsCreateCategory(nil, L["Resource Bars"], nil, "ResourceBars")
+	local cat = addon.SettingsLayout.rootUI
+
 	if not cat then return end
+
+	local expandable = addon.functions.SettingsCreateExpandableSection(cat, {
+		name = L["Resource Bars"],
+		expanded = false,
+		colorizeTitle = false,
+	})
 
 	local data = {
 		{
@@ -2084,6 +2092,7 @@ local function buildSettings()
 					ResourceBars.DisableResourceBars()
 				end
 			end,
+			parentSection = expandable,
 			default = false,
 			children = {
 				{
@@ -2097,6 +2106,7 @@ local function buildSettings()
 					parent = true,
 					parentCheck = function() return addon.db["enableResourceFrame"] == true end,
 					sType = "checkbox",
+					parentSection = expandable,
 				},
 				{
 					var = "resourceBarsHideMounted",
@@ -2109,6 +2119,7 @@ local function buildSettings()
 					parent = true,
 					parentCheck = function() return addon.db["enableResourceFrame"] == true end,
 					sType = "checkbox",
+					parentSection = expandable,
 				},
 				{
 					var = "resourceBarsHideVehicle",
@@ -2121,6 +2132,7 @@ local function buildSettings()
 					parent = true,
 					parentCheck = function() return addon.db["enableResourceFrame"] == true end,
 					sType = "checkbox",
+					parentSection = expandable,
 				},
 				{
 					var = "resourceBarsAutoEnable",
@@ -2147,6 +2159,7 @@ local function buildSettings()
 					end,
 					parent = true,
 					parentCheck = function() return addon.db["enableResourceFrame"] == true end,
+					parentSection = expandable,
 				},
 			},
 		},
@@ -2158,7 +2171,7 @@ local function buildSettings()
 			local specID, specName = GetSpecializationInfoForClassID(class, specIndex)
 			local available = ResourceBars.powertypeClasses[addon.variables.unitClass][specIndex] or {}
 			if specID and specName then
-				local entry = buildSpecToggles(specIndex, specName, available)
+				local entry = buildSpecToggles(specIndex, specName, available, expandable)
 				if entry then table.insert(data[1].children, entry) end
 			end
 		end
@@ -2187,7 +2200,9 @@ local function buildSettings()
 			end
 		end
 
-		addon.functions.SettingsCreateHeadline(cat, L["Profiles"])
+		addon.functions.SettingsCreateHeadline(cat, L["Profiles"], {
+			parentSection = expandable,
+		})
 		addon.functions.SettingsCreateDropdown(cat, {
 			var = "resourceBarsProfileScope",
 			text = L["ProfileScope"] or (L["Apply to"] or "Apply to"),
@@ -2195,6 +2210,7 @@ local function buildSettings()
 			get = getScope,
 			set = setScope,
 			default = "ALL",
+			parentSection = expandable,
 		})
 
 		addon.functions.SettingsCreateButton(cat, {
@@ -2232,6 +2248,7 @@ local function buildSettings()
 				end
 				StaticPopup_Show("EQOL_RESOURCEBAR_EXPORT_SETTINGS")
 			end,
+			parentSection = expandable,
 		})
 
 		addon.functions.SettingsCreateButton(cat, {
@@ -2300,6 +2317,7 @@ local function buildSettings()
 				end
 				StaticPopup_Show("EQOL_RESOURCEBAR_IMPORT_SETTINGS")
 			end,
+			parentSection = expandable,
 		})
 	end
 
