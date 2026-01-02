@@ -19,6 +19,13 @@ local listOrders = {
 	vendorIncludeDestroyList = {},
 }
 
+local function applyParentSection(entries, section)
+	for _, entry in ipairs(entries or {}) do
+		entry.parentSection = section
+		if entry.children then applyParentSection(entry.children, section) end
+	end
+end
+
 local function isChecked(var)
 	local entry = addon.SettingsLayout.elements and addon.SettingsLayout.elements[var]
 	return entry and entry.setting and entry.setting:GetValue() == true
@@ -163,10 +170,16 @@ local function showRemovePopup(dialogKey, prompt, listKey, label, id)
 end
 
 local function buildSettings()
-	local cVendor = addon.functions.SettingsCreateCategory(nil, L["SellingAndShopping"] or "Selling & Shopping", nil, "Vendor")
+	local cVendor = addon.SettingsLayout.rootECONOMY
 	addon.SettingsLayout.vendorCategory = cVendor
 
-	addon.functions.SettingsCreateHeadline(cVendor, L["SellingAndShopping"] or "Selling & Shopping")
+	local vendorExpandable = addon.functions.SettingsCreateExpandableSection(cVendor, {
+		name = L["SellingAndShopping"] or "Selling & Shopping",
+		expanded = false,
+		colorizeTitle = false,
+	})
+
+	addon.functions.SettingsCreateHeadline(cVendor, L["SellingAndShopping"] or "Selling & Shopping", { parentSection = vendorExpandable })
 
 	local generalCheckboxes = {
 	{
@@ -215,9 +228,10 @@ local function buildSettings()
 	},
 }
 table.sort(generalCheckboxes, function(a, b) return tostring(a.text or "") < tostring(b.text or "") end)
+applyParentSection(generalCheckboxes, vendorExpandable)
 addon.functions.SettingsCreateCheckboxes(cVendor, generalCheckboxes)
 
-addon.functions.SettingsCreateHeadline(cVendor, L["vendorCraftShopperTitle"] or "Craft Shopper")
+addon.functions.SettingsCreateHeadline(cVendor, L["vendorCraftShopperTitle"] or "Craft Shopper", { parentSection = vendorExpandable })
 addon.functions.SettingsCreateCheckbox(cVendor, {
 	var = "vendorCraftShopperEnable",
 	text = L["vendorCraftShopperEnable"],
@@ -233,9 +247,10 @@ addon.functions.SettingsCreateCheckbox(cVendor, {
 		end
 	end,
 	default = false,
+	parentSection = vendorExpandable,
 })
 
-addon.functions.SettingsCreateHeadline(cVendor, L["vendorWillBeSold"] or "Auto-Sell")
+addon.functions.SettingsCreateHeadline(cVendor, L["vendorWillBeSold"] or "Auto-Sell", { parentSection = vendorExpandable })
 
 local qualities = {
 	{ q = 1, key = "Common" },
@@ -254,7 +269,7 @@ for _, info in ipairs(qualities) do
 	local tabName = addon.Vendor.variables.tabNames[quality]
 	local colorHex = ITEM_QUALITY_COLORS[quality] and ITEM_QUALITY_COLORS[quality].hex or ""
 	local label = _G["ITEM_QUALITY" .. quality .. "_DESC"] or tabName
-	addon.functions.SettingsCreateText(cVendor, string.format("%s%s|r", colorHex, label))
+	addon.functions.SettingsCreateText(cVendor, string.format("%s%s|r", colorHex, label), { parentSection = vendorExpandable })
 
 	local enable = addon.functions.SettingsCreateCheckbox(cVendor, {
 		var = "vendor" .. tabName .. "Enable",
@@ -265,6 +280,7 @@ for _, info in ipairs(qualities) do
 			refreshSellMarks()
 		end,
 		default = addon.db["vendor" .. tabName .. "Enable"],
+		parentSection = vendorExpandable,
 	})
 
 	local function parentCheck() return isChecked("vendor" .. tabName .. "Enable") end
@@ -323,6 +339,7 @@ for _, info in ipairs(qualities) do
 		element = enable.element,
 		parentCheck = parentCheck,
 		default = 200,
+		parentSection = vendorExpandable,
 	})
 
 	if quality ~= 1 then
@@ -365,6 +382,7 @@ for _, info in ipairs(qualities) do
 	end
 
 	table.sort(qualityCheckboxes, function(a, b) return tostring(a.text or "") < tostring(b.text or "") end)
+	applyParentSection(qualityCheckboxes, vendorExpandable)
 	addon.functions.SettingsCreateCheckboxes(cVendor, qualityCheckboxes)
 
 	addon.functions.SettingsCreateMultiDropdown(cVendor, {
@@ -383,18 +401,20 @@ for _, info in ipairs(qualities) do
 			addon.db["vendor" .. tabName .. "CraftingExpansions"][value] = selected or nil
 			refreshSellMarks()
 		end,
+		parentSection = vendorExpandable,
 	})
 
 	syncBindFilters(quality, tabName)
 	addon.Vendor.variables.itemQualityFilter[quality] = addon.db["vendor" .. tabName .. "Enable"]
 end
 
-addon.functions.SettingsCreateHeadline(cVendor, L["Include"] or "Include")
-addon.functions.SettingsCreateText(cVendor, L["vendorAddItemToInclude"])
+addon.functions.SettingsCreateHeadline(cVendor, L["Include"] or "Include", { parentSection = vendorExpandable })
+addon.functions.SettingsCreateText(cVendor, L["vendorAddItemToInclude"], { parentSection = vendorExpandable })
 addon.functions.SettingsCreateButton(cVendor, {
 	var = "vendorIncludeAdd",
 	text = ADD,
 	func = function() showAddPopup("EQOL_VENDOR_INCLUDE_ADD", L["vendorAddItemToInclude"], "vendorIncludeSellList") end,
+	parentSection = vendorExpandable,
 })
 
 addon.functions.SettingsCreateScrollDropdown(cVendor, {
@@ -413,14 +433,16 @@ addon.functions.SettingsCreateScrollDropdown(cVendor, {
 		showRemovePopup("EQOL_VENDOR_INCLUDE_REMOVE", L["vendorIncludeRemoveConfirm"], "vendorIncludeSellList", label, id)
 		clearDropdownSelection("vendorIncludeRemove")
 	end,
+	parentSection = vendorExpandable,
 })
 
-addon.functions.SettingsCreateHeadline(cVendor, L["Exclude"] or "Exclude")
-addon.functions.SettingsCreateText(cVendor, L["vendorAddItemToExclude"])
+addon.functions.SettingsCreateHeadline(cVendor, L["Exclude"] or "Exclude", { parentSection = vendorExpandable })
+addon.functions.SettingsCreateText(cVendor, L["vendorAddItemToExclude"], { parentSection = vendorExpandable })
 addon.functions.SettingsCreateButton(cVendor, {
 	var = "vendorExcludeAdd",
 	text = ADD,
 	func = function() showAddPopup("EQOL_VENDOR_EXCLUDE_ADD", L["vendorAddItemToExclude"], "vendorExcludeSellList") end,
+	parentSection = vendorExpandable,
 })
 
 addon.functions.SettingsCreateScrollDropdown(cVendor, {
@@ -439,9 +461,15 @@ addon.functions.SettingsCreateScrollDropdown(cVendor, {
 		showRemovePopup("EQOL_VENDOR_EXCLUDE_REMOVE", L["vendorExcludeRemoveConfirm"], "vendorExcludeSellList", label, id)
 		clearDropdownSelection("vendorExcludeRemove")
 	end,
+	parentSection = vendorExpandable,
 })
 
-addon.functions.SettingsCreateHeadline(cVendor, L["vendorDestroy"] or "Destroy")
+local destroyExpandable = addon.functions.SettingsCreateExpandableSection(cVendor, {
+	name = L["vendorDestroy"] or "Destroy",
+	expanded = false,
+	colorizeTitle = false,
+})
+
 local destroyChildren = {
 	{
 		var = "vendorShowDestroyOverlay",
@@ -496,7 +524,7 @@ local destroyChildren = {
 	},
 	}
 	table.sort(destroyChildren, function(a, b) return tostring(a.text or "") < tostring(b.text or "") end)
-	addon.functions.SettingsCreateCheckboxes(cVendor, {
+	local destroyEntries = {
 		{
 			var = "vendorDestroyEnable",
 			text = L["vendorDestroyEnable"],
@@ -506,11 +534,12 @@ local destroyChildren = {
 				refreshSellMarks()
 				refreshDestroyButton()
 			end,
-
 			default = false,
 			children = destroyChildren,
 		},
-	})
+	}
+	applyParentSection(destroyEntries, destroyExpandable)
+	addon.functions.SettingsCreateCheckboxes(cVendor, destroyEntries)
 end
 
 function addon.Vendor.functions.InitSettings()

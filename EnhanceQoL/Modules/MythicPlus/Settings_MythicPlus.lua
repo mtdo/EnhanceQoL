@@ -16,75 +16,97 @@ local LSM = LibStub("LibSharedMedia-3.0")
 local wipe = wipe
 
 local function buildSettings()
-local cTeleports = addon.functions.SettingsCreateCategory(nil, L["Teleports"], nil, "Teleports")
-addon.SettingsLayout.teleportsCategory = cTeleports
+	local cGameplay = addon.SettingsLayout and addon.SettingsLayout.rootGAMEPLAY
+	if not cGameplay then return end
 
-local data = {
-	{
-		var = "teleportFrame",
-		text = L["teleportEnabled"],
-		desc = L["teleportEnabledDesc"],
-		func = function(v)
-			addon.db["teleportFrame"] = v
-			addon.MythicPlus.functions.toggleFrame()
-		end,
-	},
-	{
-		var = "teleportsWorldMapEnabled",
-		text = L["teleportsWorldMapEnabled"],
-		desc = L["teleportsWorldMapEnabledDesc"],
-		func = function(v) addon.db["teleportsWorldMapEnabled"] = v end,
-		children = {
-			{
-				text = "|cffffd700" .. L["teleportsWorldMapHelp"] .. "|r",
-				sType = "hint",
-			},
-		},
-	},
-	{
-		var = "teleportsWorldMapShowSeason",
-		text = L["teleportsWorldMapShowSeason"],
-		desc = L["teleportsWorldMapShowSeasonDesc"],
-		func = function(v) addon.db["teleportsWorldMapShowSeason"] = v end,
-	},
-	{
-		var = "portalHideMissing",
-		text = L["portalHideMissing"],
-		func = function(v) addon.db["portalHideMissing"] = v end,
-	},
-}
--- TODO bug in tooltip in midnight beta - remove for now
-if not addon.variables.isMidnight then table.insert(data, {
-	text = L["portalShowTooltip"],
-	var = "portalShowTooltip",
-	func = function(value) addon.db["portalShowTooltip"] = value end,
-}) end
-table.sort(data, function(a, b) return a.text < b.text end)
-addon.functions.SettingsCreateCheckboxes(cTeleports, data)
-
--- Keybinding: World Map Teleport panel
-if addon.functions.FindBindingIndex then
-	local bind = addon.functions.FindBindingIndex({ EQOL_TOGGLE_WORLDMAP_TELEPORT = true })
-	if bind and next(bind) then
-		local section = addon.functions.SettingsCreateExpandableSection(cTeleports, {
-			name = L["teleportsWorldMapBinding"],
-			expanded = true,
+	local sectionTeleports = addon.SettingsLayout.gameplayTeleportsSection
+	if not sectionTeleports then
+		sectionTeleports = addon.functions.SettingsCreateExpandableSection(cGameplay, {
+			name = L["Teleports"],
+			expanded = false,
 			colorizeTitle = false,
 		})
-		for _, idx in pairs(bind) do
-			addon.functions.SettingsCreateKeybind(cTeleports, idx, section)
+		addon.SettingsLayout.gameplayTeleportsSection = sectionTeleports
+	end
+
+	local data = {
+		{
+			var = "teleportFrame",
+			text = L["teleportEnabled"],
+			desc = L["teleportEnabledDesc"],
+			func = function(v)
+				addon.db["teleportFrame"] = v
+				addon.MythicPlus.functions.toggleFrame()
+			end,
+		},
+		{
+			var = "teleportsWorldMapEnabled",
+			text = L["teleportsWorldMapEnabled"],
+			desc = L["teleportsWorldMapEnabledDesc"],
+			func = function(v) addon.db["teleportsWorldMapEnabled"] = v end,
+			children = {
+				{
+					text = "|cffffd700" .. L["teleportsWorldMapHelp"] .. "|r",
+					sType = "hint",
+				},
+			},
+		},
+		{
+			var = "teleportsWorldMapShowSeason",
+			text = L["teleportsWorldMapShowSeason"],
+			desc = L["teleportsWorldMapShowSeasonDesc"],
+			func = function(v) addon.db["teleportsWorldMapShowSeason"] = v end,
+		},
+		{
+			var = "portalHideMissing",
+			text = L["portalHideMissing"],
+			func = function(v) addon.db["portalHideMissing"] = v end,
+		},
+	}
+	-- TODO bug in tooltip in midnight beta - remove for now
+	if not addon.variables.isMidnight then
+		table.insert(data, {
+			text = L["portalShowTooltip"],
+			var = "portalShowTooltip",
+			func = function(value) addon.db["portalShowTooltip"] = value end,
+		})
+	end
+	table.sort(data, function(a, b) return a.text < b.text end)
+
+	local function applyParentSection(entry)
+		entry.parentSection = sectionTeleports
+		if entry.children then
+			for _, child in pairs(entry.children) do
+				applyParentSection(child)
+			end
 		end
 	end
-end
+	for _, entry in ipairs(data) do
+		applyParentSection(entry)
+	end
+	addon.functions.SettingsCreateCheckboxes(cGameplay, data)
 
--- Talent Reminder (own group)
-local cTalent = addon.functions.SettingsCreateCategory(nil, L["TalentReminder"], nil, "TalentReminder")
-if cTalent then
-	local sectionTalent = addon.functions.SettingsCreateExpandableSection(cTalent, {
-		name = L["TalentReminder"],
-		expanded = true,
-		colorizeTitle = false,
-	})
+	-- Keybinding: World Map Teleport panel
+	if addon.functions.FindBindingIndex then
+		local bind = addon.functions.FindBindingIndex({ EQOL_TOGGLE_WORLDMAP_TELEPORT = true })
+		if bind and next(bind) then
+			addon.functions.SettingsCreateHeadline(cGameplay, L["teleportsWorldMapBinding"], { parentSection = sectionTeleports })
+			for _, idx in pairs(bind) do
+				addon.functions.SettingsCreateKeybind(cGameplay, idx, sectionTeleports)
+			end
+		end
+	end
+
+	-- Talent Reminder
+	local sectionTalent = addon.SettingsLayout.gameplayTalentReminderSection
+	if not sectionTalent then
+		sectionTalent = addon.functions.SettingsCreateExpandableSection(cGameplay, {
+			name = L["TalentReminder"],
+			expanded = false,
+			colorizeTitle = false,
+		})
+		addon.SettingsLayout.gameplayTalentReminderSection = sectionTalent
+	end
 
 	addon.MythicPlus.functions.getAllLoadouts()
 	if #addon.MythicPlus.variables.seasonMapInfo == 0 then addon.MythicPlus.functions.createSeasonInfo() end
@@ -130,7 +152,7 @@ if cTalent then
 		return soundList
 	end
 
-	local talentEnable = addon.functions.SettingsCreateCheckbox(cTalent, {
+	local talentEnable = addon.functions.SettingsCreateCheckbox(cGameplay, {
 		var = "talentReminderEnabled",
 		text = L["talentReminderEnabled"],
 		desc = L["talentReminderEnabledDesc"]:format(PLAYER_DIFFICULTY6, PLAYER_DIFFICULTY_MYTHIC_PLUS),
@@ -143,7 +165,7 @@ if cTalent then
 	})
 	local function isTalentReminderEnabled() return talentEnable and talentEnable.setting and talentEnable.setting:GetValue() == true end
 
-	addon.functions.SettingsCreateCheckbox(cTalent, {
+	addon.functions.SettingsCreateCheckbox(cGameplay, {
 		var = "talentReminderLoadOnReadyCheck",
 		text = L["talentReminderLoadOnReadyCheck"]:format(READY_CHECK),
 		func = function(v)
@@ -156,7 +178,7 @@ if cTalent then
 		parentSection = sectionTalent,
 	})
 
-	local soundDifference = addon.functions.SettingsCreateCheckbox(cTalent, {
+	local soundDifference = addon.functions.SettingsCreateCheckbox(cGameplay, {
 		var = "talentReminderSoundOnDifference",
 		text = L["talentReminderSoundOnDifference"],
 		func = function(v)
@@ -170,7 +192,7 @@ if cTalent then
 	})
 	local function isSoundReminderEnabled() return soundDifference and soundDifference.setting and soundDifference.setting:GetValue() == true end
 
-	local customSound = addon.functions.SettingsCreateCheckbox(cTalent, {
+	local customSound = addon.functions.SettingsCreateCheckbox(cGameplay, {
 		var = "talentReminderUseCustomSound",
 		text = L["talentReminderUseCustomSound"],
 		func = function(v) addon.db["talentReminderUseCustomSound"] = v end,
@@ -187,7 +209,7 @@ if cTalent then
 		parentSection = sectionTalent,
 	})
 
-	addon.functions.SettingsCreateSoundDropdown(cTalent, {
+	addon.functions.SettingsCreateSoundDropdown(cGameplay, {
 		var = "talentReminderCustomSoundFile",
 		text = L["talentReminderCustomSound"],
 		listFunc = buildTalentSoundOptions,
@@ -208,7 +230,7 @@ if cTalent then
 		parentSection = sectionTalent,
 	})
 
-	local showActiveBuild = addon.functions.SettingsCreateCheckbox(cTalent, {
+	local showActiveBuild = addon.functions.SettingsCreateCheckbox(cGameplay, {
 		var = "talentReminderShowActiveBuild",
 		text = L["talentReminderShowActiveBuild"],
 		func = function(v)
@@ -225,11 +247,11 @@ if cTalent then
 	addon.functions.SettingsAttachNotify(talentEnable.setting, "talentReminderUseCustomSound")
 	addon.functions.SettingsAttachNotify(soundDifference.setting, "talentReminderUseCustomSound")
 
-	addon.functions.SettingsCreateText(cTalent, "|cff99e599" .. L["talentReminderHint"]:format(CRF_EDIT_MODE) .. "|r", { parentSection = sectionTalent })
+	addon.functions.SettingsCreateText(cGameplay, "|cff99e599" .. L["talentReminderHint"]:format(CRF_EDIT_MODE) .. "|r", { parentSection = sectionTalent })
 
 	if TalentLoadoutEx then
-		addon.functions.SettingsCreateText(cTalent, "|cffffd700" .. L["labelExplainedlineTLE"] .. "|r", { parentSection = sectionTalent })
-		addon.functions.SettingsCreateButton(cTalent, {
+		addon.functions.SettingsCreateText(cGameplay, "|cffffd700" .. L["labelExplainedlineTLE"] .. "|r", { parentSection = sectionTalent })
+		addon.functions.SettingsCreateButton(cGameplay, {
 			var = "talentReminderReloadLoadouts",
 			text = L["ReloadLoadouts"],
 			func = function()
@@ -247,12 +269,9 @@ if cTalent then
 		for _, specData in ipairs(addon.MythicPlus.variables.specNames) do
 			local orderTable = talentLoadoutOrders[specData.value] or {}
 			talentLoadoutOrders[specData.value] = orderTable
-			local specSection = addon.functions.SettingsCreateExpandableSection(cTalent, {
-				name = specData.text,
-				expanded = false,
-			})
+			addon.functions.SettingsCreateHeadline(cGameplay, specData.text, { parentSection = sectionTalent })
 			for _, mapData in ipairs(addon.MythicPlus.variables.seasonMapInfo) do
-				addon.functions.SettingsCreateDropdown(cTalent, {
+				addon.functions.SettingsCreateDropdown(cGameplay, {
 					var = string.format("talentReminder_%s_%s", specData.value, mapData.id),
 					text = mapData.name,
 					type = Settings.VarType.String,
@@ -280,12 +299,11 @@ if cTalent then
 					parent = true,
 					element = talentEnable.element,
 					parentCheck = isTalentReminderEnabled,
-					parentSection = specSection,
+					parentSection = sectionTalent,
 				})
 			end
 		end
 	end
-end
 end
 
 ----- REGION END
@@ -312,6 +330,7 @@ frameLoad:SetScript("OnEvent", eventHandler)
 function addon.MythicPlus.functions.InitSettings()
 	if addon.MythicPlus.variables.settingsBuilt then return end
 	if not addon.db or not addon.functions or not addon.functions.SettingsCreateCategory then return end
+	if not addon.SettingsLayout or not addon.SettingsLayout.rootGAMEPLAY then return end
 	buildSettings()
 	addon.MythicPlus.variables.settingsBuilt = true
 end
