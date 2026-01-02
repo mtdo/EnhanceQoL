@@ -11,6 +11,7 @@
   - Unit status text now has its own font size/font/outline controls + Edit Mode sample.
   - PvP indicator icon for Player/Target/Focus.
   - Optional reverse-fill absorb bar in UF.
+  - Detached power bar can use its own border (texture/size/offset).
   - Edit Mode shows sample auras for frames with auras enabled.
 - **Misc**
   - Auto-accept summons.

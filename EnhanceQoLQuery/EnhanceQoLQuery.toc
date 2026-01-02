@@ -13,7 +13,7 @@
 ## Notes-zhTW: 一個簡單的物品資訊顯示插件
 ## Author: R41Z0R
 ## Version: @project-version@
-## Dependencies: EnhanceQoL, EnhanceQoLDrinkMacro
+## Dependencies: EnhanceQoL
 ## IconTexture: Interface\AddOns\EnhanceQoL\Icons\Icon.tga
 ## LoadOnDemand: 1
 ## X-Compatible-With: retail

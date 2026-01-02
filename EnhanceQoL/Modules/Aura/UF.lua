@@ -188,7 +188,17 @@ local defaults = {
 		strata = nil,
 		frameLevel = nil,
 		barGap = 0,
-		border = { enabled = true, texture = "DEFAULT", color = { 0, 0, 0, 0.8 }, edgeSize = 1, inset = 0 },
+		border = {
+			enabled = true,
+			texture = "DEFAULT",
+			color = { 0, 0, 0, 0.8 },
+			edgeSize = 1,
+			inset = 0,
+			detachedPower = false,
+			detachedPowerTexture = nil,
+			detachedPowerSize = nil,
+			detachedPowerOffset = nil,
+		},
 		health = {
 			useCustomColor = false,
 			useClassColor = false,
@@ -2736,11 +2746,21 @@ local function layoutFrame(cfg, unit)
 	local powerHeight = powerEnabled and (cfg.powerHeight or def.powerHeight) or 0
 	local barGap = powerEnabled and (cfg.barGap or def.barGap or 0) or 0
 	local stackHeight = healthHeight + (powerDetached and 0 or (powerHeight + barGap))
+	local borderCfg = cfg.border or {}
+	local borderDef = def.border or {}
 	local borderOffset = 0
-	if cfg.border and cfg.border.enabled then
-		borderOffset = cfg.border.offset
-		if borderOffset == nil then borderOffset = cfg.border.edgeSize or 1 end
+	if borderCfg.enabled then
+		borderOffset = borderCfg.offset
+		if borderOffset == nil then borderOffset = borderCfg.edgeSize or borderDef.edgeSize or 1 end
 		borderOffset = max(0, borderOffset or 0)
+	end
+	local detachedPowerBorder = powerDetached and powerEnabled and borderCfg.detachedPower == true
+	local detachedPowerOffset = 0
+	if detachedPowerBorder then
+		detachedPowerOffset = borderCfg.detachedPowerOffset
+		if detachedPowerOffset == nil then detachedPowerOffset = borderCfg.offset end
+		if detachedPowerOffset == nil then detachedPowerOffset = borderCfg.edgeSize or borderDef.edgeSize or 1 end
+		detachedPowerOffset = max(0, detachedPowerOffset or 0)
 	end
 	local portraitEnabled, portraitSide, portraitSquareBackground = getPortraitConfig(cfg, unit)
 	local portraitInnerHeight = stackHeight
@@ -2791,11 +2811,19 @@ local function layoutFrame(cfg, unit)
 		local baseStrata = (st.barGroup and st.barGroup.GetFrameStrata and st.barGroup:GetFrameStrata()) or (st.frame and st.frame.GetFrameStrata and st.frame:GetFrameStrata()) or "MEDIUM"
 		st.power:SetFrameStrata(powerDetached and elevateStrata(baseStrata) or baseStrata)
 	end
+	if st.powerGroup and st.powerGroup.SetFrameStrata then
+		local pStrata = st.power.GetFrameStrata and st.power:GetFrameStrata() or st.frame:GetFrameStrata()
+		st.powerGroup:SetFrameStrata(pStrata or "MEDIUM")
+	end
+	if st.powerGroup and st.powerGroup.SetFrameLevel then
+		st.powerGroup:SetFrameLevel((st.power and st.power.GetFrameLevel and st.power:GetFrameLevel()) or 0)
+	end
 
 	st.status:ClearAllPoints()
 	if st.barGroup then st.barGroup:ClearAllPoints() end
 	st.health:ClearAllPoints()
 	st.power:ClearAllPoints()
+	if st.powerGroup then st.powerGroup:ClearAllPoints() end
 
 	local anchor = cfg.anchor or def.anchor or defaults.player.anchor
 	if isBossUnit(unit) then
@@ -2834,8 +2862,20 @@ local function layoutFrame(cfg, unit)
 		local off = pcfg.offset or {}
 		local ox = off.x or 0
 		local oy = off.y or 0
-		st.power:SetPoint("TOPLEFT", st.health, "BOTTOMLEFT", ox, -barGap + oy)
+		if detachedPowerBorder and st.powerGroup then
+			if st.power.GetParent and st.power:GetParent() ~= st.powerGroup then st.power:SetParent(st.powerGroup) end
+			st.powerGroup:Show()
+			st.powerGroup:SetSize(powerWidth + detachedPowerOffset * 2, powerHeight + detachedPowerOffset * 2)
+			st.powerGroup:SetPoint("TOPLEFT", st.health, "BOTTOMLEFT", ox - detachedPowerOffset, -barGap + oy + detachedPowerOffset)
+			st.power:SetPoint("TOPLEFT", st.powerGroup, "TOPLEFT", detachedPowerOffset, -detachedPowerOffset)
+		else
+			if st.powerGroup then st.powerGroup:Hide() end
+			if st.power.GetParent and st.power:GetParent() ~= st.barGroup then st.power:SetParent(st.barGroup) end
+			st.power:SetPoint("TOPLEFT", st.health, "BOTTOMLEFT", ox, -barGap + oy)
+		end
 	else
+		if st.powerGroup then st.powerGroup:Hide() end
+		if st.power.GetParent and st.power:GetParent() ~= st.barGroup then st.power:SetParent(st.barGroup) end
 		st.power:SetPoint("TOPLEFT", st.health, "BOTTOMLEFT", 0, -barGap)
 		st.power:SetPoint("TOPRIGHT", st.health, "BOTTOMRIGHT", 0, -barGap)
 	end
@@ -2892,6 +2932,23 @@ local function layoutFrame(cfg, unit)
 
 	-- Apply border only around the bar region wrapper
 	if st.barGroup then setBackdrop(st.barGroup, cfg.border) end
+	if st.powerGroup then
+		local showPowerBorder = detachedPowerBorder and powerEnabled
+		local powerBorderCfg
+		if showPowerBorder then
+			local borderTexture = borderCfg.detachedPowerTexture or borderCfg.texture or borderDef.texture or "DEFAULT"
+			local borderSize = borderCfg.detachedPowerSize
+			if borderSize == nil then borderSize = borderCfg.edgeSize or borderDef.edgeSize or 1 end
+			powerBorderCfg = {
+				enabled = true,
+				texture = borderTexture,
+				edgeSize = borderSize,
+				color = borderCfg.color or borderDef.color,
+				inset = borderCfg.inset or borderDef.inset,
+			}
+		end
+		setBackdrop(st.powerGroup, powerBorderCfg)
+	end
 
 	if (unit == UNIT.PLAYER or unit == "target" or isBossUnit(unit)) and st.auraContainer then
 		st.auraContainer:ClearAllPoints()
@@ -2971,6 +3028,8 @@ local function ensureFrames(unit)
 	st.health = _G[info.healthName] or CreateFrame("StatusBar", info.healthName, st.barGroup, "BackdropTemplate")
 	if st.health.SetStatusBarDesaturated then st.health:SetStatusBarDesaturated(true) end
 	st.power = _G[info.powerName] or CreateFrame("StatusBar", info.powerName, st.barGroup, "BackdropTemplate")
+	st.powerGroup = st.powerGroup or CreateFrame("Frame", nil, st.frame, "BackdropTemplate")
+	st.powerGroup:Hide()
 	local _, powerToken = getMainPower(unit)
 	if st.power.SetStatusBarDesaturated then st.power:SetStatusBarDesaturated(UFHelper.isPowerDesaturated(powerToken)) end
 	if not st.portraitHolder then

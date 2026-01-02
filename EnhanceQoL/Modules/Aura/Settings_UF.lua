@@ -762,6 +762,10 @@ local function buildUnitSettings(unit)
 		},
 	})
 
+	local function isBorderEnabled()
+		return getValue(unit, { "border", "enabled" }, (def.border and def.border.enabled) ~= false) ~= false
+	end
+
 	local borderTexture = checkboxDropdown(L["Border texture"] or "Border texture", borderOptions, function()
 		local border = getValue(unit, { "border" }, def.border or {})
 		return border.texture or (def.border and def.border.texture) or "DEFAULT"
@@ -771,10 +775,10 @@ local function buildUnitSettings(unit)
 		setValue(unit, { "border" }, border)
 		refresh()
 	end, (def.border and def.border.texture) or "DEFAULT", "frame")
-	borderTexture.isEnabled = function() return getValue(unit, { "border", "enabled" }, (def.border and def.border.enabled) ~= false) ~= false end
+	borderTexture.isEnabled = isBorderEnabled
 	list[#list + 1] = borderTexture
 
-	list[#list + 1] = slider(L["UFBorderSize"] or "Border size", 1, 64, 1, function()
+	local borderSizeSetting = slider(L["UFBorderSize"] or "Border size", 1, 64, 1, function()
 		local border = getValue(unit, { "border" }, def.border or {})
 		return border.edgeSize or 1
 	end, function(val)
@@ -785,8 +789,10 @@ local function buildUnitSettings(unit)
 			refresh()
 		end)
 	end, max(1, (def.border and def.border.edgeSize) or 1), "frame", true)
+	borderSizeSetting.isEnabled = isBorderEnabled
+	list[#list + 1] = borderSizeSetting
 
-	list[#list + 1] = slider(L["Border offset"] or "Border offset", 0, 64, 1, function()
+	local borderOffsetSetting = slider(L["Border offset"] or "Border offset", 0, 64, 1, function()
 		local border = getValue(unit, { "border" }, def.border or {})
 		if border.offset == nil then return border.edgeSize or 1 end
 		return border.offset
@@ -798,6 +804,62 @@ local function buildUnitSettings(unit)
 			refresh()
 		end)
 	end, (def.border and def.border.offset) or (def.border and def.border.edgeSize) or 1, "frame", true)
+	borderOffsetSetting.isEnabled = isBorderEnabled
+	list[#list + 1] = borderOffsetSetting
+
+	list[#list + 1] = checkbox(
+		L["UFDetachedPowerBorder"] or "Show border for detached power bar",
+		function() return getValue(unit, { "border", "detachedPower" }, def.border and def.border.detachedPower == true) == true end,
+		function(val)
+			local border = getValue(unit, { "border" }, def.border or {})
+			border.detachedPower = val and true or false
+			setValue(unit, { "border" }, border)
+			refresh()
+		end,
+		def.border and def.border.detachedPower == true,
+		"frame"
+	)
+
+	local detachedBorderTexture = checkboxDropdown(L["UFDetachedPowerBorderTexture"] or "Detached power border texture", borderOptions, function()
+		local border = getValue(unit, { "border" }, def.border or {})
+		return border.detachedPowerTexture or border.texture or (def.border and def.border.texture) or "DEFAULT"
+	end, function(val)
+		local border = getValue(unit, { "border" }, def.border or {})
+		border.detachedPowerTexture = val or "DEFAULT"
+		setValue(unit, { "border" }, border)
+		refresh()
+	end, (def.border and def.border.detachedPowerTexture) or (def.border and def.border.texture) or "DEFAULT", "frame")
+	list[#list + 1] = detachedBorderTexture
+
+	local detachedBorderSize = slider(L["UFDetachedPowerBorderSize"] or "Detached power border size", 1, 64, 1, function()
+		local border = getValue(unit, { "border" }, def.border or {})
+		return border.detachedPowerSize or border.edgeSize or 1
+	end, function(val)
+		debounced(unit .. "_detachedPowerBorderSize", function()
+			local border = getValue(unit, { "border" }, def.border or {})
+			border.detachedPowerSize = val or 1
+			setValue(unit, { "border" }, border)
+			refresh()
+		end)
+	end, (def.border and def.border.detachedPowerSize) or (def.border and def.border.edgeSize) or 1, "frame", true)
+	list[#list + 1] = detachedBorderSize
+
+	local detachedBorderOffset = slider(L["UFDetachedPowerBorderOffset"] or "Detached power border offset", 0, 64, 1, function()
+		local border = getValue(unit, { "border" }, def.border or {})
+		if border.detachedPowerOffset == nil then
+			if border.offset ~= nil then return border.offset end
+			return border.edgeSize or 1
+		end
+		return border.detachedPowerOffset
+	end, function(val)
+		debounced(unit .. "_detachedPowerBorderOffset", function()
+			local border = getValue(unit, { "border" }, def.border or {})
+			border.detachedPowerOffset = val or 0
+			setValue(unit, { "border" }, border)
+			refresh()
+		end)
+	end, (def.border and def.border.detachedPowerOffset) or (def.border and def.border.offset) or (def.border and def.border.edgeSize) or 1, "frame", true)
+	list[#list + 1] = detachedBorderOffset
 
 	local portraitDef = def.portrait or {}
 	list[#list + 1] = { name = L["UFPortrait"] or "Portrait", kind = settingType.Collapsible, id = "portrait", defaultCollapsed = true }
