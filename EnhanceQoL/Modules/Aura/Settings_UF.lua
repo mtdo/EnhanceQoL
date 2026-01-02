@@ -1706,6 +1706,61 @@ local function buildUnitSettings(unit)
 	raidIconOffsetY.isEnabled = isRaidIconEnabled
 	list[#list + 1] = raidIconOffsetY
 
+	if unit == "player" or unit == "target" or unit == "focus" then
+		local pvpDef = def.pvpIndicator or { enabled = false, size = 20, offset = { x = -24, y = -2 } }
+		local function isPvPIndicatorEnabled() return getValue(unit, { "pvpIndicator", "enabled" }, pvpDef.enabled == true) == true end
+		list[#list + 1] = { name = L["UFPvPIndicator"] or "PvP Indicator", kind = settingType.Collapsible, id = "pvpindicator", defaultCollapsed = true }
+
+		list[#list + 1] = checkbox(L["UFPvPIndicatorEnable"] or "Show PvP indicator", isPvPIndicatorEnabled, function(val)
+			setValue(unit, { "pvpIndicator", "enabled" }, val and true or false)
+			refreshSelf()
+		end, pvpDef.enabled == true, "pvpindicator")
+
+		local pvpIconSize = slider(L["Icon size"] or "Icon size", 10, 40, 1, function() return getValue(unit, { "pvpIndicator", "size" }, pvpDef.size or 20) end, function(val)
+			local v = val or pvpDef.size or 20
+			if v < 10 then v = 10 end
+			if v > 40 then v = 40 end
+			setValue(unit, { "pvpIndicator", "size" }, v)
+			refreshSelf()
+		end, pvpDef.size or 20, "pvpindicator", true)
+		pvpIconSize.isEnabled = isPvPIndicatorEnabled
+		list[#list + 1] = pvpIconSize
+
+		local pvpOffsetX = slider(
+			L["Offset X"] or "Offset X",
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
+			1,
+			function() return getValue(unit, { "pvpIndicator", "offset", "x" }, (pvpDef.offset and pvpDef.offset.x) or 0) end,
+			function(val)
+				setValue(unit, { "pvpIndicator", "offset", "x" }, val or 0)
+				refreshSelf()
+			end,
+			(pvpDef.offset and pvpDef.offset.x) or 0,
+			"pvpindicator",
+			true
+		)
+		pvpOffsetX.isEnabled = isPvPIndicatorEnabled
+		list[#list + 1] = pvpOffsetX
+
+		local pvpOffsetY = slider(
+			L["Offset Y"] or "Offset Y",
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
+			1,
+			function() return getValue(unit, { "pvpIndicator", "offset", "y" }, (pvpDef.offset and pvpDef.offset.y) or 0) end,
+			function(val)
+				setValue(unit, { "pvpIndicator", "offset", "y" }, val or 0)
+				refreshSelf()
+			end,
+			(pvpDef.offset and pvpDef.offset.y) or 0,
+			"pvpindicator",
+			true
+		)
+		pvpOffsetY.isEnabled = isPvPIndicatorEnabled
+		list[#list + 1] = pvpOffsetY
+	end
+
 	if unit == "target" or unit == "focus" or isBoss then
 		local castDef = def.cast or {}
 		list[#list + 1] = { name = L["CastBar"] or "Cast Bar", kind = settingType.Collapsible, id = "cast", defaultCollapsed = true }

@@ -276,6 +276,11 @@ local defaults = {
 			size = 18,
 			offset = { x = 0, y = -2 },
 		},
+		pvpIndicator = {
+			enabled = false,
+			size = 20,
+			offset = { x = -24, y = -2 },
+		},
 		portrait = {
 			enabled = false,
 			side = "LEFT",
@@ -553,6 +558,7 @@ local function checkRaidTargetIcon(unitToken, st)
 		st.raidIcon:Hide()
 	end
 end
+
 local function updateAllRaidTargetIcons()
 	checkRaidTargetIcon(UNIT.PLAYER, states[UNIT.PLAYER])
 	checkRaidTargetIcon(UNIT.TARGET, states[UNIT.TARGET])
@@ -3043,6 +3049,12 @@ local function ensureFrames(unit)
 	st.raidIcon:SetSize(18, 18)
 	st.raidIcon:SetPoint("TOP", st.frame, "TOP", 0, -2)
 	st.raidIcon:Hide()
+	if unit == UNIT.PLAYER or unit == UNIT.TARGET or unit == UNIT.FOCUS then
+		st.pvpIcon = st.statusTextLayer:CreateTexture(nil, "OVERLAY", nil, 7)
+		st.pvpIcon:SetSize(20, 20)
+		st.pvpIcon:SetPoint("TOP", st.frame, "TOP", -24, -2)
+		st.pvpIcon:Hide()
+	end
 	if unit == UNIT.PLAYER then
 		st.combatIcon = st.statusTextLayer:CreateTexture("EQOLUFPlayerCombatIcon", "OVERLAY")
 		ensureRestLoop(st)
@@ -3206,6 +3218,7 @@ local function applyConfig(unit)
 	updatePower(cfg, unit)
 	updatePortrait(cfg, unit)
 	checkRaidTargetIcon(unit, st)
+	UFHelper.updatePvPIndicator(st, unit, cfg, defaultsFor(unit), false)
 	if unit == UNIT.PLAYER then
 		updateCombatIndicator(cfg)
 		updateRestingIndicator(cfg)
@@ -3476,6 +3489,7 @@ local unitEvents = {
 	"UNIT_NAME_UPDATE",
 	"UNIT_FLAGS",
 	"UNIT_CONNECTION",
+	"UNIT_FACTION",
 	"UNIT_AURA",
 	"UNIT_TARGET",
 	"UNIT_SPELLCAST_START",
@@ -3758,6 +3772,7 @@ local function updateFocusFrame(cfg, forceApply)
 		end
 	end
 	checkRaidTargetIcon(UNIT.FOCUS, st)
+	UFHelper.updatePvPIndicator(st, UNIT.FOCUS, cfg, defaultsFor(UNIT.FOCUS), not forceApply)
 	updateUnitStatusIndicator(cfg, UNIT.FOCUS)
 	updatePortrait(cfg, UNIT.FOCUS)
 	applyVisibilityRules(UNIT.FOCUS)
@@ -3767,6 +3782,12 @@ local function getCfg(unit)
 	local st = states[unit]
 	if st and st.cfg then return st.cfg end
 	return ensureDB(unit)
+end
+
+function UF.UpdateAllPvPIndicators()
+	UFHelper.updatePvPIndicator(states[UNIT.PLAYER], UNIT.PLAYER, getCfg(UNIT.PLAYER), defaultsFor(UNIT.PLAYER), false)
+	UFHelper.updatePvPIndicator(states[UNIT.TARGET], UNIT.TARGET, getCfg(UNIT.TARGET), defaultsFor(UNIT.TARGET), false)
+	UFHelper.updatePvPIndicator(states[UNIT.FOCUS], UNIT.FOCUS, getCfg(UNIT.FOCUS), defaultsFor(UNIT.FOCUS), false)
 end
 
 local function onEvent(self, event, unit, arg1)
@@ -3792,6 +3813,7 @@ local function onEvent(self, event, unit, arg1)
 		updateUnitStatusIndicator(totCfg, UNIT.TARGET_TARGET)
 		updateUnitStatusIndicator(focusCfg, UNIT.FOCUS)
 		updateUnitStatusIndicator(petCfg, UNIT.PET)
+		UF.UpdateAllPvPIndicators()
 		updateAllRaidTargetIcons()
 		if bossCfg.enabled then
 			updateBossFrames(true)
@@ -3816,6 +3838,7 @@ local function onEvent(self, event, unit, arg1)
 		else
 			updateUnitStatusIndicator(getCfg(UNIT.PLAYER), UNIT.PLAYER)
 		end
+		UFHelper.updatePvPIndicator(states[UNIT.PLAYER], UNIT.PLAYER, getCfg(UNIT.PLAYER), defaultsFor(UNIT.PLAYER), true)
 		if allowedEventUnit[UNIT.TARGET_TARGET] then updateUnitStatusIndicator(getCfg(UNIT.TARGET_TARGET), UNIT.TARGET_TARGET) end
 	elseif event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" then
 		local playerCfg = getCfg(UNIT.PLAYER)
@@ -3868,6 +3891,7 @@ local function onEvent(self, event, unit, arg1)
 		if totCfg.enabled then updateTargetTargetFrame(totCfg) end
 		if focusCfg.enabled then updateFocusFrame(focusCfg) end
 		updateUnitStatusIndicator(targetCfg, UNIT.TARGET)
+		UFHelper.updatePvPIndicator(states[UNIT.TARGET], UNIT.TARGET, targetCfg, defaultsFor(UNIT.TARGET), true)
 		updateUnitStatusIndicator(totCfg, UNIT.TARGET_TARGET)
 	elseif event == "UNIT_AURA" and (unit == "target" or unit == UNIT.PLAYER or isBossUnit(unit)) then
 		local cfg = getCfg(unit)
@@ -4060,6 +4084,7 @@ local function onEvent(self, event, unit, arg1)
 		end
 	elseif event == "UNIT_FLAGS" then
 		updateUnitStatusIndicator(getCfg(unit), unit)
+		UFHelper.updatePvPIndicator(states[unit], unit, getCfg(unit), defaultsFor(unit), true)
 		if allowedEventUnit[UNIT.TARGET_TARGET] then updateUnitStatusIndicator(getCfg(UNIT.TARGET_TARGET), UNIT.TARGET_TARGET) end
 	elseif event == "UNIT_CONNECTION" then
 		updateUnitStatusIndicator(getCfg(unit), unit)
@@ -4073,6 +4098,8 @@ local function onEvent(self, event, unit, arg1)
 			local bossCfg = getCfg(unit)
 			if bossCfg.enabled then updatePortrait(bossCfg, unit) end
 		end
+	elseif event == "UNIT_FACTION" then
+		UFHelper.updatePvPIndicator(states[unit], unit, getCfg(unit), defaultsFor(unit), true)
 	elseif portraitEventsMap[event] then
 		if unit == UNIT.PLAYER then updatePortrait(getCfg(UNIT.PLAYER), UNIT.PLAYER) end
 		if unit == UNIT.TARGET then updatePortrait(getCfg(UNIT.TARGET), UNIT.TARGET) end
@@ -4121,6 +4148,7 @@ local function onEvent(self, event, unit, arg1)
 			checkRaidTargetIcon(UNIT.FOCUS, states[UNIT.FOCUS])
 		end
 		updateUnitStatusIndicator(focusCfg, UNIT.FOCUS)
+		UFHelper.updatePvPIndicator(states[UNIT.FOCUS], UNIT.FOCUS, focusCfg, defaultsFor(UNIT.FOCUS), true)
 	elseif event == "PLAYER_UPDATE_RESTING" then
 		updateRestingIndicator(getCfg(UNIT.PLAYER))
 	elseif event == "GROUP_ROSTER_UPDATE" then
@@ -4161,6 +4189,7 @@ local function ensureEventHandling()
 				ensureBossFramesReady(ensureDB("boss"))
 				updateBossFrames(true)
 				updateAllRaidTargetIcons()
+				UF.UpdateAllPvPIndicators()
 				applyVisibilityRulesAll()
 				if UF.Refresh then UF.Refresh() end
 				if states[UNIT.TARGET] and states[UNIT.TARGET].castBar then setCastInfoFromUnit(UNIT.TARGET) end
@@ -4172,6 +4201,7 @@ local function ensureEventHandling()
 				hideBossFrames(true)
 				if ensureDB("boss").enabled then updateBossFrames(true) end
 				updateAllRaidTargetIcons()
+				UF.UpdateAllPvPIndicators()
 				applyVisibilityRulesAll()
 				if UF.Refresh then UF.Refresh() end
 				if ensureDB("target").enabled then fullScanTargetAuras(UNIT.TARGET) end

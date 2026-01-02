@@ -269,6 +269,70 @@ function H.getTextDelimiter(cfg, def)
 	return delimiter
 end
 
+local function resolvePvPAtlas(unit)
+	if C_GameRules and C_GameRules.IsGameRuleActive and Enum and Enum.GameRule then
+		if C_GameRules.IsGameRuleActive(Enum.GameRule.UnitFramePvPContextualDisabled) then return nil end
+	end
+	if UnitIsPVPFreeForAll and UnitIsPVPFreeForAll(unit) then return "UI-HUD-UnitFrame-Player-PVP-FFAIcon" end
+	local factionGroup = UnitFactionGroup and UnitFactionGroup(unit)
+	if factionGroup and factionGroup ~= "Neutral" and UnitIsPVP and UnitIsPVP(unit) then
+		if UnitIsMercenary and UnitIsMercenary(unit) then
+			if factionGroup == "Horde" then
+				factionGroup = "Alliance"
+			elseif factionGroup == "Alliance" then
+				factionGroup = "Horde"
+			end
+		end
+		if factionGroup == "Horde" then
+			return "UI-HUD-UnitFrame-Player-PVP-HordeIcon"
+		elseif factionGroup == "Alliance" then
+			return "UI-HUD-UnitFrame-Player-PVP-AllianceIcon"
+		end
+	end
+	return nil
+end
+
+function H.updatePvPIndicator(st, unit, cfg, def, skipDisabled)
+	if unit ~= "player" and unit ~= "target" and unit ~= "focus" then return end
+	if not st or not st.pvpIcon then return end
+	def = def or {}
+	local pcfg = (cfg and cfg.pvpIndicator) or (def and def.pvpIndicator) or {}
+	local enabled = pcfg.enabled == true and not (cfg and cfg.enabled == false)
+	if not enabled and skipDisabled then return end
+
+	local offsetDef = def and def.pvpIndicator and def.pvpIndicator.offset or {}
+	local sizeDef = def and def.pvpIndicator and def.pvpIndicator.size or 20
+	local size = H.clamp(pcfg.size or sizeDef or 20, 10, 40)
+	local ox = (pcfg.offset and pcfg.offset.x) or offsetDef.x or 0
+	local oy = (pcfg.offset and pcfg.offset.y) or offsetDef.y or -2
+	local centerOffset = (st and st._portraitCenterOffset) or 0
+	st.pvpIcon:ClearAllPoints()
+	st.pvpIcon:SetSize(size, size)
+	st.pvpIcon:SetPoint("TOP", st.frame, "TOP", (ox or 0) + centerOffset, oy)
+
+	if not enabled then
+		st.pvpIcon:Hide()
+		return
+	end
+
+	local inEditMode = addon.EditModeLib and addon.EditModeLib:IsInEditMode()
+	local atlas = resolvePvPAtlas(unit)
+	if not atlas and inEditMode then
+		local sampleFaction = UnitFactionGroup and UnitFactionGroup("player")
+		if sampleFaction == "Horde" then
+			atlas = "UI-HUD-UnitFrame-Player-PVP-HordeIcon"
+		else
+			atlas = "UI-HUD-UnitFrame-Player-PVP-AllianceIcon"
+		end
+	end
+	if atlas then
+		st.pvpIcon:SetAtlas(atlas)
+		st.pvpIcon:Show()
+	else
+		st.pvpIcon:Hide()
+	end
+end
+
 function H.getPowerColor(pToken)
 	if not pToken then pToken = EnumPowerType.MANA end
 	local overrides = addon.db and addon.db.ufPowerColorOverrides

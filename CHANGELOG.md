@@ -6,11 +6,10 @@
 
 - **UF Plus**
   - Per-frame aura toggle for Player/Target/Boss frames
-  - Boss frames can optionally show auras.
-  - Player frame can optionally show auras (default off).
   - Player unit status can show group number.
   - Additional health/mana text modes (percent-first + level combos).
   - Unit status text now has its own font size/font/outline controls + Edit Mode sample.
+  - PvP indicator icon for Player/Target/Focus.
   - Edit Mode shows sample auras for frames with auras enabled.
 - **Misc**
   - Auto-accept summons.
