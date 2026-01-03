@@ -13,7 +13,7 @@ local cSocial = addon.SettingsLayout.rootSOCIAL
 addon.SettingsLayout.socialCategory = cSocial
 
 local socialExpandable = addon.functions.SettingsCreateExpandableSection(cSocial, {
-	name = L["Social"],
+	name = _G["GENERAL"],
 	expanded = false,
 	colorizeTitle = false,
 })

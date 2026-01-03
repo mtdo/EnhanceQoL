@@ -147,7 +147,7 @@ applyParentSection(data, auctionHouseExpandable)
 table.sort(data, function(a, b) return a.text < b.text end)
 addon.functions.SettingsCreateCheckboxes(cVendorEconomy, data)
 
-local mailboxExpandable = addon.functions.SettingsCreateExpandableSection(cVendorEconomy, {
+local mailboxExpandable = addon.functions.SettingsCreateExpandableSection(addon.SettingsLayout.rootSOCIAL, {
 	name = MINIMAP_TRACKING_MAILBOX,
 	expanded = false,
 	colorizeTitle = false,
@@ -247,7 +247,7 @@ data = {
 
 applyParentSection(data, mailboxExpandable)
 table.sort(data, function(a, b) return a.text < b.text end)
-addon.functions.SettingsCreateCheckboxes(cVendorEconomy, data)
+addon.functions.SettingsCreateCheckboxes(addon.SettingsLayout.rootSOCIAL, data)
 
 local goldExpandable = addon.functions.SettingsCreateExpandableSection(cVendorEconomy, {
 	name = L["GoldTracking"],
