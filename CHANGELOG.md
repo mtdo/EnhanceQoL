@@ -16,6 +16,7 @@
   - Cast bar icon offset slider for Target/Focus/Boss frames.
   - Optional border highlight for mouseover/aggro.
   - Edit Mode shows sample auras for frames with auras enabled.
+  - Tapped mob color indicator for unit frames.
 - **Misc**
   - Auto-accept summons.
   - Auto-accept resurrection requests.

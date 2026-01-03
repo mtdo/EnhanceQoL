@@ -210,7 +210,9 @@ local defaults = {
 		health = {
 			useCustomColor = false,
 			useClassColor = false,
+			useTapDeniedColor = true,
 			color = { 0.0, 0.8, 0.0, 1 },
+			tapDeniedColor = { 0.5, 0.5, 0.5, 1 },
 			absorbColor = { 0.85, 0.95, 1.0, 0.7 },
 			absorbEnabled = true,
 			absorbUseCustomColor = false,
@@ -2224,6 +2226,12 @@ local function updateHealth(cfg, unit)
 			hr, hg, hb, ha = nr, ng, nb, na
 		end
 	end
+	local useTapDenied = hc.useTapDeniedColor
+	if useTapDenied == nil then useTapDenied = defH.useTapDeniedColor end
+	if useTapDenied ~= false and UnitIsTapDenied and UnitPlayerControlled and not UnitPlayerControlled(unit) and UnitIsTapDenied(unit) then
+		local tc = hc.tapDeniedColor or defH.tapDeniedColor or { 0.5, 0.5, 0.5, 1 }
+		hr, hg, hb, ha = tc[1] or 0.5, tc[2] or 0.5, tc[3] or 0.5, tc[4] or 1
+	end
 	if not hr then
 		local color = defH.color or { 0, 0.8, 0, 1 }
 		hr, hg, hb, ha = color[1] or 0, color[2] or 0.8, color[3] or 0, color[4] or 1
@@ -4185,6 +4193,13 @@ local function onEvent(self, event, unit, arg1)
 	elseif event == "UNIT_FLAGS" then
 		updateUnitStatusIndicator(getCfg(unit), unit)
 		UFHelper.updatePvPIndicator(states[unit], unit, getCfg(unit), defaultsFor(unit), true)
+		if unit == UNIT.TARGET then updateHealth(getCfg(UNIT.TARGET), UNIT.TARGET) end
+		if unit == UNIT.TARGET_TARGET then updateHealth(getCfg(UNIT.TARGET_TARGET), UNIT.TARGET_TARGET) end
+		if unit == UNIT.FOCUS then updateHealth(getCfg(UNIT.FOCUS), UNIT.FOCUS) end
+		if isBossUnit(unit) then
+			local bossCfg = getCfg(unit)
+			if bossCfg.enabled then updateHealth(bossCfg, unit) end
+		end
 		if allowedEventUnit[UNIT.TARGET_TARGET] then updateUnitStatusIndicator(getCfg(UNIT.TARGET_TARGET), UNIT.TARGET_TARGET) end
 	elseif event == "UNIT_CONNECTION" then
 		updateUnitStatusIndicator(getCfg(unit), unit)
@@ -4200,6 +4215,13 @@ local function onEvent(self, event, unit, arg1)
 		end
 	elseif event == "UNIT_FACTION" then
 		UFHelper.updatePvPIndicator(states[unit], unit, getCfg(unit), defaultsFor(unit), true)
+		if unit == UNIT.TARGET then updateHealth(getCfg(UNIT.TARGET), UNIT.TARGET) end
+		if unit == UNIT.TARGET_TARGET then updateHealth(getCfg(UNIT.TARGET_TARGET), UNIT.TARGET_TARGET) end
+		if unit == UNIT.FOCUS then updateHealth(getCfg(UNIT.FOCUS), UNIT.FOCUS) end
+		if isBossUnit(unit) then
+			local bossCfg = getCfg(unit)
+			if bossCfg.enabled then updateHealth(bossCfg, unit) end
+		end
 	elseif event == "UNIT_THREAT_SITUATION_UPDATE" or event == "UNIT_THREAT_LIST_UPDATE" then
 		UFHelper.updateHighlight(states[UNIT.PLAYER], UNIT.PLAYER, UNIT.PLAYER)
 		UFHelper.updateHighlight(states[UNIT.PET], UNIT.PET, UNIT.PLAYER)

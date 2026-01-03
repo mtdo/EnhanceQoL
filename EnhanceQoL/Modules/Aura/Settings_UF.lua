@@ -1106,6 +1106,30 @@ local function buildUnitSettings(unit)
 		isEnabled = function() return getValue(unit, { "health", "useClassColor" }, healthDef.useClassColor == true) ~= true end,
 	})
 
+	local showTapDeniedColor = unit == "target" or unit == "targettarget" or unit == "focus" or isBoss
+	if showTapDeniedColor then
+		local tapDef = healthDef.tapDeniedColor or { 0.5, 0.5, 0.5, 1 }
+		list[#list + 1] = checkboxColor({
+			name = L["UFTapDeniedColor"] or "Tapped mob color",
+			parentId = "health",
+			defaultChecked = healthDef.useTapDeniedColor ~= false,
+			isChecked = function() return getValue(unit, { "health", "useTapDeniedColor" }, healthDef.useTapDeniedColor ~= false) ~= false end,
+			onChecked = function(val)
+				setValue(unit, { "health", "useTapDeniedColor" }, val and true or false)
+				if val and not getValue(unit, { "health", "tapDeniedColor" }) then setValue(unit, { "health", "tapDeniedColor" }, tapDef) end
+				refreshSelf()
+				refreshSettingsUI()
+			end,
+			getColor = function() return toRGBA(getValue(unit, { "health", "tapDeniedColor" }, tapDef), tapDef) end,
+			onColor = function(color)
+				setColor(unit, { "health", "tapDeniedColor" }, color.r, color.g, color.b, color.a)
+				setValue(unit, { "health", "useTapDeniedColor" }, true)
+				refreshSelf()
+			end,
+			colorDefault = { r = tapDef[1] or 0.5, g = tapDef[2] or 0.5, b = tapDef[3] or 0.5, a = tapDef[4] or 1 },
+		})
+	end
+
 	list[#list + 1] = radioDropdown(
 		L["TextLeft"] or "Left text",
 		textOptions,
