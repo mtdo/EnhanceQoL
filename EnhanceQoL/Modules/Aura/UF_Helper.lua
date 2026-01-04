@@ -1,4 +1,4 @@
--- luacheck: globals C_GameRules
+-- luacheck: globals C_GameRules GetIconForRole
 local parentAddonName = "EnhanceQoL"
 local addonName, addon = ...
 

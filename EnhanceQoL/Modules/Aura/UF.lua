@@ -1,3 +1,4 @@
+-- luacheck: globals CASTING_BAR_TYPES
 local parentAddonName = "EnhanceQoL"
 local addonName, addon = ...
 
