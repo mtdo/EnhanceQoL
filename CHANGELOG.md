@@ -31,6 +31,7 @@
 - **Chat**
   - Use arrow keys in the chat input without holding Alt.
   - Move the chat editbox to the top of the chat window.
+  - Unclamp chat windows from the screen edges.
   - Hide the combat log tab while docked.
 - **Questing**
   - Objective Tracker can minimize to the (+) button only.

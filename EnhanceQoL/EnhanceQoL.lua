@@ -3096,6 +3096,7 @@ local function initChatFrame()
 		hooksecurefunc("FCF_OpenTemporaryWindow", function()
 			if addon.db and addon.db.chatUseArrowKeys and addon.functions.ApplyChatArrowKeys then addon.functions.ApplyChatArrowKeys(true) end
 			if addon.db and addon.db.chatEditBoxOnTop and addon.functions.ApplyChatEditBoxOnTop then addon.functions.ApplyChatEditBoxOnTop(true) end
+			if addon.db and addon.db.chatUnclampFrame and addon.functions.ApplyChatUnclampFrame then addon.functions.ApplyChatUnclampFrame(true) end
 			if addon.db and addon.db.chatHideCombatLogTab and addon.functions.ApplyChatHideCombatLogTab then addon.functions.ApplyChatHideCombatLogTab(true) end
 		end)
 
@@ -3109,6 +3110,7 @@ local function initChatFrame()
 		frame:SetScript("OnEvent", function()
 			if addon.db and addon.db.chatUseArrowKeys and addon.functions.ApplyChatArrowKeys then addon.functions.ApplyChatArrowKeys(true) end
 			if addon.db and addon.db.chatEditBoxOnTop and addon.functions.ApplyChatEditBoxOnTop then addon.functions.ApplyChatEditBoxOnTop(true) end
+			if addon.db and addon.db.chatUnclampFrame and addon.functions.ApplyChatUnclampFrame then addon.functions.ApplyChatUnclampFrame(true) end
 			if addon.db and addon.db.chatHideCombatLogTab and addon.functions.ApplyChatHideCombatLogTab then addon.functions.ApplyChatHideCombatLogTab(true) end
 		end)
 		addon.variables.chatFrameWatcher = frame
@@ -3183,6 +3185,43 @@ local function initChatFrame()
 					end
 				else
 					restoreEditBoxPoints(editBox)
+				end
+			end)
+
+			ensureChatFrameHooks()
+		end
+
+	local function storeChatClampState(frame)
+		addon.variables = addon.variables or {}
+		addon.variables.chatClampCache = addon.variables.chatClampCache or {}
+		local cache = addon.variables.chatClampCache
+		if cache[frame] then return end
+		local state = {
+			clamped = frame.IsClampedToScreen and frame:IsClampedToScreen() or nil,
+		}
+		if frame.GetClampRectInsets then state.insets = { frame:GetClampRectInsets() } end
+		cache[frame] = state
+	end
+
+	local function restoreChatClampState(frame)
+		addon.variables = addon.variables or {}
+		local cache = addon.variables.chatClampCache
+		local state = cache and cache[frame]
+		if not state then return end
+		if frame.SetClampedToScreen and state.clamped ~= nil then frame:SetClampedToScreen(state.clamped) end
+		if state.insets and frame.SetClampRectInsets then frame:SetClampRectInsets(state.insets[1], state.insets[2], state.insets[3], state.insets[4]) end
+		cache[frame] = nil
+	end
+
+	addon.functions.ApplyChatUnclampFrame = addon.functions.ApplyChatUnclampFrame
+		or function(enabled)
+			forEachChatFrame(function(frame)
+				if not frame then return end
+				if enabled then
+					storeChatClampState(frame)
+					if frame.SetClampedToScreen then frame:SetClampedToScreen(false) end
+				else
+					restoreChatClampState(frame)
 				end
 			end)
 
@@ -3310,6 +3349,7 @@ local function initChatFrame()
 	addon.functions.InitDBValue("chatHideLearnUnlearn", false)
 	addon.functions.InitDBValue("chatUseArrowKeys", false)
 	addon.functions.InitDBValue("chatEditBoxOnTop", false)
+	addon.functions.InitDBValue("chatUnclampFrame", false)
 	addon.functions.InitDBValue("chatHideCombatLogTab", false)
 	addon.functions.InitDBValue("chatBubbleFontOverride", false)
 	addon.functions.InitDBValue("chatBubbleFontSize", DEFAULT_CHAT_BUBBLE_FONT_SIZE)
@@ -3322,6 +3362,7 @@ local function initChatFrame()
 	if addon.ChatIM and addon.ChatIM.SetEnabled then addon.ChatIM:SetEnabled(addon.db["enableChatIM"]) end
 	if addon.functions.ApplyChatArrowKeys then addon.functions.ApplyChatArrowKeys(addon.db["chatUseArrowKeys"]) end
 	if addon.functions.ApplyChatEditBoxOnTop then addon.functions.ApplyChatEditBoxOnTop(addon.db["chatEditBoxOnTop"]) end
+	if addon.functions.ApplyChatUnclampFrame then addon.functions.ApplyChatUnclampFrame(addon.db["chatUnclampFrame"]) end
 	if addon.functions.ApplyChatHideCombatLogTab then addon.functions.ApplyChatHideCombatLogTab(addon.db["chatHideCombatLogTab"]) end
 end
 

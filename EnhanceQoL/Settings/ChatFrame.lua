@@ -102,6 +102,16 @@ local data = {
 		default = false,
 	},
 	{
+		var = "chatUnclampFrame",
+		text = L["chatUnclampFrame"],
+		desc = L["chatUnclampFrameDesc"],
+		func = function(key)
+			addon.db["chatUnclampFrame"] = key
+			if addon.functions.ApplyChatUnclampFrame then addon.functions.ApplyChatUnclampFrame(key) end
+		end,
+		default = false,
+	},
+	{
 		var = "chatHideCombatLogTab",
 		text = L["chatHideCombatLogTab"],
 		desc = L["chatHideCombatLogTabDesc"],
