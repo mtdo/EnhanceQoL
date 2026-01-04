@@ -439,6 +439,15 @@ local function resolvePvPAtlas(unit)
 	return nil
 end
 
+local function resolveRoleAtlas(role)
+	if not role or role == "NONE" then return nil end
+	if GetIconForRole then return GetIconForRole(role, false) end
+	if role == "TANK" then return "UI-LFG-RoleIcon-Tank" end
+	if role == "HEALER" then return "UI-LFG-RoleIcon-Healer" end
+	if role == "DAMAGER" then return "UI-LFG-RoleIcon-DPS" end
+	return nil
+end
+
 function H.updatePvPIndicator(st, unit, cfg, def, skipDisabled)
 	if unit ~= "player" and unit ~= "target" and unit ~= "focus" then return end
 	if not st or not st.pvpIcon then return end
@@ -477,6 +486,44 @@ function H.updatePvPIndicator(st, unit, cfg, def, skipDisabled)
 		st.pvpIcon:Show()
 	else
 		st.pvpIcon:Hide()
+	end
+end
+
+function H.updateRoleIndicator(st, unit, cfg, def, skipDisabled)
+	if unit ~= "player" and unit ~= "target" and unit ~= "focus" then return end
+	if not st or not st.roleIcon then return end
+	def = def or {}
+	local rcfg = (cfg and cfg.roleIndicator) or (def and def.roleIndicator) or {}
+	local enabled = rcfg.enabled == true and not (cfg and cfg.enabled == false)
+	if not enabled and skipDisabled then return end
+
+	local offsetDef = def and def.roleIndicator and def.roleIndicator.offset or {}
+	local sizeDef = def and def.roleIndicator and def.roleIndicator.size or 18
+	local size = H.clamp(rcfg.size or sizeDef or 18, 10, 40)
+	local ox = (rcfg.offset and rcfg.offset.x) or offsetDef.x or 0
+	local oy = (rcfg.offset and rcfg.offset.y) or offsetDef.y or -2
+	local centerOffset = (st and st._portraitCenterOffset) or 0
+	st.roleIcon:ClearAllPoints()
+	st.roleIcon:SetSize(size, size)
+	st.roleIcon:SetPoint("TOP", st.frame, "TOP", (ox or 0) + centerOffset, oy)
+
+	if not enabled then
+		st.roleIcon:Hide()
+		return
+	end
+
+	local inEditMode = addon.EditModeLib and addon.EditModeLib:IsInEditMode()
+	local inGroup = IsInGroup and IsInGroup() or false
+	local role = inGroup and UnitGroupRolesAssigned and UnitGroupRolesAssigned(unit) or nil
+	if role == "NONE" then role = nil end
+	if not role and inEditMode then role = "DAMAGER" end
+
+	local atlas = resolveRoleAtlas(role)
+	if atlas then
+		st.roleIcon:SetAtlas(atlas)
+		st.roleIcon:Show()
+	else
+		st.roleIcon:Hide()
 	end
 end
 

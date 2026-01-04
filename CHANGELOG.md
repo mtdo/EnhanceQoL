@@ -10,6 +10,7 @@
   - Additional health/mana text modes (percent-first + level combos).
   - Unit status text now has its own font size/font/outline controls + Edit Mode sample.
   - PvP indicator icon for Player/Target/Focus.
+  - Role indicator icon for Player/Target/Focus.
   - Optional reverse-fill absorb bar in UF.
   - Cast bars now show interrupted/failed feedback on Target/Focus/Boss.
   - Resource bars can show configurable threshold lines (count/color/thickness).
@@ -26,6 +27,11 @@
   - Auto-release in PvP/BGs.
   - Latency stream: configurable ping colors + display mode (FPS/Latency).
   - Quick-skip cinematics option (auto-confirms the skip prompt on Esc/Space/Enter).
+  - Added missing Dalaran teleport ring variants.
+- **Chat**
+  - Use arrow keys in the chat input without holding Alt.
+  - Move the chat editbox to the top of the chat window.
+  - Hide the combat log tab while docked.
 - **Questing**
   - Objective Tracker can minimize to the (+) button only.
 - **Minimap**
@@ -58,6 +64,8 @@
 - **Minimap**
   - Square minimap layout now anchors the mail icon to the top-left of the minimap.
   - Button Sink labels and tooltips refreshed for clarity.
+- **Mythic+ Teleports**
+  - Teleports now collapse to owned items when multiple variants exist (ex. Kirin Tor Rings); tooltip shows `X other variants available`.
 
 ### 🐛 Fixed
 

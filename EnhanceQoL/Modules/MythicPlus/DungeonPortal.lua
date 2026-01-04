@@ -613,7 +613,7 @@ function addon.MythicPlus.functions.BuildTeleportCompendiumSections()
 				if data.isGnomish then specOk = specOk and hasGnomish end
 				if data.isGoblin then specOk = specOk and hasGoblin end
 
-				-- Handle multiple itemIDs by splitting into separate entries
+				-- Handle multiple itemIDs by splitting into separate entries (optionally only show owned variants)
 				-- If a class-specific mapping exists, only include the item for the player's class
 				if data.isItem and type(data.itemID) == "table" then
 					local allowedIDs = data.itemID
@@ -635,34 +635,53 @@ function addon.MythicPlus.functions.BuildTeleportCompendiumSections()
 						and (not data.isMagePortal or (addon.variables and addon.variables.unitClass == "MAGE"))
 						and (not data.timerunnerID or (data.timerunnerID == timerunnerID))
 
-					for _, iid in ipairs(allowedIDs) do
-						local knownX = C_Item.GetItemCount(iid) > 0
-						local showX = baseShow and (not addon.db["portalHideMissing"] or (addon.db["portalHideMissing"] and knownX))
-						-- Favourites always bypass non-availability filters (except Hide Missing)
-						if not showX and favorites[spellID] then showX = (not addon.db["portalHideMissing"] or (addon.db["portalHideMissing"] and knownX)) end
-						if showX then
-							local iconID = data.icon
-							if not iconID then
-								local _, _, itemIcon = C_Item.GetItemInfoInstant(iid)
-								iconID = itemIcon
+					if #allowedIDs > 0 then
+						local showIDs = allowedIDs
+						if data.ownedOnly then
+							local ownedIDs = {}
+							for _, iid in ipairs(allowedIDs) do
+								if C_Item.GetItemCount(iid) > 0 then table.insert(ownedIDs, iid) end
 							end
-							table.insert(list, {
-								spellID = spellID,
-								text = resolveDisplayText(spellID, data),
-								iconID = iconID,
-								isKnown = knownX,
-								isToy = false,
-								toyID = false,
-								isItem = true,
-								itemID = iid,
-								isClassTP = data.isClassTP or false,
-								isMagePortal = data.isMagePortal or false,
-								equipSlot = data.equipSlot,
-								isFavorite = favorites[spellID] and true or false,
-								locID = data.locID,
-								x = data.x,
-								y = data.y,
-							})
+							if #ownedIDs > 0 then
+								showIDs = ownedIDs
+							else
+								showIDs = { allowedIDs[1] }
+							end
+						end
+
+						local otherVariants
+						if data.ownedOnly and #allowedIDs > #showIDs then otherVariants = #allowedIDs - #showIDs end
+
+						for _, iid in ipairs(showIDs) do
+							local knownX = C_Item.GetItemCount(iid) > 0
+							local showX = baseShow and (not addon.db["portalHideMissing"] or (addon.db["portalHideMissing"] and knownX))
+							-- Favourites always bypass non-availability filters (except Hide Missing)
+							if not showX and favorites[spellID] then showX = (not addon.db["portalHideMissing"] or (addon.db["portalHideMissing"] and knownX)) end
+							if showX then
+								local iconID = data.icon
+								if not iconID then
+									local _, _, itemIcon = C_Item.GetItemInfoInstant(iid)
+									iconID = itemIcon
+								end
+								table.insert(list, {
+									spellID = spellID,
+									text = resolveDisplayText(spellID, data),
+									iconID = iconID,
+									isKnown = knownX,
+									isToy = false,
+									toyID = false,
+									isItem = true,
+									itemID = iid,
+									variantOtherCount = otherVariants,
+									isClassTP = data.isClassTP or false,
+									isMagePortal = data.isMagePortal or false,
+									equipSlot = data.equipSlot,
+									isFavorite = favorites[spellID] and true or false,
+									locID = data.locID,
+									x = data.x,
+									y = data.y,
+								})
+							end
 						end
 					end
 				else
@@ -832,7 +851,7 @@ function addon.MythicPlus.functions.BuildCurrentSeasonTeleportSection()
 				if data.isGnomish then specOk = specOk and hasGnomish end
 				if data.isGoblin then specOk = specOk and hasGoblin end
 
-				-- Handle item variants per class
+				-- Handle item variants per class (optionally only show owned variants)
 				if data.isItem and type(data.itemID) == "table" then
 					local allowedIDs = data.itemID
 					if data.classItemID and addon.variables and addon.variables.unitClass then
@@ -853,33 +872,52 @@ function addon.MythicPlus.functions.BuildCurrentSeasonTeleportSection()
 						and (not data.isRaceTP or (addon.variables and addon.variables.unitRace == data.isRaceTP))
 						and (not data.isMagePortal or (addon.variables and addon.variables.unitClass == "MAGE"))
 
-					for _, iid in ipairs(allowedIDs) do
-						local knownX = C_Item.GetItemCount(iid) > 0
-						local showX = baseShow and (not addon.db["portalHideMissing"] or (addon.db["portalHideMissing"] and knownX))
-						if not showX and favorites[spellID] then showX = (not addon.db["portalHideMissing"] or (addon.db["portalHideMissing"] and knownX)) end
-						if showX then
-							local iconID = data.icon
-							if not iconID then
-								local _, _, itemIcon = C_Item.GetItemInfoInstant(iid)
-								iconID = itemIcon
+					if #allowedIDs > 0 then
+						local showIDs = allowedIDs
+						if data.ownedOnly then
+							local ownedIDs = {}
+							for _, iid in ipairs(allowedIDs) do
+								if C_Item.GetItemCount(iid) > 0 then table.insert(ownedIDs, iid) end
 							end
-							table.insert(list, {
-								spellID = spellID,
-								text = resolveDisplayText(spellID, data),
-								iconID = iconID,
-								isKnown = knownX,
-								isToy = false,
-								toyID = false,
-								isItem = true,
-								itemID = iid,
-								isClassTP = data.isClassTP or false,
-								isMagePortal = data.isMagePortal or false,
-								equipSlot = data.equipSlot,
-								isFavorite = favorites[spellID] and true or false,
-								locID = data.locID,
-								x = data.x,
-								y = data.y,
-							})
+							if #ownedIDs > 0 then
+								showIDs = ownedIDs
+							else
+								showIDs = { allowedIDs[1] }
+							end
+						end
+
+						local otherVariants
+						if data.ownedOnly and #allowedIDs > #showIDs then otherVariants = #allowedIDs - #showIDs end
+
+						for _, iid in ipairs(showIDs) do
+							local knownX = C_Item.GetItemCount(iid) > 0
+							local showX = baseShow and (not addon.db["portalHideMissing"] or (addon.db["portalHideMissing"] and knownX))
+							if not showX and favorites[spellID] then showX = (not addon.db["portalHideMissing"] or (addon.db["portalHideMissing"] and knownX)) end
+							if showX then
+								local iconID = data.icon
+								if not iconID then
+									local _, _, itemIcon = C_Item.GetItemInfoInstant(iid)
+									iconID = itemIcon
+								end
+								table.insert(list, {
+									spellID = spellID,
+									text = resolveDisplayText(spellID, data),
+									iconID = iconID,
+									isKnown = knownX,
+									isToy = false,
+									toyID = false,
+									isItem = true,
+									itemID = iid,
+									variantOtherCount = otherVariants,
+									isClassTP = data.isClassTP or false,
+									isMagePortal = data.isMagePortal or false,
+									equipSlot = data.equipSlot,
+									isFavorite = favorites[spellID] and true or false,
+									locID = data.locID,
+									x = data.x,
+									y = data.y,
+								})
+							end
 						end
 					end
 				else

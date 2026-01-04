@@ -1914,7 +1914,7 @@ local function buildUnitSettings(unit)
 	if unit == "player" or unit == "target" or unit == "focus" then
 		local pvpDef = def.pvpIndicator or { enabled = false, size = 20, offset = { x = -24, y = -2 } }
 		local function isPvPIndicatorEnabled() return getValue(unit, { "pvpIndicator", "enabled" }, pvpDef.enabled == true) == true end
-		list[#list + 1] = { name = L["UFPvPIndicator"] or "PvP Indicator", kind = settingType.Collapsible, id = "pvpindicator", defaultCollapsed = true }
+		list[#list + 1] = { name = L["UFPvPIndicator"] or "Role/PvP Indicator", kind = settingType.Collapsible, id = "pvpindicator", defaultCollapsed = true }
 
 		list[#list + 1] = checkbox(L["UFPvPIndicatorEnable"] or "Show PvP indicator", isPvPIndicatorEnabled, function(val)
 			setValue(unit, { "pvpIndicator", "enabled" }, val and true or false)
@@ -1964,6 +1964,58 @@ local function buildUnitSettings(unit)
 		)
 		pvpOffsetY.isEnabled = isPvPIndicatorEnabled
 		list[#list + 1] = pvpOffsetY
+
+		local roleDef = def.roleIndicator or { enabled = false, size = 18, offset = { x = 24, y = -2 } }
+		local function isRoleIndicatorEnabled() return getValue(unit, { "roleIndicator", "enabled" }, roleDef.enabled == true) == true end
+
+		list[#list + 1] = checkbox(L["UFRoleIndicatorEnable"] or "Show role indicator", isRoleIndicatorEnabled, function(val)
+			setValue(unit, { "roleIndicator", "enabled" }, val and true or false)
+			refreshSelf()
+		end, roleDef.enabled == true, "pvpindicator")
+
+		local roleIconSize = slider(L["Icon size"] or "Icon size", 10, 40, 1, function() return getValue(unit, { "roleIndicator", "size" }, roleDef.size or 18) end, function(val)
+			local v = val or roleDef.size or 18
+			if v < 10 then v = 10 end
+			if v > 40 then v = 40 end
+			setValue(unit, { "roleIndicator", "size" }, v)
+			refreshSelf()
+		end, roleDef.size or 18, "pvpindicator", true)
+		roleIconSize.isEnabled = isRoleIndicatorEnabled
+		list[#list + 1] = roleIconSize
+
+		local roleOffsetX = slider(
+			L["Offset X"] or "Offset X",
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
+			1,
+			function() return getValue(unit, { "roleIndicator", "offset", "x" }, (roleDef.offset and roleDef.offset.x) or 0) end,
+			function(val)
+				setValue(unit, { "roleIndicator", "offset", "x" }, val or 0)
+				refreshSelf()
+			end,
+			(roleDef.offset and roleDef.offset.x) or 0,
+			"pvpindicator",
+			true
+		)
+		roleOffsetX.isEnabled = isRoleIndicatorEnabled
+		list[#list + 1] = roleOffsetX
+
+		local roleOffsetY = slider(
+			L["Offset Y"] or "Offset Y",
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
+			1,
+			function() return getValue(unit, { "roleIndicator", "offset", "y" }, (roleDef.offset and roleDef.offset.y) or 0) end,
+			function(val)
+				setValue(unit, { "roleIndicator", "offset", "y" }, val or 0)
+				refreshSelf()
+			end,
+			(roleDef.offset and roleDef.offset.y) or 0,
+			"pvpindicator",
+			true
+		)
+		roleOffsetY.isEnabled = isRoleIndicatorEnabled
+		list[#list + 1] = roleOffsetY
 	end
 
 	if unit == "target" or unit == "focus" or isBoss then

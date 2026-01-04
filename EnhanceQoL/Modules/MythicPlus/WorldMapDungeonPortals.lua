@@ -66,6 +66,12 @@ local function BuildSeasonSection()
 	return addon.MythicPlus.functions.BuildCurrentSeasonTeleportSection()
 end
 
+local function AddVariantTooltipLine(entry)
+	if not entry or not entry.variantOtherCount or entry.variantOtherCount <= 0 then return end
+	local fmt = L["teleportOtherVariants"] or "%d other variants available"
+	GameTooltip:AddLine(string.format(fmt, entry.variantOtherCount), 0.7, 0.7, 0.7, true)
+end
+
 -- Open World Map to a mapID and create a user waypoint pin at x,y (0..1)
 local function OpenMapAndCreatePin(mapID, x, y)
 	if not mapID or not x or not y then return end
@@ -422,6 +428,7 @@ local function CreateSecureSpellButton(parent, entry)
 		else
 			GameTooltip:SetSpellByID(entry.spellID)
 		end
+		AddVariantTooltipLine(entry)
 		GameTooltip:Show()
 	end)
 	b:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -562,6 +569,7 @@ local function CreateLegendRowButton(parent, entry, width, height)
 			else
 				GameTooltip:SetSpellByID(entry.spellID)
 			end
+			AddVariantTooltipLine(entry)
 			GameTooltip:Show()
 		end
 	end)
@@ -1003,9 +1011,7 @@ local function worldMapEventHandler(self, event, arg1)
 		end
 		if f._pendingOpen then
 			f._pendingOpen = nil
-			if addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.OpenWorldMapTeleportPanel then
-				addon.MythicPlus.functions.OpenWorldMapTeleportPanel(true)
-			end
+			if addon.MythicPlus and addon.MythicPlus.functions and addon.MythicPlus.functions.OpenWorldMapTeleportPanel then addon.MythicPlus.functions.OpenWorldMapTeleportPanel(true) end
 		end
 		if WorldMapFrame and WorldMapFrame:IsShown() and addon.db and addon.db["teleportsWorldMapEnabled"] then C_Timer.After(0, function() f:RefreshPanel() end) end
 		-- fall through to allow refresh if map is visible

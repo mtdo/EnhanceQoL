@@ -302,6 +302,11 @@ local defaults = {
 			size = 20,
 			offset = { x = -24, y = -2 },
 		},
+		roleIndicator = {
+			enabled = false,
+			size = 18,
+			offset = { x = 24, y = -2 },
+		},
 		portrait = {
 			enabled = false,
 			side = "LEFT",
@@ -3277,6 +3282,10 @@ local function ensureFrames(unit)
 		st.pvpIcon:SetSize(20, 20)
 		st.pvpIcon:SetPoint("TOP", st.frame, "TOP", -24, -2)
 		st.pvpIcon:Hide()
+		st.roleIcon = st.statusTextLayer:CreateTexture(nil, "OVERLAY", nil, 7)
+		st.roleIcon:SetSize(18, 18)
+		st.roleIcon:SetPoint("TOP", st.frame, "TOP", 24, -2)
+		st.roleIcon:Hide()
 	end
 	if unit == UNIT.PLAYER then
 		st.combatIcon = st.statusTextLayer:CreateTexture("EQOLUFPlayerCombatIcon", "OVERLAY")
@@ -3456,6 +3465,7 @@ local function applyConfig(unit)
 	updatePortrait(cfg, unit)
 	checkRaidTargetIcon(unit, st)
 	UFHelper.updatePvPIndicator(st, unit, cfg, defaultsFor(unit), false)
+	UFHelper.updateRoleIndicator(st, unit, cfg, defaultsFor(unit), false)
 	if unit == UNIT.PLAYER then
 		updateCombatIndicator(cfg)
 		updateRestingIndicator(cfg)
@@ -4017,6 +4027,7 @@ local function updateFocusFrame(cfg, forceApply)
 	end
 	checkRaidTargetIcon(UNIT.FOCUS, st)
 	UFHelper.updatePvPIndicator(st, UNIT.FOCUS, cfg, defaultsFor(UNIT.FOCUS), not forceApply)
+	UFHelper.updateRoleIndicator(st, UNIT.FOCUS, cfg, defaultsFor(UNIT.FOCUS), not forceApply)
 	updateUnitStatusIndicator(cfg, UNIT.FOCUS)
 	updatePortrait(cfg, UNIT.FOCUS)
 	UFHelper.updateHighlight(st, UNIT.FOCUS, UNIT.PLAYER)
@@ -4033,6 +4044,12 @@ function UF.UpdateAllPvPIndicators()
 	UFHelper.updatePvPIndicator(states[UNIT.PLAYER], UNIT.PLAYER, getCfg(UNIT.PLAYER), defaultsFor(UNIT.PLAYER), false)
 	UFHelper.updatePvPIndicator(states[UNIT.TARGET], UNIT.TARGET, getCfg(UNIT.TARGET), defaultsFor(UNIT.TARGET), false)
 	UFHelper.updatePvPIndicator(states[UNIT.FOCUS], UNIT.FOCUS, getCfg(UNIT.FOCUS), defaultsFor(UNIT.FOCUS), false)
+end
+
+function UF.UpdateAllRoleIndicators(skipDisabled)
+	UFHelper.updateRoleIndicator(states[UNIT.PLAYER], UNIT.PLAYER, getCfg(UNIT.PLAYER), defaultsFor(UNIT.PLAYER), skipDisabled)
+	UFHelper.updateRoleIndicator(states[UNIT.TARGET], UNIT.TARGET, getCfg(UNIT.TARGET), defaultsFor(UNIT.TARGET), skipDisabled)
+	UFHelper.updateRoleIndicator(states[UNIT.FOCUS], UNIT.FOCUS, getCfg(UNIT.FOCUS), defaultsFor(UNIT.FOCUS), skipDisabled)
 end
 
 local function onEvent(self, event, unit, arg1)
@@ -4059,6 +4076,7 @@ local function onEvent(self, event, unit, arg1)
 		updateUnitStatusIndicator(focusCfg, UNIT.FOCUS)
 		updateUnitStatusIndicator(petCfg, UNIT.PET)
 		UF.UpdateAllPvPIndicators()
+		UF.UpdateAllRoleIndicators(false)
 		UFHelper.updateAllHighlights(states, UNIT, maxBossFrames)
 		updateAllRaidTargetIcons()
 		if bossCfg.enabled then
@@ -4139,6 +4157,7 @@ local function onEvent(self, event, unit, arg1)
 		if focusCfg.enabled then updateFocusFrame(focusCfg) end
 		updateUnitStatusIndicator(targetCfg, UNIT.TARGET)
 		UFHelper.updatePvPIndicator(states[UNIT.TARGET], UNIT.TARGET, targetCfg, defaultsFor(UNIT.TARGET), true)
+		UFHelper.updateRoleIndicator(states[UNIT.TARGET], UNIT.TARGET, targetCfg, defaultsFor(UNIT.TARGET), true)
 		updateUnitStatusIndicator(totCfg, UNIT.TARGET_TARGET)
 	elseif event == "UNIT_AURA" and (unit == "target" or unit == UNIT.PLAYER or isBossUnit(unit)) then
 		local cfg = getCfg(unit)
@@ -4423,6 +4442,7 @@ local function onEvent(self, event, unit, arg1)
 		end
 		updateUnitStatusIndicator(focusCfg, UNIT.FOCUS)
 		UFHelper.updatePvPIndicator(states[UNIT.FOCUS], UNIT.FOCUS, focusCfg, defaultsFor(UNIT.FOCUS), true)
+		UFHelper.updateRoleIndicator(states[UNIT.FOCUS], UNIT.FOCUS, focusCfg, defaultsFor(UNIT.FOCUS), true)
 		UFHelper.updateHighlight(states[UNIT.FOCUS], UNIT.FOCUS, UNIT.PLAYER)
 	elseif event == "PLAYER_UPDATE_RESTING" then
 		updateRestingIndicator(getCfg(UNIT.PLAYER))
@@ -4432,6 +4452,7 @@ local function onEvent(self, event, unit, arg1)
 		local usDef = defStatus.unitStatus or {}
 		local usCfg = (playerCfg.status and playerCfg.status.unitStatus) or usDef or {}
 		if playerCfg.enabled ~= false and usCfg.enabled == true and usCfg.showGroup == true then updateUnitStatusIndicator(playerCfg, UNIT.PLAYER) end
+		UF.UpdateAllRoleIndicators(true)
 	elseif event == "RAID_TARGET_UPDATE" then
 		updateAllRaidTargetIcons()
 	end
@@ -4465,6 +4486,7 @@ local function ensureEventHandling()
 				updateBossFrames(true)
 				updateAllRaidTargetIcons()
 				UF.UpdateAllPvPIndicators()
+				UF.UpdateAllRoleIndicators(false)
 				applyVisibilityRulesAll()
 				if UF.Refresh then UF.Refresh() end
 				if states[UNIT.TARGET] and states[UNIT.TARGET].castBar then setCastInfoFromUnit(UNIT.TARGET) end
@@ -4477,6 +4499,7 @@ local function ensureEventHandling()
 				if ensureDB("boss").enabled then updateBossFrames(true) end
 				updateAllRaidTargetIcons()
 				UF.UpdateAllPvPIndicators()
+				UF.UpdateAllRoleIndicators(false)
 				applyVisibilityRulesAll()
 				if UF.Refresh then UF.Refresh() end
 				if ensureDB("target").enabled then fullScanTargetAuras(UNIT.TARGET) end
