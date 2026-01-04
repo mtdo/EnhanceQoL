@@ -222,12 +222,14 @@ local defaults = {
 			useAbsorbGlow = true,
 			backdrop = { enabled = true, color = { 0, 0, 0, 0.6 } },
 			textLeft = "PERCENT",
+			textCenter = "NONE",
 			textRight = "CURMAX",
 			textDelimiter = " ",
 			fontSize = 14,
 			font = nil,
 			fontOutline = "OUTLINE", -- fallback to default font
 			offsetLeft = { x = 6, y = 0 },
+			offsetCenter = { x = 0, y = 0 },
 			offsetRight = { x = -6, y = 0 },
 			useShortNumbers = true,
 			hidePercentSymbol = false,
@@ -240,11 +242,13 @@ local defaults = {
 			backdrop = { enabled = true, color = { 0, 0, 0, 0.6 } },
 			useCustomColor = false,
 			textLeft = "PERCENT",
+			textCenter = "NONE",
 			textRight = "CURMAX",
 			textDelimiter = " ",
 			fontSize = 14,
 			font = nil,
 			offsetLeft = { x = 6, y = 0 },
+			offsetCenter = { x = 0, y = 0 },
 			offsetRight = { x = -6, y = 0 },
 			useShortNumbers = true,
 			hidePercentSymbol = false,
@@ -2403,14 +2407,33 @@ local function updateHealth(cfg, unit)
 		end
 	end
 	local leftMode = hc.textLeft or "PERCENT"
+	local centerMode = hc.textCenter or "NONE"
 	local rightMode = hc.textRight or "CURMAX"
-	local leftDelimiter = UFHelper.getTextDelimiter(hc, defH)
-	local rightDelimiter = UFHelper.getTextDelimiter(hc, defH)
+	local delimiter = UFHelper.getTextDelimiter(hc, defH)
 	local hidePercentSymbol = hc.hidePercentSymbol == true
 	local levelText
-	if UFHelper.textModeUsesLevel(leftMode) or UFHelper.textModeUsesLevel(rightMode) then levelText = UFHelper.getUnitLevelText(unit) end
-	if st.healthTextLeft then st.healthTextLeft:SetText(UFHelper.formatText(leftMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, leftDelimiter, hidePercentSymbol, levelText)) end
-	if st.healthTextRight then st.healthTextRight:SetText(UFHelper.formatText(rightMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, rightDelimiter, hidePercentSymbol, levelText)) end
+	if UFHelper.textModeUsesLevel(leftMode) or UFHelper.textModeUsesLevel(centerMode) or UFHelper.textModeUsesLevel(rightMode) then levelText = UFHelper.getUnitLevelText(unit) end
+	if st.healthTextLeft then
+		if leftMode == "NONE" then
+			st.healthTextLeft:SetText("")
+		else
+			st.healthTextLeft:SetText(UFHelper.formatText(leftMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, hidePercentSymbol, levelText))
+		end
+	end
+	if st.healthTextCenter then
+		if centerMode == "NONE" then
+			st.healthTextCenter:SetText("")
+		else
+			st.healthTextCenter:SetText(UFHelper.formatText(centerMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, hidePercentSymbol, levelText))
+		end
+	end
+	if st.healthTextRight then
+		if rightMode == "NONE" then
+			st.healthTextRight:SetText("")
+		else
+			st.healthTextRight:SetText(UFHelper.formatText(rightMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, hidePercentSymbol, levelText))
+		end
+	end
 end
 
 local function updatePower(cfg, unit)
@@ -2425,13 +2448,15 @@ local function updatePower(cfg, unit)
 	local pcfg = cfg.power or {}
 	local hidePercentSymbol = pcfg.hidePercentSymbol == true
 	local leftMode = pcfg.textLeft or "PERCENT"
+	local centerMode = pcfg.textCenter or "NONE"
 	local rightMode = pcfg.textRight or "CURMAX"
 	local levelText
-	if UFHelper.textModeUsesLevel(leftMode) or UFHelper.textModeUsesLevel(rightMode) then levelText = UFHelper.getUnitLevelText(unit) end
+	if UFHelper.textModeUsesLevel(leftMode) or UFHelper.textModeUsesLevel(centerMode) or UFHelper.textModeUsesLevel(rightMode) then levelText = UFHelper.getUnitLevelText(unit) end
 	if pcfg.enabled == false then
 		bar:Hide()
 		bar:SetValue(0)
 		if st.powerTextLeft then st.powerTextLeft:SetText("") end
+		if st.powerTextCenter then st.powerTextCenter:SetText("") end
 		if st.powerTextRight then st.powerTextRight:SetText("") end
 		return
 	end
@@ -2455,35 +2480,40 @@ local function updatePower(cfg, unit)
 	local cr, cg, cb, ca = UFHelper.getPowerColor(powerToken)
 	bar:SetStatusBarColor(cr or 0.1, cg or 0.45, cb or 1, ca or 1)
 	if bar.SetStatusBarDesaturated then bar:SetStatusBarDesaturated(UFHelper.isPowerDesaturated(powerToken)) end
-	if st.powerTextLeft then
-		if (issecretvalue and not issecretvalue(maxv) and maxv == 0) or (not addon.variables.isMidnight and maxv == 0) then
-			st.powerTextLeft:SetText("")
-		else
-			local leftDelimiter = UFHelper.getTextDelimiter(pcfg, defP)
-			st.powerTextLeft:SetText(UFHelper.formatText(leftMode, cur, maxv, pcfg.useShortNumbers ~= false, percentVal, leftDelimiter, hidePercentSymbol, levelText))
+	local maxZero = (issecretvalue and not issecretvalue(maxv) and maxv == 0) or (not addon.variables.isMidnight and maxv == 0)
+	local delimiter = UFHelper.getTextDelimiter(pcfg, defP)
+	local function setPowerText(fs, mode)
+		if not fs then return end
+		if maxZero or mode == "NONE" then
+			fs:SetText("")
+			return
 		end
+		fs:SetText(UFHelper.formatText(mode, cur, maxv, pcfg.useShortNumbers ~= false, percentVal, delimiter, hidePercentSymbol, levelText))
 	end
-	if (issecretvalue and not issecretvalue(maxv) and maxv == 0) or (not addon.variables.isMidnight and maxv == 0) then
-		st.powerTextRight:SetText("")
-	else
-		if st.powerTextRight then
-			local rightDelimiter = UFHelper.getTextDelimiter(pcfg, defP)
-			st.powerTextRight:SetText(UFHelper.formatText(rightMode, cur, maxv, pcfg.useShortNumbers ~= false, percentVal, rightDelimiter, hidePercentSymbol, levelText))
-		end
-	end
+	setPowerText(st.powerTextLeft, leftMode)
+	setPowerText(st.powerTextCenter, centerMode)
+	setPowerText(st.powerTextRight, rightMode)
 end
 
-local function layoutTexts(bar, leftFS, rightFS, cfg, width)
+local function layoutTexts(bar, leftFS, centerFS, rightFS, cfg, width)
 	if not bar then return end
 	local leftCfg = (cfg and cfg.offsetLeft) or { x = 6, y = 0 }
+	local centerCfg = (cfg and cfg.offsetCenter) or { x = 0, y = 0 }
 	local rightCfg = (cfg and cfg.offsetRight) or { x = -6, y = 0 }
 	if leftFS then
 		leftFS:ClearAllPoints()
 		leftFS:SetPoint("LEFT", bar, "LEFT", leftCfg.x or 0, leftCfg.y or 0)
+		leftFS:SetJustifyH("LEFT")
+	end
+	if centerFS then
+		centerFS:ClearAllPoints()
+		centerFS:SetPoint("CENTER", bar, "CENTER", centerCfg.x or 0, centerCfg.y or 0)
+		centerFS:SetJustifyH("CENTER")
 	end
 	if rightFS then
 		rightFS:ClearAllPoints()
 		rightFS:SetPoint("RIGHT", bar, "RIGHT", rightCfg.x or 0, rightCfg.y or 0)
+		rightFS:SetJustifyH("RIGHT")
 	end
 end
 
@@ -3083,8 +3113,8 @@ local function layoutFrame(cfg, unit)
 		st.raidIcon:SetPoint("TOP", st.barGroup or st.frame, "TOP", barCenterOffset or 0, -2)
 	end
 
-	layoutTexts(st.health, st.healthTextLeft, st.healthTextRight, cfg.health, width)
-	layoutTexts(st.power, st.powerTextLeft, st.powerTextRight, cfg.power, width)
+	layoutTexts(st.health, st.healthTextLeft, st.healthTextCenter, st.healthTextRight, cfg.health, width)
+	layoutTexts(st.power, st.powerTextLeft, st.powerTextCenter, st.powerTextRight, cfg.power, width)
 	if st.castBar and unit == UNIT.TARGET then applyCastLayout(cfg, unit) end
 
 	-- Apply border only around the bar region wrapper
@@ -3263,8 +3293,10 @@ local function ensureFrames(unit)
 	st.statusTextLayer:SetAllPoints(st.status)
 
 	st.healthTextLeft = st.healthTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	st.healthTextCenter = st.healthTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	st.healthTextRight = st.healthTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	st.powerTextLeft = st.powerTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	st.powerTextCenter = st.powerTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	st.powerTextRight = st.powerTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	st.nameText = st.statusTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	st.levelText = st.statusTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -3328,6 +3360,7 @@ local function applyBars(cfg, unit)
 	else
 		st.power:Hide()
 		if st.powerTextLeft then st.powerTextLeft:SetText("") end
+		if st.powerTextCenter then st.powerTextCenter:SetText("") end
 		if st.powerTextRight then st.powerTextRight:SetText("") end
 	end
 	if allowAbsorb and st.absorb then
@@ -3367,8 +3400,10 @@ local function applyBars(cfg, unit)
 	end
 
 	UFHelper.applyFont(st.healthTextLeft, hc.font, hc.fontSize or 14, hc.fontOutline)
+	UFHelper.applyFont(st.healthTextCenter, hc.font, hc.fontSize or 14, hc.fontOutline)
 	UFHelper.applyFont(st.healthTextRight, hc.font, hc.fontSize or 14, hc.fontOutline)
 	UFHelper.applyFont(st.powerTextLeft, pcfg.font, pcfg.fontSize or 14, pcfg.fontOutline)
+	UFHelper.applyFont(st.powerTextCenter, pcfg.font, pcfg.fontSize or 14, pcfg.fontOutline)
 	UFHelper.applyFont(st.powerTextRight, pcfg.font, pcfg.fontSize or 14, pcfg.fontOutline)
 	syncTextFrameLevels(st)
 end
@@ -3612,14 +3647,33 @@ local function applyBossEditSample(idx, cfg)
 	local color = hc.color or (def.health and def.health.color) or { 0, 0.8, 0, 1 }
 	st.health:SetStatusBarColor(color[1] or 0, color[2] or 0.8, color[3] or 0, color[4] or 1)
 	local leftMode = hc.textLeft or "PERCENT"
+	local centerMode = hc.textCenter or "NONE"
 	local rightMode = hc.textRight or "CURMAX"
-	local leftDelimiter = UFHelper.getTextDelimiter(hc, defH)
-	local rightDelimiter = UFHelper.getTextDelimiter(hc, defH)
+	local delimiter = UFHelper.getTextDelimiter(hc, defH)
 	local hidePercentSymbol = hc.hidePercentSymbol == true
 	local levelText
-	if UFHelper.textModeUsesLevel(leftMode) or UFHelper.textModeUsesLevel(rightMode) then levelText = UFHelper.getUnitLevelText("player") end
-	if st.healthTextLeft then st.healthTextLeft:SetText(UFHelper.formatText(leftMode, cur, maxv, hc.useShortNumbers ~= false, nil, leftDelimiter, hidePercentSymbol, levelText)) end
-	if st.healthTextRight then st.healthTextRight:SetText(UFHelper.formatText(rightMode, cur, maxv, hc.useShortNumbers ~= false, nil, rightDelimiter, hidePercentSymbol, levelText)) end
+	if UFHelper.textModeUsesLevel(leftMode) or UFHelper.textModeUsesLevel(centerMode) or UFHelper.textModeUsesLevel(rightMode) then levelText = UFHelper.getUnitLevelText("player") end
+	if st.healthTextLeft then
+		if leftMode == "NONE" then
+			st.healthTextLeft:SetText("")
+		else
+			st.healthTextLeft:SetText(UFHelper.formatText(leftMode, cur, maxv, hc.useShortNumbers ~= false, nil, delimiter, hidePercentSymbol, levelText))
+		end
+	end
+	if st.healthTextCenter then
+		if centerMode == "NONE" then
+			st.healthTextCenter:SetText("")
+		else
+			st.healthTextCenter:SetText(UFHelper.formatText(centerMode, cur, maxv, hc.useShortNumbers ~= false, nil, delimiter, hidePercentSymbol, levelText))
+		end
+	end
+	if st.healthTextRight then
+		if rightMode == "NONE" then
+			st.healthTextRight:SetText("")
+		else
+			st.healthTextRight:SetText(UFHelper.formatText(rightMode, cur, maxv, hc.useShortNumbers ~= false, nil, delimiter, hidePercentSymbol, levelText))
+		end
+	end
 
 	local powerEnabled = pcfg.enabled ~= false
 	if st.power then
@@ -3633,18 +3687,40 @@ local function applyBossEditSample(idx, cfg)
 			st.power:SetStatusBarColor(pr or 0.1, pg or 0.45, pb or 1, pa or 1)
 			if st.power.SetStatusBarDesaturated then st.power:SetStatusBarDesaturated(UFHelper.isPowerDesaturated(token)) end
 			local pLeftMode = pcfg.textLeft or "PERCENT"
+			local pCenterMode = pcfg.textCenter or "NONE"
 			local pRightMode = pcfg.textRight or "CURMAX"
-			local pLeftDelimiter = UFHelper.getTextDelimiter(pcfg, defP)
-			local pRightDelimiter = UFHelper.getTextDelimiter(pcfg, defP)
+			local pDelimiter = UFHelper.getTextDelimiter(pcfg, defP)
 			local pHidePercentSymbol = pcfg.hidePercentSymbol == true
 			local pLevelText = levelText
-			if not pLevelText and (UFHelper.textModeUsesLevel(pLeftMode) or UFHelper.textModeUsesLevel(pRightMode)) then pLevelText = UFHelper.getUnitLevelText("player") end
-			if st.powerTextLeft then st.powerTextLeft:SetText(UFHelper.formatText(pLeftMode, pCur, pMax, pcfg.useShortNumbers ~= false, nil, pLeftDelimiter, pHidePercentSymbol, pLevelText)) end
-			if st.powerTextRight then st.powerTextRight:SetText(UFHelper.formatText(pRightMode, pCur, pMax, pcfg.useShortNumbers ~= false, nil, pRightDelimiter, pHidePercentSymbol, pLevelText)) end
+			if not pLevelText and (UFHelper.textModeUsesLevel(pLeftMode) or UFHelper.textModeUsesLevel(pCenterMode) or UFHelper.textModeUsesLevel(pRightMode)) then
+				pLevelText = UFHelper.getUnitLevelText("player")
+			end
+			if st.powerTextLeft then
+				if pLeftMode == "NONE" then
+					st.powerTextLeft:SetText("")
+				else
+					st.powerTextLeft:SetText(UFHelper.formatText(pLeftMode, pCur, pMax, pcfg.useShortNumbers ~= false, nil, pDelimiter, pHidePercentSymbol, pLevelText))
+				end
+			end
+			if st.powerTextCenter then
+				if pCenterMode == "NONE" then
+					st.powerTextCenter:SetText("")
+				else
+					st.powerTextCenter:SetText(UFHelper.formatText(pCenterMode, pCur, pMax, pcfg.useShortNumbers ~= false, nil, pDelimiter, pHidePercentSymbol, pLevelText))
+				end
+			end
+			if st.powerTextRight then
+				if pRightMode == "NONE" then
+					st.powerTextRight:SetText("")
+				else
+					st.powerTextRight:SetText(UFHelper.formatText(pRightMode, pCur, pMax, pcfg.useShortNumbers ~= false, nil, pDelimiter, pHidePercentSymbol, pLevelText))
+				end
+			end
 			st.power:Show()
 		else
 			st.power:SetValue(0)
 			if st.powerTextLeft then st.powerTextLeft:SetText("") end
+			if st.powerTextCenter then st.powerTextCenter:SetText("") end
 			if st.powerTextRight then st.powerTextRight:SetText("") end
 			st.power:Hide()
 		end

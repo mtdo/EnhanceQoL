@@ -8,6 +8,7 @@
   - Per-frame aura toggle for Player/Target/Boss frames
   - Player unit status can show group number.
   - Additional health/mana text modes (percent-first + level combos).
+  - Health/Power texts now support a center slot with independent offsets.
   - Unit status text now has its own font size/font/outline controls + Edit Mode sample.
   - PvP indicator icon for Player/Target/Focus.
   - Role indicator icon for Player/Target/Focus.

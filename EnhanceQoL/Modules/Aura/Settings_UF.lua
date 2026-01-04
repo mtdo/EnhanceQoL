@@ -1171,6 +1171,19 @@ local function buildUnitSettings(unit)
 	)
 
 	list[#list + 1] = radioDropdown(
+		L["TextCenter"] or "Center text",
+		textOptions,
+		function() return normalizeTextMode(getValue(unit, { "health", "textCenter" }, healthDef.textCenter or "NONE")) end,
+		function(val)
+			setValue(unit, { "health", "textCenter" }, val)
+			refresh()
+			refreshSettingsUI()
+		end,
+		healthDef.textCenter or "NONE",
+		"health"
+	)
+
+	list[#list + 1] = radioDropdown(
 		L["TextRight"] or "Right text",
 		textOptions,
 		function() return normalizeTextMode(getValue(unit, { "health", "textRight" }, healthDef.textRight or "CURMAX")) end,
@@ -1196,8 +1209,9 @@ local function buildUnitSettings(unit)
 	)
 	healthDelimiterSetting.isEnabled = function()
 		local leftMode = getValue(unit, { "health", "textLeft" }, healthDef.textLeft or "PERCENT")
+		local centerMode = getValue(unit, { "health", "textCenter" }, healthDef.textCenter or "NONE")
 		local rightMode = getValue(unit, { "health", "textRight" }, healthDef.textRight or "CURMAX")
-		return textModeUsesDelimiter(leftMode) or textModeUsesDelimiter(rightMode)
+		return textModeUsesDelimiter(leftMode) or textModeUsesDelimiter(centerMode) or textModeUsesDelimiter(rightMode)
 	end
 	list[#list + 1] = healthDelimiterSetting
 
@@ -1238,7 +1252,12 @@ local function buildUnitSettings(unit)
 		"health"
 	)
 
-	list[#list + 1] = slider(
+	local function showHealthTextOffsets(key, fallback)
+		local mode = normalizeTextMode(getValue(unit, { "health", key }, fallback))
+		return mode ~= "NONE"
+	end
+
+	local healthLeftX = slider(
 		L["TextLeftOffsetX"] or "Left text X offset",
 		-OFFSET_RANGE,
 		OFFSET_RANGE,
@@ -1254,8 +1273,10 @@ local function buildUnitSettings(unit)
 		"health",
 		true
 	)
+	healthLeftX.isShown = function() return showHealthTextOffsets("textLeft", healthDef.textLeft or "PERCENT") end
+	list[#list + 1] = healthLeftX
 
-	list[#list + 1] = slider(
+	local healthLeftY = slider(
 		L["TextLeftOffsetY"] or "Left text Y offset",
 		-OFFSET_RANGE,
 		OFFSET_RANGE,
@@ -1271,8 +1292,48 @@ local function buildUnitSettings(unit)
 		"health",
 		true
 	)
+	healthLeftY.isShown = function() return showHealthTextOffsets("textLeft", healthDef.textLeft or "PERCENT") end
+	list[#list + 1] = healthLeftY
 
-	list[#list + 1] = slider(
+	local healthCenterX = slider(
+		L["TextCenterOffsetX"] or "Center text X offset",
+		-OFFSET_RANGE,
+		OFFSET_RANGE,
+		1,
+		function() return (getValue(unit, { "health", "offsetCenter", "x" }, (healthDef.offsetCenter and healthDef.offsetCenter.x) or 0)) end,
+		function(val)
+			debounced(unit .. "_healthCenterX", function()
+				setValue(unit, { "health", "offsetCenter", "x" }, val or 0)
+				refresh()
+			end)
+		end,
+		(healthDef.offsetCenter and healthDef.offsetCenter.x) or 0,
+		"health",
+		true
+	)
+	healthCenterX.isShown = function() return showHealthTextOffsets("textCenter", healthDef.textCenter or "NONE") end
+	list[#list + 1] = healthCenterX
+
+	local healthCenterY = slider(
+		L["TextCenterOffsetY"] or "Center text Y offset",
+		-OFFSET_RANGE,
+		OFFSET_RANGE,
+		1,
+		function() return (getValue(unit, { "health", "offsetCenter", "y" }, (healthDef.offsetCenter and healthDef.offsetCenter.y) or 0)) end,
+		function(val)
+			debounced(unit .. "_healthCenterY", function()
+				setValue(unit, { "health", "offsetCenter", "y" }, val or 0)
+				refresh()
+			end)
+		end,
+		(healthDef.offsetCenter and healthDef.offsetCenter.y) or 0,
+		"health",
+		true
+	)
+	healthCenterY.isShown = function() return showHealthTextOffsets("textCenter", healthDef.textCenter or "NONE") end
+	list[#list + 1] = healthCenterY
+
+	local healthRightX = slider(
 		L["TextRightOffsetX"] or "Right text X offset",
 		-OFFSET_RANGE,
 		OFFSET_RANGE,
@@ -1288,8 +1349,10 @@ local function buildUnitSettings(unit)
 		"health",
 		true
 	)
+	healthRightX.isShown = function() return showHealthTextOffsets("textRight", healthDef.textRight or "CURMAX") end
+	list[#list + 1] = healthRightX
 
-	list[#list + 1] = slider(
+	local healthRightY = slider(
 		L["TextRightOffsetY"] or "Right text Y offset",
 		-OFFSET_RANGE,
 		OFFSET_RANGE,
@@ -1305,6 +1368,8 @@ local function buildUnitSettings(unit)
 		"health",
 		true
 	)
+	healthRightY.isShown = function() return showHealthTextOffsets("textRight", healthDef.textRight or "CURMAX") end
+	list[#list + 1] = healthRightY
 
 	list[#list + 1] = checkbox(L["Use short numbers"] or "Use short numbers", function() return getValue(unit, { "health", "useShortNumbers" }, healthDef.useShortNumbers ~= false) end, function(val)
 		setValue(unit, { "health", "useShortNumbers" }, val and true or false)
@@ -1453,6 +1518,7 @@ local function buildUnitSettings(unit)
 		end)
 	end, def.width or MIN_WIDTH, "power", true)
 	powerWidthSetting.isEnabled = isPowerDetachedEnabled
+	powerWidthSetting.isShown = isPowerDetachedEnabled
 	list[#list + 1] = powerWidthSetting
 
 	local powerOffsetX = slider(L["Offset X"] or "Offset X", -OFFSET_RANGE, OFFSET_RANGE, 1, function() return getValue(unit, { "power", "offset", "x" }, 0) end, function(val)
@@ -1462,6 +1528,7 @@ local function buildUnitSettings(unit)
 		end)
 	end, 0, "power", true)
 	powerOffsetX.isEnabled = isPowerDetachedEnabled
+	powerOffsetX.isShown = isPowerDetachedEnabled
 	list[#list + 1] = powerOffsetX
 
 	local powerOffsetY = slider(L["Offset Y"] or "Offset Y", -OFFSET_RANGE, OFFSET_RANGE, 1, function() return getValue(unit, { "power", "offset", "y" }, 0) end, function(val)
@@ -1471,6 +1538,7 @@ local function buildUnitSettings(unit)
 		end)
 	end, 0, "power", true)
 	powerOffsetY.isEnabled = isPowerDetachedEnabled
+	powerOffsetY.isShown = isPowerDetachedEnabled
 	list[#list + 1] = powerOffsetY
 
 	local powerTextLeft = radioDropdown(
@@ -1487,6 +1555,21 @@ local function buildUnitSettings(unit)
 	)
 	powerTextLeft.isEnabled = isPowerEnabled
 	list[#list + 1] = powerTextLeft
+
+	local powerTextCenter = radioDropdown(
+		L["TextCenter"] or "Center text",
+		textOptions,
+		function() return normalizeTextMode(getValue(unit, { "power", "textCenter" }, powerDef.textCenter or "NONE")) end,
+		function(val)
+			setValue(unit, { "power", "textCenter" }, val)
+			refreshSelf()
+			refreshSettingsUI()
+		end,
+		powerDef.textCenter or "NONE",
+		"power"
+	)
+	powerTextCenter.isEnabled = isPowerEnabled
+	list[#list + 1] = powerTextCenter
 
 	local powerTextRight = radioDropdown(
 		L["TextRight"] or "Right text",
@@ -1517,8 +1600,9 @@ local function buildUnitSettings(unit)
 	powerDelimiter.isEnabled = function()
 		if not isPowerEnabled() then return false end
 		local leftMode = getValue(unit, { "power", "textLeft" }, powerDef.textLeft or "PERCENT")
+		local centerMode = getValue(unit, { "power", "textCenter" }, powerDef.textCenter or "NONE")
 		local rightMode = getValue(unit, { "power", "textRight" }, powerDef.textRight or "CURMAX")
-		return textModeUsesDelimiter(leftMode) or textModeUsesDelimiter(rightMode)
+		return textModeUsesDelimiter(leftMode) or textModeUsesDelimiter(centerMode) or textModeUsesDelimiter(rightMode)
 	end
 	list[#list + 1] = powerDelimiter
 
@@ -1559,6 +1643,11 @@ local function buildUnitSettings(unit)
 	powerFontOutline.isEnabled = isPowerEnabled
 	list[#list + 1] = powerFontOutline
 
+	local function showPowerTextOffsets(key, fallback)
+		local mode = normalizeTextMode(getValue(unit, { "power", key }, fallback))
+		return mode ~= "NONE"
+	end
+
 	local powerLeftX = slider(
 		L["TextLeftOffsetX"] or "Left text X offset",
 		-OFFSET_RANGE,
@@ -1576,6 +1665,7 @@ local function buildUnitSettings(unit)
 		true
 	)
 	powerLeftX.isEnabled = isPowerEnabled
+	powerLeftX.isShown = function() return showPowerTextOffsets("textLeft", powerDef.textLeft or "PERCENT") end
 	list[#list + 1] = powerLeftX
 
 	local powerLeftY = slider(
@@ -1595,7 +1685,48 @@ local function buildUnitSettings(unit)
 		true
 	)
 	powerLeftY.isEnabled = isPowerEnabled
+	powerLeftY.isShown = function() return showPowerTextOffsets("textLeft", powerDef.textLeft or "PERCENT") end
 	list[#list + 1] = powerLeftY
+
+	local powerCenterX = slider(
+		L["TextCenterOffsetX"] or "Center text X offset",
+		-OFFSET_RANGE,
+		OFFSET_RANGE,
+		1,
+		function() return (getValue(unit, { "power", "offsetCenter", "x" }, (powerDef.offsetCenter and powerDef.offsetCenter.x) or 0)) end,
+		function(val)
+			debounced(unit .. "_powerCenterX", function()
+				setValue(unit, { "power", "offsetCenter", "x" }, val or 0)
+				refresh()
+			end)
+		end,
+		(powerDef.offsetCenter and powerDef.offsetCenter.x) or 0,
+		"power",
+		true
+	)
+	powerCenterX.isEnabled = isPowerEnabled
+	powerCenterX.isShown = function() return showPowerTextOffsets("textCenter", powerDef.textCenter or "NONE") end
+	list[#list + 1] = powerCenterX
+
+	local powerCenterY = slider(
+		L["TextCenterOffsetY"] or "Center text Y offset",
+		-OFFSET_RANGE,
+		OFFSET_RANGE,
+		1,
+		function() return (getValue(unit, { "power", "offsetCenter", "y" }, (powerDef.offsetCenter and powerDef.offsetCenter.y) or 0)) end,
+		function(val)
+			debounced(unit .. "_powerCenterY", function()
+				setValue(unit, { "power", "offsetCenter", "y" }, val or 0)
+				refresh()
+			end)
+		end,
+		(powerDef.offsetCenter and powerDef.offsetCenter.y) or 0,
+		"power",
+		true
+	)
+	powerCenterY.isEnabled = isPowerEnabled
+	powerCenterY.isShown = function() return showPowerTextOffsets("textCenter", powerDef.textCenter or "NONE") end
+	list[#list + 1] = powerCenterY
 
 	local powerRightX = slider(
 		L["TextRightOffsetX"] or "Right text X offset",
@@ -1614,6 +1745,7 @@ local function buildUnitSettings(unit)
 		true
 	)
 	powerRightX.isEnabled = isPowerEnabled
+	powerRightX.isShown = function() return showPowerTextOffsets("textRight", powerDef.textRight or "CURMAX") end
 	list[#list + 1] = powerRightX
 
 	local powerRightY = slider(
@@ -1633,6 +1765,7 @@ local function buildUnitSettings(unit)
 		true
 	)
 	powerRightY.isEnabled = isPowerEnabled
+	powerRightY.isShown = function() return showPowerTextOffsets("textRight", powerDef.textRight or "CURMAX") end
 	list[#list + 1] = powerRightY
 
 	list[#list + 1] = checkbox(L["Use short numbers"] or "Use short numbers", function() return getValue(unit, { "power", "useShortNumbers" }, powerDef.useShortNumbers ~= false) end, function(val)
