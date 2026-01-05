@@ -597,7 +597,8 @@ function addon.Mover.functions.createHooks(frame, entry)
 	if resolved.ignoreFramePositionManager ~= nil then frame.ignoreFramePositionManager = resolved.ignoreFramePositionManager end
 	if frame.EnableMouse then frame:EnableMouse(true) end
 
-	local function onStartDrag()
+	local function onStartDrag(_, button)
+		if button and button ~= "LeftButton" then return end
 		if not isEntryActive(resolved) then return end
 		if not modifierPressed() then return end
 		if InCombatLockdown() and frame:IsProtected() then return end
@@ -605,7 +606,8 @@ function addon.Mover.functions.createHooks(frame, entry)
 		frame:StartMoving()
 	end
 
-	local function onStopDrag()
+	local function onStopDrag(_, button)
+		if button and button ~= "LeftButton" then return end
 		if not isEntryActive(resolved) then return end
 		if InCombatLockdown() and frame:IsProtected() then return end
 		frame:StopMovingOrSizing()
@@ -660,23 +662,23 @@ function addon.Mover.functions.createHooks(frame, entry)
 	end
 
 	local function attachScaleHandlers(handle)
-		if not handle then return end
+		if not handle or handle._eqolScaleHooked then return end
+		handle._eqolScaleHooked = true
 		if handle.EnableMouseWheel then handle:EnableMouseWheel(false) end
 		handle:HookScript("OnMouseWheel", onScaleWheel)
 		handle:HookScript("OnMouseUp", onScaleReset)
 		handle:HookScript("OnEnter", function()
 			handle._eqolScaleHover = true
-			handle:SetScript("OnUpdate", function()
-				if not handle._eqolScaleHover then return end
-				updateWheelState(handle)
-			end)
 			updateWheelState(handle)
 		end)
 		handle:HookScript("OnLeave", function()
 			handle._eqolScaleHover = nil
 			handle._eqolScaleWheelEnabled = nil
 			if handle.EnableMouseWheel then handle:EnableMouseWheel(false) end
-			handle:SetScript("OnUpdate", nil)
+		end)
+		handle:HookScript("OnUpdate", function()
+			if not handle._eqolScaleHover then return end
+			updateWheelState(handle)
 		end)
 	end
 
@@ -704,28 +706,59 @@ function addon.Mover.functions.createHooks(frame, entry)
 		return handle
 	end
 
-	if resolved.useRootHandle ~= false then frame._eqolMoveHandle = attachHandle(frame) end
+	local function attachDragHandlers(target)
+		if not target or target._eqolDragHooked then return end
+		if target.IsForbidden and target:IsForbidden() then return end
+		target._eqolDragHooked = true
+		if target.EnableMouse then target:EnableMouse(true) end
+		target:HookScript("OnMouseDown", onStartDrag)
+		target:HookScript("OnMouseUp", onStopDrag)
+		attachScaleHandlers(target)
+	end
 
-	local createdSubs = frame._eqolMoveSubHandles or {}
-	if resolved.handles then
-		local function attachHandleToPath(path)
-			local anchor = resolveFramePath(path)
-			if not anchor or createdSubs[anchor] then return end
-			if anchor.IsForbidden and anchor:IsForbidden() then return end
-			createdSubs[anchor] = attachHandle(anchor)
-		end
+	local useOverlay = resolved.useRootHandle
+	if useOverlay == nil then useOverlay = frame:IsProtected() end
+	if useOverlay then
+		if resolved.useRootHandle ~= false then frame._eqolMoveHandle = attachHandle(frame) end
 
-		for _, path in ipairs(resolved.handles) do
-			attachHandleToPath(path)
-		end
+		local createdSubs = frame._eqolMoveSubHandles or {}
+		if resolved.handles then
+			local function attachHandleToPath(path)
+				local anchor = resolveFramePath(path)
+				if not anchor or createdSubs[anchor] then return end
+				if anchor.IsForbidden and anchor:IsForbidden() then return end
+				createdSubs[anchor] = attachHandle(anchor)
+			end
 
-		frame:HookScript("OnShow", function()
 			for _, path in ipairs(resolved.handles) do
 				attachHandleToPath(path)
 			end
-		end)
+
+			frame:HookScript("OnShow", function()
+				for _, path in ipairs(resolved.handles) do
+					attachHandleToPath(path)
+				end
+			end)
+		end
+		frame._eqolMoveSubHandles = createdSubs
+	else
+		attachDragHandlers(frame)
+		if resolved.handles then
+			local function attachDragTarget(path)
+				local anchor = resolveFramePath(path)
+				if not anchor then return end
+				attachDragHandlers(anchor)
+			end
+			for _, path in ipairs(resolved.handles) do
+				attachDragTarget(path)
+			end
+			frame:HookScript("OnShow", function()
+				for _, path in ipairs(resolved.handles) do
+					attachDragTarget(path)
+				end
+			end)
+		end
 	end
-	frame._eqolMoveSubHandles = createdSubs
 
 	hooksecurefunc(frame, "SetPoint", function(self)
 		if not isEntryActive(resolved) then return end

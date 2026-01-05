@@ -194,7 +194,7 @@ local frames = {
 		label = L["Talents & Spells"] or "Talents & Spells",
 		group = "character",
 		names = { "PlayerSpellsFrame" },
-		handlesRelative = { "TalentsFrame", "TalentsFrame.FxModelScene", "SpecFrame" },
+		handlesRelative = { "TalentsFrame", "TalentsFrame.ButtonsParent", "SpecFrame" },
 		addon = "Blizzard_PlayerSpells",
 		defaultEnabled = true,
 	},

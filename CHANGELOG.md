@@ -85,6 +85,7 @@
 
 - Unit Frame Strata set at least "High" blocks options window
 - TomTom Minimap Icons are ignored in Button Sink
+- Mover: Dragging no longer overlays the PlayerSpells/Talents UI, so buttons remain clickable.
 
 ---
 

@@ -129,6 +129,40 @@ local function partsOnClick(b, btn, ...)
 	if fn then fn(b, btn, ...) end
 end
 
+local pendingSecure = {}
+local pendingSecureFrame
+
+local function queueSecureUpdate(data)
+	if not data then return end
+	pendingSecure[data] = true
+	if not pendingSecureFrame then
+		pendingSecureFrame = CreateFrame("Frame")
+		pendingSecureFrame:SetScript("OnEvent", function()
+			if InCombatLockdown and InCombatLockdown() then return end
+			for entry in pairs(pendingSecure) do
+				pendingSecure[entry] = nil
+				local payload = entry.pendingPayload
+				entry.pendingPayload = nil
+				if entry.applyPayload and payload then
+					entry.applyPayload(payload, true)
+				end
+			end
+			if not next(pendingSecure) then
+				pendingSecureFrame:UnregisterEvent("PLAYER_REGEN_ENABLED")
+			end
+		end)
+	end
+	pendingSecureFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+end
+
+local function payloadHasSecureParts(payload)
+	if not payload or not payload.parts then return false end
+	for _, part in ipairs(payload.parts) do
+		if part and part.secure then return true end
+	end
+	return false
+end
+
 local function registerEditModePanel(panel)
 	if not EditMode or not EditMode.RegisterFrame then return end
 	if panel.editModeRegistered then
@@ -595,6 +629,13 @@ function DataPanel.Create(id, name, existingOnly)
 
 		local function cb(payload)
 			payload = payload or {}
+			local hasSecureParts = payloadHasSecureParts(payload)
+			if hasSecureParts then data.secureParts = true end
+			if hasSecureParts and InCombatLockdown and InCombatLockdown() and not data.secureInitialized then
+				data.pendingPayload = payload
+				queueSecureUpdate(data)
+				return
+			end
 			local font = (addon.variables and addon.variables.defaultFont) or select(1, data.text:GetFont())
 			local size = payload.fontSize or data.fontSize or 14
 
@@ -642,17 +683,63 @@ function DataPanel.Create(id, name, existingOnly)
 				if heightChanged then data.partsHeight = buttonHeight end
 				local totalWidth = 0
 				for i, part in ipairs(payload.parts) do
+					local secureSpec = part and part.secure
+					local isSecure = secureSpec ~= nil
+					local secureTemplate
+					local secureAttributes
+					local secureClicks
+					local secureKey
+					if isSecure and type(secureSpec) == "table" then
+						secureTemplate = secureSpec.template
+						secureAttributes = secureSpec.attributes
+						secureClicks = secureSpec.registerClicks
+						secureKey = secureSpec.key
+					end
+					if isSecure and not secureTemplate then secureTemplate = "SecureActionButtonTemplate" end
+
 					local child = data.parts[i]
 					local isNew = false
+					local needsRebuild = false
+					if child then
+						if isSecure ~= (child.isSecure == true) then
+							needsRebuild = true
+						elseif isSecure and child.secureTemplate ~= secureTemplate then
+							needsRebuild = true
+						end
+					end
+					if needsRebuild then
+						if InCombatLockdown and InCombatLockdown() then
+							data.pendingPayload = payload
+							queueSecureUpdate(data)
+							return
+						end
+						child:Hide()
+						child:SetParent(nil)
+						data.parts[i] = nil
+						child = nil
+					end
 					if not child then
-						child = CreateFrame("Button", nil, button)
+						if isSecure and InCombatLockdown and InCombatLockdown() then
+							data.pendingPayload = payload
+							queueSecureUpdate(data)
+							return
+						end
+						if isSecure then
+							child = CreateFrame("Button", nil, button, secureTemplate)
+							child.isSecure = true
+							child.secureTemplate = secureTemplate
+							child:RegisterForClicks(secureClicks or "AnyDown", "AnyUp")
+							child:SetAttribute("pressAndHoldAction", false)
+						else
+							child = CreateFrame("Button", nil, button)
+							child:RegisterForClicks("AnyUp")
+							child:SetScript("OnClick", partsOnClick)
+						end
 						child.text = child:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 						child.text:SetAllPoints()
-						child:RegisterForClicks("AnyUp")
 						child.slot = data
 						child:SetScript("OnEnter", partsOnEnter)
 						child:SetScript("OnLeave", partsOnLeave)
-						child:SetScript("OnClick", partsOnClick)
 						if i == 1 then
 							child:SetPoint("LEFT", button, "LEFT", 0, 0)
 						else
@@ -663,6 +750,31 @@ function DataPanel.Create(id, name, existingOnly)
 					end
 					child.slot = data
 					child:Show()
+					if isSecure then
+						local needsSecureConfig = not child.secureConfigured or (secureKey and child.secureKey ~= secureKey)
+						if needsSecureConfig then
+							if InCombatLockdown and InCombatLockdown() then
+								data.pendingPayload = payload
+								queueSecureUpdate(data)
+								return
+							end
+							if secureAttributes then
+								for key, value in pairs(secureAttributes) do
+									child:SetAttribute(key, value)
+								end
+							end
+							if secureSpec and secureSpec.forwardRightClick then
+								if not (secureAttributes and secureAttributes.type2) then
+									child:SetAttribute("type2", "click")
+								end
+								if not (secureAttributes and secureAttributes.clickbutton2) then
+									child:SetAttribute("clickbutton2", button)
+								end
+							end
+							child.secureConfigured = true
+							child.secureKey = secureKey
+						end
+					end
 					if isNew or heightChanged then child:SetHeight(buttonHeight) end
 					if isNew or partsFontChanged then
 						child.text:SetFont(font, size, "OUTLINE")
@@ -739,8 +851,14 @@ function DataPanel.Create(id, name, existingOnly)
 			data.OnMouseEnter = payload.OnMouseEnter
 			data.OnMouseLeave = payload.OnMouseLeave
 			if payload.OnClick ~= nil then data.OnClick = payload.OnClick end
+			if hasSecureParts then data.secureInitialized = true end
+			if data.pendingPayload then
+				data.pendingPayload = nil
+				pendingSecure[data] = nil
+			end
 		end
 
+		data.applyPayload = cb
 		data.unsub = DataHub:Subscribe(name, cb)
 		self.streams[name] = data
 
