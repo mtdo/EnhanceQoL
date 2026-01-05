@@ -463,15 +463,6 @@ data = {
 		parentSection = interfaceExpandable,
 	},
 	{
-		var = "hideQuickJoinToast",
-		text = HIDE .. " " .. COMMUNITIES_NOTIFICATION_SETTINGS_DIALOG_QUICK_JOIN_LABEL,
-		func = function(v)
-			addon.db["hideQuickJoinToast"] = v
-			addon.functions.toggleQuickJoinToastButton(addon.db["hideQuickJoinToast"])
-		end,
-		parentSection = interfaceExpandable,
-	},
-	{
 		var = "hideZoneText",
 		text = L["hideZoneText"],
 		func = function(v)

@@ -202,6 +202,15 @@ local chatIMExpandable = addon.functions.SettingsCreateExpandableSection(cChatFr
 })
 
 addon.functions.SettingsCreateText(cChatFrame, "|cff99e599" .. L["RightClickCloseTab"] .. "|r", { parentSection = chatIMExpandable })
+addon.functions.SettingsCreateCheckbox(cChatFrame, {
+	var = "hideQuickJoinToast",
+	text = HIDE .. " " .. COMMUNITIES_NOTIFICATION_SETTINGS_DIALOG_QUICK_JOIN_LABEL,
+	func = function(v)
+		addon.db["hideQuickJoinToast"] = v
+		addon.functions.toggleQuickJoinToastButton(addon.db["hideQuickJoinToast"])
+	end,
+	parentSection = chatIMExpandable,
+})
 
 data = {
 	{

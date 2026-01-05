@@ -2270,9 +2270,7 @@ local function buildSettings()
 	if not cat then return end
 
 	local expandable = addon.SettingsLayout.uiBarsResourcesExpandable
-	if not expandable then
-		return
-	end
+	if not expandable then return end
 
 	settingsBuilt = true
 
@@ -2379,155 +2377,165 @@ local function buildSettings()
 
 	addon.functions.SettingsCreateCheckboxes(cat, data)
 
-	do -- Profile export/import
-		local classKey = addon.variables.unitClass or "UNKNOWN"
-		addon.db.resourceBarsProfileScope = addon.db.resourceBarsProfileScope or {}
-		local function getScope()
-			local cur = addon.db.resourceBarsProfileScope[classKey]
-			if not cur then cur = "ALL" end
-			return cur
-		end
-		local function setScope(val) addon.db.resourceBarsProfileScope[classKey] = val end
-
-		local scopeList, scopeOrder = { ALL = L["All specs"] or "All specs" }, { "ALL" }
-		if class and ResourceBars.powertypeClasses and ResourceBars.powertypeClasses[addon.variables.unitClass] then
-			for specIndex = 1, C_SpecializationInfo.GetNumSpecializationsForClassID(class) do
-				local _, specName = GetSpecializationInfoForClassID(class, specIndex)
-				if specName then
-					scopeList[tostring(specIndex)] = specName
-					scopeOrder[#scopeOrder + 1] = tostring(specIndex)
-				end
-			end
-		end
-
-		local cProfiles = addon.SettingsLayout.rootPROFILES
-
-		local expandableProfile = addon.functions.SettingsCreateExpandableSection(cProfiles, {
-			name = L["Resource Bars"],
-			expanded = false,
-			colorizeTitle = false,
-		})
-
-		addon.functions.SettingsCreateDropdown(cProfiles, {
-			var = "resourceBarsProfileScope",
-			text = L["ProfileScope"] or (L["Apply to"] or "Apply to"),
-			list = scopeList,
-			get = getScope,
-			set = setScope,
-			default = "ALL",
-			parentSection = expandableProfile,
-		})
-
-		addon.functions.SettingsCreateButton(cProfiles, {
-			var = "resourceBarsExport",
-			text = L["Export"] or "Export",
-			func = function()
-				local code
-				local reason
-				local scopeKey = getScope() or "ALL"
-				if ResourceBars and ResourceBars.ExportProfile then
-					code, reason = ResourceBars.ExportProfile(scopeKey)
-				end
-				if not code then
-					local msg = ResourceBars.ExportErrorMessage and ResourceBars.ExportErrorMessage(reason) or (L["ExportProfileFailed"] or "Export failed.")
-					print("|cff00ff98Enhance QoL|r: " .. tostring(msg))
-					return
-				end
-				StaticPopupDialogs["EQOL_RESOURCEBAR_EXPORT_SETTINGS"] = StaticPopupDialogs["EQOL_RESOURCEBAR_EXPORT_SETTINGS"]
-					or {
-						text = L["ExportProfileTitle"] or "Export Resource Bars",
-						button1 = CLOSE,
-						hasEditBox = true,
-						editBoxWidth = 320,
-						timeout = 0,
-						whileDead = true,
-						hideOnEscape = true,
-						preferredIndex = 3,
-					}
-				StaticPopupDialogs["EQOL_RESOURCEBAR_EXPORT_SETTINGS"].OnShow = function(self)
-					self:SetFrameStrata("TOOLTIP")
-					local editBox = self.editBox or self:GetEditBox()
-					editBox:SetText(code)
-					editBox:HighlightText()
-					editBox:SetFocus()
-				end
-				StaticPopup_Show("EQOL_RESOURCEBAR_EXPORT_SETTINGS")
-			end,
-			parentSection = expandableProfile,
-		})
-
-		addon.functions.SettingsCreateButton(cProfiles, {
-			var = "resourceBarsImport",
-			text = L["Import"] or "Import",
-			func = function()
-				StaticPopupDialogs["EQOL_RESOURCEBAR_IMPORT_SETTINGS"] = StaticPopupDialogs["EQOL_RESOURCEBAR_IMPORT_SETTINGS"]
-					or {
-						text = L["ImportProfileTitle"] or "Import Resource Bars",
-						button1 = OKAY,
-						button2 = CANCEL,
-						hasEditBox = true,
-						editBoxWidth = 320,
-						timeout = 0,
-						whileDead = true,
-						hideOnEscape = true,
-						preferredIndex = 3,
-					}
-				StaticPopupDialogs["EQOL_RESOURCEBAR_IMPORT_SETTINGS"].OnShow = function(self)
-					self:SetFrameStrata("TOOLTIP")
-					local editBox = self.editBox or self:GetEditBox()
-					editBox:SetText("")
-					editBox:SetFocus()
-				end
-				StaticPopupDialogs["EQOL_RESOURCEBAR_IMPORT_SETTINGS"].EditBoxOnEnterPressed = function(editBox)
-					local parent = editBox:GetParent()
-					if parent and parent.button1 then parent.button1:Click() end
-				end
-				StaticPopupDialogs["EQOL_RESOURCEBAR_IMPORT_SETTINGS"].OnAccept = function(self)
-					local editBox = self.editBox or self:GetEditBox()
-					local input = editBox:GetText() or ""
-					local scopeKey = getScope() or "ALL"
-					local ok, applied, enableState = addon.Aura.functions.importResourceProfile(input, scopeKey)
-					if not ok then
-						local msg = ResourceBars.ImportErrorMessage and ResourceBars.ImportErrorMessage(applied, enableState) or (L["ImportProfileFailed"] or "Import failed.")
-						print("|cff00ff98Enhance QoL|r: " .. tostring(msg))
-						return
-					end
-					if enableState ~= nil and scopeKey == "ALL" then
-						local prev = addon.db["enableResourceFrame"]
-						addon.db["enableResourceFrame"] = enableState and true or false
-						if enableState and prev ~= true and addon.Aura.ResourceBars and addon.Aura.ResourceBars.EnableResourceBars then
-							addon.Aura.ResourceBars.EnableResourceBars()
-						elseif not enableState and prev ~= false and addon.Aura.ResourceBars and addon.Aura.ResourceBars.DisableResourceBars then
-							addon.Aura.ResourceBars.DisableResourceBars()
-						end
-					end
-					if applied then
-						for _, specIndex in ipairs(applied) do
-							addon.Aura.functions.requestActiveRefresh(specIndex)
-						end
-					end
-					notifyResourceBarSettings()
-					if applied and #applied > 0 then
-						local specNames = {}
-						for _, specIndex in ipairs(applied) do
-							specNames[#specNames + 1] = ResourceBars.SpecNameByIndex and ResourceBars.SpecNameByIndex(specIndex) or tostring(specIndex)
-						end
-						local msg = (L["ImportProfileSuccess"] or "Resource Bars updated for: %s"):format(table.concat(specNames, ", "))
-						print("|cff00ff98Enhance QoL|r: " .. msg)
-					else
-						local msg = L["ImportProfileSuccessGeneric"] or "Resource Bars profile imported."
-						print("|cff00ff98Enhance QoL|r: " .. msg)
-					end
-					Settings.NotifyUpdate("EQOL_" .. "enableResourceFrame")
-				end
-				StaticPopup_Show("EQOL_RESOURCEBAR_IMPORT_SETTINGS")
-			end,
-			parentSection = expandableProfile,
-		})
-	end
-
 	registerEditModeBars()
 end
 
 addon.Aura.functions = addon.Aura.functions or {}
 addon.Aura.functions.AddResourceBarsSettings = buildSettings
+addon.Aura.functions.AddResourceBarsProfileSettings = function()
+	if addon.SettingsLayout.resourceBarsProfileBuilt then return end
+	addon.SettingsLayout.resourceBarsProfileBuilt = true
+
+	local classKey = addon.variables.unitClass or "UNKNOWN"
+	addon.db.resourceBarsProfileScope = addon.db.resourceBarsProfileScope or {}
+	local function getScope()
+		local cur = addon.db.resourceBarsProfileScope[classKey]
+		if not cur then cur = "ALL" end
+		return cur
+	end
+	local function setScope(val) addon.db.resourceBarsProfileScope[classKey] = val end
+
+	local scopeList, scopeOrder = { ALL = L["All specs"] or "All specs" }, { "ALL" }
+	local classID = addon.variables and addon.variables.unitClassID
+	local classTag = addon.variables and addon.variables.unitClass
+	if (not classID) or not classTag then
+		local _, tag, id = UnitClass("player")
+		if not classTag then classTag = tag end
+		if not classID then classID = id end
+	end
+	if classID and classTag and C_SpecializationInfo and C_SpecializationInfo.GetNumSpecializationsForClassID and ResourceBars.powertypeClasses and ResourceBars.powertypeClasses[classTag] then
+		local specCount = C_SpecializationInfo.GetNumSpecializationsForClassID(classID)
+		for specIndex = 1, (specCount or 0) do
+			local _, specName = GetSpecializationInfoForClassID(classID, specIndex)
+			if specName then
+				scopeList[tostring(specIndex)] = specName
+				scopeOrder[#scopeOrder + 1] = tostring(specIndex)
+			end
+		end
+	end
+
+	local cProfiles = addon.SettingsLayout.rootPROFILES
+
+	local expandableProfile = addon.functions.SettingsCreateExpandableSection(cProfiles, {
+		name = L["Resource Bars"],
+		expanded = false,
+		colorizeTitle = false,
+	})
+
+	addon.functions.SettingsCreateDropdown(cProfiles, {
+		var = "resourceBarsProfileScope",
+		text = L["ProfileScope"] or (L["Apply to"] or "Apply to"),
+		list = scopeList,
+		get = getScope,
+		set = setScope,
+		default = "ALL",
+		parentSection = expandableProfile,
+	})
+
+	addon.functions.SettingsCreateButton(cProfiles, {
+		var = "resourceBarsExport",
+		text = L["Export"] or "Export",
+		func = function()
+			local code
+			local reason
+			local scopeKey = getScope() or "ALL"
+			if ResourceBars and ResourceBars.ExportProfile then
+				code, reason = ResourceBars.ExportProfile(scopeKey)
+			end
+			if not code then
+				local msg = ResourceBars.ExportErrorMessage and ResourceBars.ExportErrorMessage(reason) or (L["ExportProfileFailed"] or "Export failed.")
+				print("|cff00ff98Enhance QoL|r: " .. tostring(msg))
+				return
+			end
+			StaticPopupDialogs["EQOL_RESOURCEBAR_EXPORT_SETTINGS"] = StaticPopupDialogs["EQOL_RESOURCEBAR_EXPORT_SETTINGS"]
+				or {
+					text = L["ExportProfileTitle"] or "Export Resource Bars",
+					button1 = CLOSE,
+					hasEditBox = true,
+					editBoxWidth = 320,
+					timeout = 0,
+					whileDead = true,
+					hideOnEscape = true,
+					preferredIndex = 3,
+				}
+			StaticPopupDialogs["EQOL_RESOURCEBAR_EXPORT_SETTINGS"].OnShow = function(self)
+				self:SetFrameStrata("TOOLTIP")
+				local editBox = self.editBox or self:GetEditBox()
+				editBox:SetText(code)
+				editBox:HighlightText()
+				editBox:SetFocus()
+			end
+			StaticPopup_Show("EQOL_RESOURCEBAR_EXPORT_SETTINGS")
+		end,
+		parentSection = expandableProfile,
+	})
+
+	addon.functions.SettingsCreateButton(cProfiles, {
+		var = "resourceBarsImport",
+		text = L["Import"] or "Import",
+		func = function()
+			StaticPopupDialogs["EQOL_RESOURCEBAR_IMPORT_SETTINGS"] = StaticPopupDialogs["EQOL_RESOURCEBAR_IMPORT_SETTINGS"]
+				or {
+					text = L["ImportProfileTitle"] or "Import Resource Bars",
+					button1 = OKAY,
+					button2 = CANCEL,
+					hasEditBox = true,
+					editBoxWidth = 320,
+					timeout = 0,
+					whileDead = true,
+					hideOnEscape = true,
+					preferredIndex = 3,
+				}
+			StaticPopupDialogs["EQOL_RESOURCEBAR_IMPORT_SETTINGS"].OnShow = function(self)
+				self:SetFrameStrata("TOOLTIP")
+				local editBox = self.editBox or self:GetEditBox()
+				editBox:SetText("")
+				editBox:SetFocus()
+			end
+			StaticPopupDialogs["EQOL_RESOURCEBAR_IMPORT_SETTINGS"].EditBoxOnEnterPressed = function(editBox)
+				local parent = editBox:GetParent()
+				if parent and parent.button1 then parent.button1:Click() end
+			end
+			StaticPopupDialogs["EQOL_RESOURCEBAR_IMPORT_SETTINGS"].OnAccept = function(self)
+				local editBox = self.editBox or self:GetEditBox()
+				local input = editBox:GetText() or ""
+				local scopeKey = getScope() or "ALL"
+				local ok, applied, enableState = addon.Aura.functions.importResourceProfile(input, scopeKey)
+				if not ok then
+					local msg = ResourceBars.ImportErrorMessage and ResourceBars.ImportErrorMessage(applied, enableState) or (L["ImportProfileFailed"] or "Import failed.")
+					print("|cff00ff98Enhance QoL|r: " .. tostring(msg))
+					return
+				end
+				if enableState ~= nil and scopeKey == "ALL" then
+					local prev = addon.db["enableResourceFrame"]
+					addon.db["enableResourceFrame"] = enableState and true or false
+					if enableState and prev ~= true and addon.Aura.ResourceBars and addon.Aura.ResourceBars.EnableResourceBars then
+						addon.Aura.ResourceBars.EnableResourceBars()
+					elseif not enableState and prev ~= false and addon.Aura.ResourceBars and addon.Aura.ResourceBars.DisableResourceBars then
+						addon.Aura.ResourceBars.DisableResourceBars()
+					end
+				end
+				if applied then
+					for _, specIndex in ipairs(applied) do
+						addon.Aura.functions.requestActiveRefresh(specIndex)
+					end
+				end
+				notifyResourceBarSettings()
+				if applied and #applied > 0 then
+					local specNames = {}
+					for _, specIndex in ipairs(applied) do
+						specNames[#specNames + 1] = ResourceBars.SpecNameByIndex and ResourceBars.SpecNameByIndex(specIndex) or tostring(specIndex)
+					end
+					local msg = (L["ImportProfileSuccess"] or "Resource Bars updated for: %s"):format(table.concat(specNames, ", "))
+					print("|cff00ff98Enhance QoL|r: " .. msg)
+				else
+					local msg = L["ImportProfileSuccessGeneric"] or "Resource Bars profile imported."
+					print("|cff00ff98Enhance QoL|r: " .. msg)
+				end
+				Settings.NotifyUpdate("EQOL_" .. "enableResourceFrame")
+			end
+			StaticPopup_Show("EQOL_RESOURCEBAR_IMPORT_SETTINGS")
+		end,
+		parentSection = expandableProfile,
+	})
+end

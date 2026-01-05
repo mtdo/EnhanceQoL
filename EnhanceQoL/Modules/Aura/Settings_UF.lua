@@ -3565,4 +3565,6 @@ if addon.functions and addon.functions.SettingsCreateCategory then
 			parentSection = expandableProfile,
 		})
 	end
+
+	if addon.Aura and addon.Aura.functions and addon.Aura.functions.AddResourceBarsProfileSettings then addon.Aura.functions.AddResourceBarsProfileSettings() end
 end

@@ -12,14 +12,14 @@ end
 local cSocial = addon.SettingsLayout.rootSOCIAL
 addon.SettingsLayout.socialCategory = cSocial
 
-local socialExpandable = addon.functions.SettingsCreateExpandableSection(cSocial, {
-	name = _G["GENERAL"],
+local privacyExpandable = addon.functions.SettingsCreateExpandableSection(cSocial, {
+	name = L["PrivacyBlockingIgnore"] or "Privacy, Blocking & Ignore",
 	newTagID = "SocialGeneral",
 	expanded = false,
 	colorizeTitle = false,
 })
 
-local data = {
+local privacyData = {
 	{
 		var = "blockDuelRequests",
 		text = L["blockDuelRequests"],
@@ -186,6 +186,18 @@ local data = {
 		type = "CheckBox",
 		func = function(value) addon.db["autoAcceptSummon"] = value end,
 	},
+}
+
+applyParentSection(privacyData, privacyExpandable)
+addon.functions.SettingsCreateCheckboxes(cSocial, privacyData)
+
+local friendsExpandable = addon.functions.SettingsCreateExpandableSection(cSocial, {
+	name = L["FriendsAndCommunities"] or "Friends & Communities",
+	expanded = false,
+	colorizeTitle = false,
+})
+
+local friendsData = {
 	{
 		var = "friendsListDecorEnabled",
 		text = L["friendsListDecorEnabledLabel"],
@@ -300,8 +312,8 @@ local data = {
 	},
 }
 
-applyParentSection(data, socialExpandable)
-addon.functions.SettingsCreateCheckboxes(cSocial, data)
+applyParentSection(friendsData, friendsExpandable)
+addon.functions.SettingsCreateCheckboxes(cSocial, friendsData)
 
 ----- REGION END
 
