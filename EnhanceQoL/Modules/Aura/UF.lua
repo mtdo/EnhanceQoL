@@ -3580,7 +3580,11 @@ local function layoutBossFrames(cfg)
 		if st and st.frame then
 			st.frame:ClearAllPoints()
 			if not last then
-				st.frame:SetPoint("TOPLEFT", bossContainer, "TOPLEFT", 0, 0)
+				if growth == "UP" then
+					st.frame:SetPoint("BOTTOMLEFT", bossContainer, "BOTTOMLEFT", 0, 0)
+				else
+					st.frame:SetPoint("TOPLEFT", bossContainer, "TOPLEFT", 0, 0)
+				end
 			else
 				if growth == "UP" then
 					st.frame:SetPoint("BOTTOMLEFT", last.frame, "TOPLEFT", 0, spacing)
