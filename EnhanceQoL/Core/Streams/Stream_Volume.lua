@@ -1,24 +1,63 @@
--- luacheck: globals EnhanceQoL MASTER_VOLUME OPTION_TOOLTIP_MASTER_VOLUME
+-- luacheck: globals EnhanceQoL MenuUtil MenuResponse MASTER_VOLUME MUSIC_VOLUME FX_VOLUME AMBIENCE_VOLUME DIALOG_VOLUME AUDIO_OUTPUT_DEVICE GAMEMENU_OPTIONS FONT_SIZE UIParent GameTooltip
 local addonName, addon = ...
 local L = addon.L
 
 local AceGUI = addon.AceGUI
 local db
 local stream
-local sliderFrame
-local slider
+local aceWindow
+local hoveredButton
 
 local floor = math.floor
 local format = string.format
 
-local function getOptionsHint()
-	if addon.DataPanel and addon.DataPanel.GetOptionsHintText then
-		local text = addon.DataPanel.GetOptionsHintText()
-		if text ~= nil then return text end
-		return nil
-	end
-	return L["Right-Click for options"]
-end
+local STREAM_ORDER = { "master", "sfx", "ambience", "dialog", "music" }
+local STREAMS = {
+	master = {
+		id = "master",
+		cvar = "Sound_MasterVolume",
+		muteCvar = "Sound_EnableAllSound",
+		label = MASTER_VOLUME or "Master Volume",
+	},
+	sfx = {
+		id = "sfx",
+		cvar = "Sound_SFXVolume",
+		muteCvar = "Sound_EnableSFX",
+		label = FX_VOLUME or "Sound Effects",
+	},
+	ambience = {
+		id = "ambience",
+		cvar = "Sound_AmbienceVolume",
+		muteCvar = "Sound_EnableAmbience",
+		label = AMBIENCE_VOLUME or "Ambience Volume",
+	},
+	dialog = {
+		id = "dialog",
+		cvar = "Sound_DialogVolume",
+		muteCvar = "Sound_EnableDialog",
+		label = DIALOG_VOLUME or "Dialog Volume",
+	},
+	music = {
+		id = "music",
+		cvar = "Sound_MusicVolume",
+		muteCvar = "Sound_EnableMusic",
+		label = MUSIC_VOLUME or "Music Volume",
+	},
+}
+
+local CVAR_WATCH = {
+	Sound_MasterVolume = true,
+	Sound_SFXVolume = true,
+	Sound_AmbienceVolume = true,
+	Sound_DialogVolume = true,
+	Sound_MusicVolume = true,
+	Sound_EnableAllSound = true,
+	Sound_EnableSFX = true,
+	Sound_EnableAmbience = true,
+	Sound_EnableDialog = true,
+	Sound_EnableMusic = true,
+	Sound_OutputDriverIndex = true,
+}
 
 local function ensureDB()
 	addon.db.datapanel = addon.db.datapanel or {}
@@ -26,6 +65,7 @@ local function ensureDB()
 	db = addon.db.datapanel.volume
 	db.fontSize = db.fontSize or 14
 	db.step = db.step or 0.05
+	db.activeStream = db.activeStream or "master"
 end
 
 local function RestorePosition(frame)
@@ -35,7 +75,6 @@ local function RestorePosition(frame)
 	end
 end
 
-local aceWindow
 local function createAceWindow()
 	if aceWindow then
 		aceWindow:Show()
@@ -77,97 +116,177 @@ local function clampVolume(value)
 	return value
 end
 
-local function getVolume() return clampVolume(GetCVar and GetCVar("Sound_MasterVolume")) end
-
-local function setVolume(value) SetCVar("Sound_MasterVolume", clampVolume(value)) end
-
 local function formatPercent(value) return format("%d%%", floor(value * 100 + 0.5)) end
 
-local function updateSliderText(value)
-	if not slider or not slider.Text then return end
-	slider.Text:SetText(formatPercent(value))
-end
+local function getStreamInfo(id) return STREAMS[id] or STREAMS.master end
 
-local function updateSliderValue(value)
-	if not slider then return end
-	slider._ignore = true
-	slider:SetValue(value)
-	slider._ignore = nil
-	updateSliderText(value)
-end
-
-local function ensureSliderFrame()
-	if sliderFrame then return sliderFrame end
+local function getActiveStreamId()
 	ensureDB()
-	sliderFrame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
-	sliderFrame:SetSize(200, 44)
-	sliderFrame:SetFrameStrata("TOOLTIP")
-	sliderFrame:SetBackdrop({
-		bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-		edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-		edgeSize = 12,
-		insets = { left = 4, right = 4, top = 4, bottom = 4 },
-	})
-	sliderFrame:SetBackdropColor(0, 0, 0, 0.85)
-	sliderFrame:EnableMouse(true)
-	sliderFrame:Hide()
-	sliderFrame:SetScript("OnHide", function(self) self.owner = nil end)
-
-	slider = CreateFrame("Slider", nil, sliderFrame, "OptionsSliderTemplate")
-	slider:SetWidth(160)
-	slider:SetPoint("CENTER", sliderFrame, "CENTER", 0, 0)
-	slider:SetMinMaxValues(0, 1)
-	slider:SetValueStep(db.step or 0.05)
-	slider:SetObeyStepOnDrag(true)
-	if slider.Low then slider.Low:SetText("0%") end
-	if slider.High then slider.High:SetText("100%") end
-
-	slider:SetScript("OnValueChanged", function(self, value)
-		if self._ignore then return end
-		setVolume(value)
-		updateSliderText(value)
-		if stream then addon.DataHub:RequestUpdate(stream) end
-	end)
-
-	return sliderFrame
+	if not STREAMS[db.activeStream] then db.activeStream = "master" end
+	return db.activeStream
 end
 
-local function toggleSlider(anchor)
-	if not anchor then return end
-	local frame = ensureSliderFrame()
-	if frame:IsShown() and frame.owner == anchor then
-		frame:Hide()
-		return
+local function setActiveStreamId(id)
+	ensureDB()
+	if not STREAMS[id] then id = "master" end
+	if db.activeStream == id then return end
+	db.activeStream = id
+	addon.DataHub:RequestUpdate(stream)
+end
+
+local function getStreamVolume(id)
+	local info = getStreamInfo(id)
+	if not info or not info.cvar then return 0 end
+	return clampVolume(GetCVar and GetCVar(info.cvar))
+end
+
+local function setStreamVolume(id, value)
+	local info = getStreamInfo(id)
+	if not info or not info.cvar then return end
+	SetCVar(info.cvar, clampVolume(value))
+end
+
+local function isStreamEnabled(id)
+	local info = getStreamInfo(id)
+	if not info or not info.muteCvar then return true end
+	return tonumber(GetCVar and GetCVar(info.muteCvar)) == 1
+end
+
+local function setStreamEnabled(id, enabled)
+	local info = getStreamInfo(id)
+	if not info or not info.muteCvar then return end
+	SetCVar(info.muteCvar, enabled and "1" or "0")
+end
+
+local function getOutputDeviceName()
+	if not Sound_GameSystem_GetNumOutputDrivers or not Sound_GameSystem_GetOutputDriverNameByIndex then return nil end
+	local count = Sound_GameSystem_GetNumOutputDrivers()
+	if not count or count <= 0 then return nil end
+	local index = tonumber(GetCVar and GetCVar("Sound_OutputDriverIndex")) or 0
+	if index < 0 or index >= count then index = 0 end
+	return Sound_GameSystem_GetOutputDriverNameByIndex(index)
+end
+
+local function buildTooltip()
+	local lines = {}
+	local output = getOutputDeviceName()
+	if output and output ~= "" then
+		lines[#lines + 1] = AUDIO_OUTPUT_DEVICE or "Output Device"
+		lines[#lines + 1] = output
+		lines[#lines + 1] = " "
 	end
-	frame.owner = anchor
-	frame:ClearAllPoints()
-	frame:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -4)
-	if not anchor._volumeSliderHideHooked then
-		anchor._volumeSliderHideHooked = true
-		anchor:HookScript("OnHide", function()
-			if sliderFrame and sliderFrame.owner == anchor then sliderFrame:Hide() end
-		end)
+
+	lines[#lines + 1] = L["volumeStreams"] or "Volume Streams"
+	local activeId = getActiveStreamId()
+	for _, id in ipairs(STREAM_ORDER) do
+		local info = STREAMS[id]
+		if info then
+			local label = info.label or id
+			if not isStreamEnabled(id) then
+				label = "|cff9b9b9b" .. label .. "|r"
+			elseif id == activeId then
+				label = "|cff00ff00" .. label .. "|r"
+			end
+			lines[#lines + 1] = format("%s: %s", label, formatPercent(getStreamVolume(id)))
+		end
 	end
-	frame:Show()
-	updateSliderValue(getVolume())
+
+	lines[#lines + 1] = " "
+	lines[#lines + 1] = L["volumeLeftClickHint"] or "Left-click: Select volume stream"
+	lines[#lines + 1] = L["volumeRightClickHint"] or "Right-click: Toggle volume stream"
+	lines[#lines + 1] = L["volumeMiddleClickHint"] or "Middle-click: Toggle mute active stream"
+	lines[#lines + 1] = L["volumeMouseWheelHint"] or "Mouse wheel: Adjust active volume"
+	return table.concat(lines, "\n")
+end
+
+local function updateTooltipForButton(btn, text)
+	if not btn or not GameTooltip or not GameTooltip.IsOwned then return end
+	if not GameTooltip:IsOwned(btn) then return end
+	GameTooltip:SetText(text or buildTooltip())
+	GameTooltip:Show()
 end
 
 local function updateVolume(streamObj)
 	ensureDB()
-	local volume = getVolume()
+	local activeId = getActiveStreamId()
+	local info = getStreamInfo(activeId)
+	local volume = getStreamVolume(activeId)
 	local size = db.fontSize or 14
+	local label = info.label or info.id or "Volume"
+	if not isStreamEnabled(activeId) then label = "|cffff0000" .. label .. "|r" end
+	local tooltip = buildTooltip()
 	streamObj.snapshot.fontSize = size
-	streamObj.snapshot.text = ("|TInterface\\Common\\VoiceChat-Speaker:%d:%d:0:0|t %s"):format(size, size, formatPercent(volume))
-	local tip = OPTION_TOOLTIP_MASTER_VOLUME or MASTER_VOLUME
-	local hint = getOptionsHint()
-	if hint and tip then
-		streamObj.snapshot.tooltip = tip .. "\n" .. hint
-	elseif tip then
-		streamObj.snapshot.tooltip = tip
-	else
-		streamObj.snapshot.tooltip = hint
-	end
-	if sliderFrame and sliderFrame:IsShown() then updateSliderValue(volume) end
+	streamObj.snapshot.text = ("|TInterface\\Common\\VoiceChat-Speaker:%d:%d:0:0|t %s: %s"):format(size, size, label, formatPercent(volume))
+	streamObj.snapshot.tooltip = tooltip
+	updateTooltipForButton(hoveredButton, tooltip)
+end
+
+local function showSelectStreamMenu(owner)
+	if not MenuUtil or not MenuUtil.CreateContextMenu then return end
+	MenuUtil.CreateContextMenu(owner, function(_, rootDescription)
+		rootDescription:SetTag("MENU_EQOL_VOLUME_SELECT")
+		rootDescription:CreateTitle(L["volumeSelectMenuTitle"] or "Select Volume Stream")
+		for _, id in ipairs(STREAM_ORDER) do
+			local info = STREAMS[id]
+			if info then
+				local label = info.label or id
+				rootDescription:CreateRadio(label, function() return getActiveStreamId() == id end, function()
+					setActiveStreamId(id)
+					return MenuResponse and MenuResponse.Close
+				end, id)
+			end
+		end
+	end)
+end
+
+local function showMuteMenu(owner)
+	if not MenuUtil or not MenuUtil.CreateContextMenu then return end
+	MenuUtil.CreateContextMenu(owner, function(_, rootDescription)
+		rootDescription:SetTag("MENU_EQOL_VOLUME_MUTE")
+		rootDescription:CreateTitle(L["volumeMuteMenuTitle"] or "Toggle Volume Stream")
+		for _, id in ipairs(STREAM_ORDER) do
+			local info = STREAMS[id]
+			if info and info.muteCvar then
+				local label = info.label or id
+				rootDescription:CreateCheckbox(label, function() return isStreamEnabled(id) end, function()
+					setStreamEnabled(id, not isStreamEnabled(id))
+					addon.DataHub:RequestUpdate(stream)
+				end)
+			end
+		end
+		rootDescription:CreateDivider()
+		rootDescription:CreateButton(GAMEMENU_OPTIONS, function()
+			createAceWindow()
+			return MenuResponse and MenuResponse.Close
+		end)
+	end)
+end
+
+local function toggleActiveStreamMute()
+	local activeId = getActiveStreamId()
+	if not STREAMS[activeId] or not STREAMS[activeId].muteCvar then return end
+	setStreamEnabled(activeId, not isStreamEnabled(activeId))
+	addon.DataHub:RequestUpdate(stream)
+end
+
+local function attachMouseWheel(btn)
+	if not btn or btn._eqolVolumeWheel then return end
+	btn._eqolVolumeWheel = true
+	btn:EnableMouseWheel(true)
+	btn:SetScript("OnMouseWheel", function(_, delta)
+		ensureDB()
+		local step = db.step or 0.05
+		local activeId = getActiveStreamId()
+		local volume = getStreamVolume(activeId)
+		if delta > 0 then
+			volume = volume + step
+		else
+			volume = volume - step
+		end
+		setStreamVolume(activeId, volume)
+		updateTooltipForButton(btn)
+		addon.DataHub:RequestUpdate(stream)
+	end)
 end
 
 local provider = {
@@ -178,15 +297,25 @@ local provider = {
 	events = {
 		PLAYER_LOGIN = function(s) addon.DataHub:RequestUpdate(s) end,
 		CVAR_UPDATE = function(s, _, name)
-			if name == "Sound_MasterVolume" then addon.DataHub:RequestUpdate(s) end
+			if name and CVAR_WATCH[name] then addon.DataHub:RequestUpdate(s) end
 		end,
 	},
 	OnClick = function(btn, mouseButton)
 		if mouseButton == "LeftButton" then
-			toggleSlider(btn)
+			showSelectStreamMenu(btn)
 		elseif mouseButton == "RightButton" then
-			createAceWindow()
+			showMuteMenu(btn)
+		elseif mouseButton == "MiddleButton" then
+			toggleActiveStreamMute()
 		end
+	end,
+	OnMouseEnter = function(btn)
+		hoveredButton = btn
+		attachMouseWheel(btn)
+		updateTooltipForButton(btn)
+	end,
+	OnMouseLeave = function(btn)
+		if hoveredButton == btn then hoveredButton = nil end
 	end,
 }
 

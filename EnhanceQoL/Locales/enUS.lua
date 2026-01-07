@@ -175,6 +175,15 @@ L["Coordinates"] = "Coordinates"
 L["Coordinates update interval (s)"] = "Coordinates update interval (s)"
 L["Hide coordinates in instances"] = "Hide coordinates in instances"
 
+-- Volume stream
+L["volumeStreams"] = "Volume Streams"
+L["volumeSelectMenuTitle"] = "Select Volume Stream"
+L["volumeMuteMenuTitle"] = "Toggle Volume Stream"
+L["volumeLeftClickHint"] = "Left-click: Select volume stream"
+L["volumeRightClickHint"] = "Right-click: Toggle volume stream"
+L["volumeMiddleClickHint"] = "Middle-click: Toggle mute active stream"
+L["volumeMouseWheelHint"] = "Mouse wheel: Adjust active volume"
+
 L["Hide Raid Tools"] = "Hide Raid Tools in Party"
 L["hideRaidTools"] = "Hide Raid Tools in Party"
 L["optionsFrameScale"] = "Options window scale"
