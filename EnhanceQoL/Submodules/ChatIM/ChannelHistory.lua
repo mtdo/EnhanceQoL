@@ -1,3 +1,4 @@
+-- luacheck: globals MAIL
 local parentAddonName = "EnhanceQoL"
 local addonName, addon = ...
 if _G[parentAddonName] then

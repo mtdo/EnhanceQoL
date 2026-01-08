@@ -1,7 +1,9 @@
 -- luacheck: globals GetTradePlayerItemInfo GetTradeTargetItemInfo GetTradePlayerItemLink GetTradeTargetItemLink GetPlayerTradeMoney GetTargetTradeMoney
 -- luacheck: globals HasSendMailItem GetSendMailItem GetSendMailMoney GetSendMailCOD HasInboxItem GetInboxHeaderInfo GetInboxText GetInboxItem GetInboxItemLink
 -- luacheck: globals SendMailNameEditBox SendMailSubjectEditBox SendMailBodyEditBox SendMailFrame_SendMail InboxFrame_OnClick
--- luacheck: globals ButtonFrameTemplate_HidePortrait SetTooltipMoney
+-- luacheck: globals ButtonFrameTemplate_HidePortrait SetTooltipMoney SetItemButtonQuality
+-- luacheck: globals COPPER_PER_SILVER SILVER_PER_GOLD COPPER_PER_GOLD MAX_TRADE_ITEMS TRADE_ENCHANT_SLOT ATTACHMENTS_MAX_SEND ATTACHMENTS_MAX_RECEIVE ATTACHMENTS_PER_ROW_RECEIVE
+-- luacheck: globals MAIL NO_SUBJECT TO EQOL_MailPreviewFrame EQOL_MailPreviewFrameInset
 local parentAddonName = "EnhanceQoL"
 local addonName, addon = ...
 if _G[parentAddonName] then
@@ -436,7 +438,8 @@ end
 function TradeMailLog:StartTrade()
 	local partner = GetUnitName and GetUnitName("NPC", true) or nil
 	if not partner or partner == "" then
-		local name, realm = UnitName and UnitName("npc")
+		local name, realm
+		if UnitName then name, realm = UnitName("npc") end
 		if name and realm then
 			partner = name .. "-" .. realm
 		else

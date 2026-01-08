@@ -1,4 +1,4 @@
--- luacheck: globals DefaultCompactUnitFrameSetup CompactUnitFrame_UpdateAuras CompactUnitFrame_UpdateName UnitTokenFromGUID C_Bank
+-- luacheck: globals DefaultCompactUnitFrameSetup CompactUnitFrame_UpdateAuras CompactUnitFrame_UpdateName UnitTokenFromGUID C_Bank CompactRaidFrameContainer
 -- luacheck: globals HUD_EDIT_MODE_MINIMAP_LABEL
 -- luacheck: globals Menu GameTooltip_SetTitle GameTooltip_AddNormalLine EnhanceQoL
 -- luacheck: globals GenericTraitUI_LoadUI GenericTraitFrame
