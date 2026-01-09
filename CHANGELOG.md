@@ -23,6 +23,7 @@
   - Edit Mode shows sample auras for frames with auras enabled.
   - Tapped mob color indicator for unit frames.
   - Player castbar can optionally show the cast target.
+  - Castbar change max name width cap
 - **Misc**
   - Auto-accept summons.
   - Auto-accept resurrection requests.

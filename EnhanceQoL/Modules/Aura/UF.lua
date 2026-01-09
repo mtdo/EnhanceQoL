@@ -293,6 +293,7 @@ local defaults = {
 			offset = { x = 0, y = -4 },
 			backdrop = { enabled = true, color = { 0, 0, 0, 0.6 } },
 			showName = true,
+			nameMaxChars = 0,
 			showCastTarget = false,
 			nameOffset = { x = 6, y = 0 },
 			showDuration = true,
@@ -372,6 +373,7 @@ local defaults = {
 			offset = { x = 11, y = -4 },
 			backdrop = { enabled = true, color = { 0, 0, 0, 0.6 } },
 			showName = true,
+			nameMaxChars = 0,
 			showCastTarget = false,
 			nameOffset = { x = 6, y = 0 },
 			showDuration = true,
@@ -1891,6 +1893,7 @@ local function applyCastLayout(cfg, unit)
 	local def = defaultsFor(unit)
 	local ccfg = (cfg and cfg.cast) or {}
 	local defc = (def and def.cast) or {}
+	local hc = (cfg and cfg.health) or {}
 	local width = ccfg.width or (cfg and cfg.width) or defc.width or (def and def.width) or 220
 	local height = ccfg.height or defc.height or 16
 	st.castBar:SetSize(width, height)
@@ -1964,6 +1967,16 @@ local function applyCastLayout(cfg, unit)
 		local durationSpace = (ccfg.showDuration ~= false) and 60 or 0
 		local available = (width or 0) - iconSize - durationSpace - 6
 		if available < 0 then available = 0 end
+		local maxChars = ccfg.nameMaxChars
+		if maxChars == nil then maxChars = defc.nameMaxChars end
+		maxChars = tonumber(maxChars) or 0
+		if maxChars > 0 and UFHelper.getNameLimitWidth then
+			local castFont = ccfg.font or defc.font or hc.font
+			local castFontSize = ccfg.fontSize or defc.fontSize or hc.fontSize or 12
+			local castOutline = hc.fontOutline or "OUTLINE"
+			local maxWidth = UFHelper.getNameLimitWidth(castFont, castFontSize, castOutline, maxChars)
+			if maxWidth and maxWidth > 0 then available = maxWidth end
+		end
 		st.castName:SetWidth(available)
 		if st.castName.SetWordWrap then st.castName:SetWordWrap(false) end
 		if st.castName.SetMaxLines then st.castName:SetMaxLines(1) end
@@ -2285,15 +2298,13 @@ local function setCastInfoFromUnit(unit)
 		if type(startTimeMS) ~= "nil" and type(endTimeMS) ~= "nil" then
 			st.castBar:Show()
 
-			local durObj, direction, empoweredCast
-			if UnitEmpoweredChannelDuration then
-				durObj = _G.UnitEmpoweredChannelDuration and _G.UnitEmpoweredChannelDuration(unit, true)
+			local durObj, direction
+			if _G.UnitEmpoweredChannelDuration then
+				durObj = _G.UnitEmpoweredChannelDuration(unit, true)
 				direction = Enum.StatusBarTimerDirection.ElapsedTime
 				if not durObj and UnitChannelDuration then
 					durObj = UnitChannelDuration(unit)
 					direction = Enum.StatusBarTimerDirection.RemainingTime
-				else
-					empoweredCast = true
 				end
 			elseif isChannel then
 				durObj = UnitChannelDuration(unit)
@@ -2303,16 +2314,6 @@ local function setCastInfoFromUnit(unit)
 				direction = Enum.StatusBarTimerDirection.ElapsedTime
 			end
 			st.castBar:SetTimerDuration(durObj, Enum.StatusBarInterpolation.Immediate, direction)
-			-- st.castInfo = {
-			-- 	name = text or name,
-			-- 	texture = texture,
-			-- 	notInterruptible = notInterruptible,
-			-- 	isChannel = isChannel,
-			-- 	isEmpowered = isEmpowered,
-			-- 	numEmpowerStages = numEmpowerStages,
-			-- 	useTimer = true,
-			-- }
-			-- UFHelper.applyStatusBarReverseFill(st.castBar, isChannel and not isEmpowered)
 			if st.castName then
 				local showName = ccfg.showName ~= false
 				st.castName:SetShown(showName)
@@ -3987,6 +3988,7 @@ local unitEvents = {
 	"UNIT_SPELLCAST_CHANNEL_UPDATE",
 	"UNIT_SPELLCAST_EMPOWER_START",
 	"UNIT_SPELLCAST_EMPOWER_UPDATE",
+	"UNIT_SPELLCAST_DELAYED",
 	"UNIT_SPELLCAST_EMPOWER_STOP",
 }
 local unitEventsMap = {}
@@ -4650,6 +4652,7 @@ local function onEvent(self, event, unit, ...)
 		or event == "UNIT_SPELLCAST_CHANNEL_UPDATE"
 		or event == "UNIT_SPELLCAST_EMPOWER_START"
 		or event == "UNIT_SPELLCAST_EMPOWER_UPDATE"
+		or event == "UNIT_SPELLCAST_DELAYED"
 	then
 		if unit == UNIT.PLAYER then setCastInfoFromUnit(UNIT.PLAYER) end
 		if unit == UNIT.TARGET then setCastInfoFromUnit(UNIT.TARGET) end

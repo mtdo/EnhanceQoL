@@ -2317,6 +2317,15 @@ local function buildUnitSettings(unit)
 		castNameFontSize.isEnabled = isCastNameEnabled
 		list[#list + 1] = castNameFontSize
 
+		local castNameMaxCharsSetting = slider(L["UFCastNameMaxChars"] or "Cast name max width", 0, 100, 1, function()
+			return getValue(unit, { "cast", "nameMaxChars" }, castDef.nameMaxChars or 0)
+		end, function(val)
+			setValue(unit, { "cast", "nameMaxChars" }, val or 0)
+			refresh()
+		end, castDef.nameMaxChars or 0, "cast", true)
+		castNameMaxCharsSetting.isEnabled = isCastNameEnabled
+		list[#list + 1] = castNameMaxCharsSetting
+
 		list[#list + 1] = checkbox(
 			L["Show cast duration"] or "Show cast duration",
 			function() return getValue(unit, { "cast", "showDuration" }, castDef.showDuration ~= false) ~= false end,
