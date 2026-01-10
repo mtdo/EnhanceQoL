@@ -37,6 +37,7 @@ if playerClass and GetClassColor then
 	classR, classG, classB = GetClassColor(playerClass)
 end
 local currentPreset = nil
+local lastTrailWanted = false
 
 local trailPresets = {
 	[1] = { -- LOW
@@ -252,6 +253,20 @@ local function removeMouseRing()
 end
 addon.Mouse.functions.removeMouseRing = removeMouseRing
 
+local function updateRunnerState()
+	if not addon.mouseTrailRunner then return end
+	local db = addon.db
+	local shouldRun = db and (db["mouseRingEnabled"] or db["mouseTrailEnabled"])
+	if shouldRun then
+		if addon.mouseTrailRunner:GetScript("OnUpdate") == nil then
+			addon.mouseTrailRunner:SetScript("OnUpdate", addon.Mouse.functions.runMouseRunner)
+		end
+	elseif addon.mouseTrailRunner:GetScript("OnUpdate") ~= nil then
+		addon.mouseTrailRunner:SetScript("OnUpdate", nil)
+	end
+end
+addon.Mouse.functions.updateRunnerState = updateRunnerState
+
 local function refreshRingVisibility()
 	local db = addon.db
 	if not db then return false end
@@ -276,6 +291,7 @@ function addon.Mouse.functions.InitState()
 	if not db then return end
 	refreshRingVisibility()
 	if db["mouseTrailEnabled"] then applyPreset(db["mouseTrailDensity"]) end
+	updateRunnerState()
 end
 
 -- Manage visibility of the ring based on combat state
@@ -291,10 +307,16 @@ end)
 -- Shared runner for ring + trail updates
 if not addon.mouseTrailRunner then
 	local runner = CreateFrame("Frame")
-	local lastTrailWanted = false
-	runner:SetScript("OnUpdate", function(self, delta)
+	addon.Mouse.functions.runMouseRunner = function(self, delta)
 		local db = addon.db
-		if not db then return end
+		if not db then
+			self:SetScript("OnUpdate", nil)
+			return
+		end
+		if not db["mouseRingEnabled"] and not db["mouseTrailEnabled"] then
+			self:SetScript("OnUpdate", nil)
+			return
+		end
 		local ringOnly = db["mouseRingOnlyInCombat"]
 		local trailOnly = db["mouseTrailOnlyInCombat"]
 		local rightClickOnly = db["mouseRingOnlyOnRightClick"]
@@ -326,6 +348,7 @@ if not addon.mouseTrailRunner then
 			addon.mousePointer:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
 		end
 		if trailWanted then UpdateMouseTrail(delta, x, y, scale) end
-	end)
+	end
 	addon.mouseTrailRunner = runner
+	updateRunnerState()
 end

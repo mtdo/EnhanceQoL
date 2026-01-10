@@ -662,6 +662,7 @@ local settings = {
 		set = function(value)
 			db.enabled = value
 			addon.Mover.functions.ApplyAll()
+			if addon.Mover.functions.UpdateScaleWheelCaptureState then addon.Mover.functions.UpdateScaleWheelCaptureState() end
 		end,
 	},
 	{
@@ -675,6 +676,7 @@ local settings = {
 		set = function(value)
 			db.scaleEnabled = value
 			addon.Mover.functions.ApplyAll()
+			if addon.Mover.functions.UpdateScaleWheelCaptureState then addon.Mover.functions.UpdateScaleWheelCaptureState() end
 		end,
 		notify = "moverEnabled",
 	},
@@ -688,7 +690,10 @@ local settings = {
 		order = { "SHIFT", "CTRL", "ALT" },
 		default = "CTRL",
 		get = function() return db.scaleModifier or "CTRL" end,
-		set = function(value) db.scaleModifier = value end,
+		set = function(value)
+			db.scaleModifier = value
+			if addon.Mover.functions.UpdateScaleWheelCaptureState then addon.Mover.functions.UpdateScaleWheelCaptureState() end
+		end,
 		parentCheck = function() return db.scaleEnabled end,
 	},
 	{

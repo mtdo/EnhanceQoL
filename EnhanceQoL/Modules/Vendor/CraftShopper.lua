@@ -764,7 +764,7 @@ local function createCrafterMultiplyFrame()
 	-- Track recipe changes to refresh button label
 	fCMF._accum = 0
 	fCMF.lastRecipeID = nil
-	fCMF:SetScript("OnUpdate", function(self, elapsed)
+	local function updateRecipeWatcher(self, elapsed)
 		self._accum = (self._accum or 0) + elapsed
 		if self._accum < 0.3 then return end
 		self._accum = 0
@@ -776,6 +776,13 @@ local function createCrafterMultiplyFrame()
 			if self.editBox and self.editBox:GetText() ~= "" then self.editBox:SetText("") end
 			if UpdateMultiplyFrameState then UpdateMultiplyFrameState() end
 		end
+	end
+	fCMF:SetScript("OnShow", function(self)
+		self._accum = 0
+		self:SetScript("OnUpdate", updateRecipeWatcher)
+	end)
+	fCMF:SetScript("OnHide", function(self)
+		self:SetScript("OnUpdate", nil)
 	end)
 
 	-- Default hidden; only show when enabled and professions is visible

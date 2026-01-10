@@ -46,6 +46,7 @@ local data = {
 			else
 				addon.Mouse.functions.removeMouseRing()
 			end
+			if addon.Mouse.functions.updateRunnerState then addon.Mouse.functions.updateRunnerState() end
 		end,
 		parentSection = expandable,
 		children = {
@@ -200,7 +201,10 @@ data = {
 	{
 		var = "mouseTrailEnabled",
 		text = L["mouseTrailEnabled"],
-		func = function(v) addon.db["mouseTrailEnabled"] = v end,
+		func = function(v)
+			addon.db["mouseTrailEnabled"] = v
+			if addon.Mouse.functions.updateRunnerState then addon.Mouse.functions.updateRunnerState() end
+		end,
 		parentSection = expandable,
 		children = {
 			{

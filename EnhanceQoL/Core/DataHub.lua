@@ -10,12 +10,14 @@ end
 
 local eventFrame = CreateFrame("Frame")
 local driver = CreateFrame("Frame")
+local DRIVER_TICK = 0.05
 
 DataHub.streams = {}
 DataHub.eventMap = {}
 DataHub.polling = {}
 DataHub.eventsByStream = {}
 DataHub.throttleTimers = {}
+DataHub.driverTicker = DataHub.driverTicker or nil
 
 local ipairs = ipairs
 local pairs = pairs
@@ -76,9 +78,15 @@ end
 
 function DataHub:UpdateDriver()
 	if next(self.polling) then
-		driver:SetScript("OnUpdate", driverUpdate)
+		if not self.driverTicker then
+			self.driverTicker = C_Timer.NewTicker(DRIVER_TICK, driverUpdate)
+			driverUpdate()
+		end
 	else
-		driver:SetScript("OnUpdate", nil)
+		if self.driverTicker then
+			self.driverTicker:Cancel()
+			self.driverTicker = nil
+		end
 	end
 end
 

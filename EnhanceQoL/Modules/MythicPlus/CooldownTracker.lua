@@ -16,6 +16,9 @@ if addon.variables.isMidnight then return end
 
 local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_MythicPlus")
 local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
+local floor = math.floor
+local format = string.format
+local COOLDOWN_UPDATE_INTERVAL = 0.1
 
 -- Addition für Potion Cooldown tracker
 local allowedSpells = { -- Tinker Engineering
@@ -218,27 +221,32 @@ local function createCooldownBar(spellID, anchorFrame, playerName, unit)
 	frame.timeElapsed = 0
 	frame:SetScript("OnUpdate", function(self, elapsed)
 		self.timeElapsed = self.timeElapsed + elapsed
-		if self.timeElapsed < duration then
-			local timeLeft = duration - self.timeElapsed
-			local timeText
-
-			if timeLeft > 60 then
-				local minutes = math.floor(timeLeft / 60)
-				local seconds = math.floor(timeLeft % 60)
-				timeText = string.format("%d:%02d", minutes, seconds) .. "m"
-			elseif timeLeft < 10 then
-				timeText = string.format("%.1f", timeLeft) .. "s" -- Anzeige mit einer Nachkommastelle
-			else
-				timeText = string.format("%.0f", timeLeft) .. "s"
-			end
-
-			self:SetValue(timeLeft)
-			self.time:SetText(timeText)
-		else
+		if self.timeElapsed >= duration then
 			self:SetScript("OnUpdate", nil)
 			self:Hide()
 			addon.MythicPlus.functions.updateBars()
+			return
 		end
+
+		self._updateAccum = (self._updateAccum or 0) + elapsed
+		if self._updateAccum < COOLDOWN_UPDATE_INTERVAL then return end
+		self._updateAccum = 0
+
+		local timeLeft = duration - self.timeElapsed
+		local timeText
+
+		if timeLeft > 60 then
+			local minutes = floor(timeLeft / 60)
+			local seconds = floor(timeLeft % 60)
+			timeText = format("%d:%02d", minutes, seconds) .. "m"
+		elseif timeLeft < 10 then
+			timeText = format("%.1f", timeLeft) .. "s" -- Anzeige mit einer Nachkommastelle
+		else
+			timeText = format("%.0f", timeLeft) .. "s"
+		end
+
+		self:SetValue(timeLeft)
+		self.time:SetText(timeText)
 	end)
 
 	return frame

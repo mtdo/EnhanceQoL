@@ -384,6 +384,22 @@ function addon.Mover.functions.CheckScaleWheelCapture()
 	if findScaleTargetUnderMouse() then captureFrame:EnableMouseWheel(true) end
 end
 
+function addon.Mover.functions.UpdateScaleWheelCaptureState()
+	local captureFrame = addon.Mover.variables.scaleCaptureFrame
+	if not captureFrame then return end
+	if db and db.enabled and db.scaleEnabled and scaleModifierPressed() then
+		if captureFrame:GetScript("OnUpdate") == nil then
+			captureFrame:SetScript("OnUpdate", addon.Mover.functions.CheckScaleWheelCapture)
+		end
+		addon.Mover.functions.CheckScaleWheelCapture()
+	else
+		captureFrame:EnableMouseWheel(false)
+		if captureFrame:GetScript("OnUpdate") ~= nil then
+			captureFrame:SetScript("OnUpdate", nil)
+		end
+	end
+end
+
 function addon.Mover.functions.HandleScaleWheel(delta)
 	if not db or not db.enabled or not db.scaleEnabled then return end
 	if not scaleModifierPressed() then return end
@@ -401,11 +417,11 @@ function addon.Mover.functions.EnsureScaleCaptureFrame()
 	captureFrame:SetFrameStrata("TOOLTIP")
 	captureFrame:SetFrameLevel(9999)
 	captureFrame:EnableMouseWheel(false)
-	captureFrame:SetScript("OnUpdate", function() addon.Mover.functions.CheckScaleWheelCapture() end)
-	captureFrame:SetScript("OnEvent", function() addon.Mover.functions.CheckScaleWheelCapture() end)
+	captureFrame:SetScript("OnEvent", function() addon.Mover.functions.UpdateScaleWheelCaptureState() end)
 	captureFrame:RegisterEvent("MODIFIER_STATE_CHANGED")
 	captureFrame:SetScript("OnMouseWheel", function(_, delta) addon.Mover.functions.HandleScaleWheel(delta) end)
 	addon.Mover.variables.scaleCaptureFrame = captureFrame
+	addon.Mover.functions.UpdateScaleWheelCaptureState()
 end
 
 local function MoveKeepTwoPointSize(frame, x, y, point, relPoint)

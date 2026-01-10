@@ -2086,9 +2086,14 @@ local function updateCastBar(unit)
 		if ccfg.showDuration ~= false then
 			local remaining = (endMs - nowMs) / 1000
 			if remaining < 0 then remaining = 0 end
-			st.castDuration:SetText(("%.1f"):format(remaining))
+			local tenths = math.floor(remaining * 10 + 0.5)
+			if st.castInfo.durationTenths ~= tenths then
+				st.castInfo.durationTenths = tenths
+				st.castDuration:SetText(("%.1f"):format(remaining))
+			end
 			st.castDuration:Show()
 		else
+			st.castInfo.durationTenths = nil
 			st.castDuration:SetText("")
 			st.castDuration:Hide()
 		end
@@ -2312,6 +2317,10 @@ local function setCastInfoFromUnit(unit)
 			else
 				durObj = UnitCastingDuration(unit)
 				direction = Enum.StatusBarTimerDirection.ElapsedTime
+			end
+			if not durObj then
+				stopCast(unit)
+				return
 			end
 			st.castBar:SetTimerDuration(durObj, Enum.StatusBarInterpolation.Immediate, direction)
 			if st.castName then
