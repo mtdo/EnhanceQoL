@@ -13,6 +13,10 @@
 - UF Plus: Secondary/tertiary delimiter options for health/power texts.
 - UF Plus: Shaman Maelstrom Weapon class resource bar with animated swirl/proc visuals (respects UF Player + Class Resource settings).
 
+### 🐛 Fixed
+
+- Resource Bars: Font dropdown selection no longer resets on click (fonts are selectable again).
+
 ### ❌ Removed
 
 - Removed the CombatMeter module and clean up its saved variables on load.

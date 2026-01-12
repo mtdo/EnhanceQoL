@@ -1518,11 +1518,11 @@ local function registerEditModeBars()
 					field = "fontFace",
 					parentId = "textsettings",
 					generator = function(_, root)
-						local currentPath
-						do
+						local function currentFontPath()
 							local c = curSpecCfg()
-							currentPath = (c and c.fontFace) or cfg.fontFace or addon.variables.defaultFont
+							return (c and c.fontFace) or cfg.fontFace or addon.variables.defaultFont
 						end
+						local currentPath = currentFontPath()
 						local seen = {}
 						if not LibStub then return end
 						local media = LibStub("LibSharedMedia-3.0", true)
@@ -1531,26 +1531,20 @@ local function registerEditModeBars()
 						for _, name in ipairs(media:List("font") or {}) do
 							local path = hash[name] or name
 							seen[path] = name
-							root:CreateCheckbox(name, function()
-								local c = curSpecCfg()
-								return currentPath == path
-							end, function()
+							root:CreateCheckbox(name, function() return currentFontPath() == path end, function()
 								local c = curSpecCfg()
 								if not c then return end
-								if currentPath == path then return end
+								if currentFontPath() == path then return end
 								c.fontFace = path
 								queueRefresh()
 							end)
 						end
 						if currentPath and not seen[currentPath] then
 							local label = tostring(currentPath)
-							root:CreateCheckbox(label, function()
-								local c = curSpecCfg()
-								return (c and c.fontFace) == currentPath
-							end, function()
+							root:CreateCheckbox(label, function() return currentFontPath() == currentPath end, function()
 								local c = curSpecCfg()
 								if not c then return end
-								if (c and c.fontFace) == currentPath then return end
+								if currentFontPath() == currentPath then return end
 								c.fontFace = currentPath
 								queueRefresh()
 							end)
