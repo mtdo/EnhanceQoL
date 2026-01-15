@@ -12,90 +12,133 @@ local cChar = addon.SettingsLayout.rootGAMEPLAY
 addon.SettingsLayout.characterInspectCategory = cChar
 local data
 
-local GetDifficultyInfo = _G.GetDifficultyInfo
-
-local COMBAT_LOG_PROMPT = "EQOL_COMBAT_LOG_PROMPT"
-local COMBAT_LOG_CATEGORIES = {
-	dungeon = true,
-	raid = true,
-	pvp = true,
+local COMBAT_LOG_DIFFICULTY_DB_KEYS = {
+	dungeon = "combatLogDungeonDifficulties",
+	raid = "combatLogRaidDifficulties",
 }
+local COMBAT_LOG_TOGGLE_DB_KEYS = {
+	pvp = "combatLogPvp",
+	scenario = "combatLogScenario",
+	delve = "combatLogDelve",
+}
+local COMBAT_LOG_DELAY_SECONDS = 30
 local combatLogInstanceMap = {
 	party = "dungeon",
-	scenario = "dungeon",
-	delve = "dungeon",
 	raid = "raid",
 	pvp = "pvp",
 	arena = "pvp",
+	scenario = "scenario",
+	delve = "delve",
 }
-
-local function ensureCombatLogTables()
-	if not addon.db then return nil, nil end
-	addon.db.combatLogRules = addon.db.combatLogRules or {}
-	addon.db.combatLogInfo = addon.db.combatLogInfo or {}
-	local rules = addon.db.combatLogRules
-	local info = addon.db.combatLogInfo
-	for category in pairs(COMBAT_LOG_CATEGORIES) do
-		rules[category] = rules[category] or {}
-		info[category] = info[category] or {}
-	end
-	return rules, info
-end
+local DIFFICULTY_IDS = (DifficultyUtil and DifficultyUtil.ID) or {}
+local COMBAT_LOG_DIFFICULTY_GROUPS = {
+	dungeon = {
+		{ key = "normal", text = PLAYER_DIFFICULTY1, difficulties = { DIFFICULTY_IDS.DungeonNormal or 1, 150, 216 } },
+		{ key = "heroic", text = PLAYER_DIFFICULTY2, difficulties = { DIFFICULTY_IDS.DungeonHeroic or 2 } },
+		{ key = "mythic", text = PLAYER_DIFFICULTY6, difficulties = { DIFFICULTY_IDS.DungeonMythic or 23 } },
+		{ key = "mythicPlus", text = PLAYER_DIFFICULTY_MYTHIC_PLUS, difficulties = { DIFFICULTY_IDS.DungeonChallenge or 8 } },
+		{ key = "timewalking", text = PLAYER_DIFFICULTY_TIMEWALKER, difficulties = { DIFFICULTY_IDS.DungeonTimewalker or 24 } },
+	},
+	raid = {
+		{ key = "lfr", text = PLAYER_DIFFICULTY3, difficulties = { DIFFICULTY_IDS.RaidLFR or 7, DIFFICULTY_IDS.PrimaryRaidLFR or 17, 151 } },
+		{
+			key = "normal",
+			text = PLAYER_DIFFICULTY1,
+			difficulties = {
+				DIFFICULTY_IDS.Raid10Normal or 3,
+				DIFFICULTY_IDS.Raid25Normal or 4,
+				DIFFICULTY_IDS.PrimaryRaidNormal or 14,
+				DIFFICULTY_IDS.Raid40 or 9,
+				DIFFICULTY_IDS.RaidStory or 220,
+			},
+		},
+		{ key = "heroic", text = PLAYER_DIFFICULTY2, difficulties = { DIFFICULTY_IDS.Raid10Heroic or 5, DIFFICULTY_IDS.Raid25Heroic or 6, DIFFICULTY_IDS.PrimaryRaidHeroic or 15 } },
+		{ key = "mythic", text = PLAYER_DIFFICULTY6, difficulties = { DIFFICULTY_IDS.PrimaryRaidMythic or 16 } },
+		{ key = "timewalking", text = PLAYER_DIFFICULTY_TIMEWALKER, difficulties = { DIFFICULTY_IDS.RaidTimewalker or 33 } },
+	},
+}
 
 local function getCombatLogCategory(instanceType)
 	return combatLogInstanceMap[instanceType]
 end
 
-local function makeCombatLogKey(mapID, difficultyID)
-	if not mapID or not difficultyID then return nil end
-	return tostring(mapID) .. ":" .. tostring(difficultyID)
-end
-
-local function buildCombatLogLabel(name, difficultyName, difficultyID)
-	local instanceName = name and name ~= "" and name or (UNKNOWN or "Unknown")
-	local diff = difficultyName
-	if (not diff or diff == "") and difficultyID and GetDifficultyInfo then
-		diff = GetDifficultyInfo(difficultyID)
-	end
-	if diff and diff ~= "" then
-		return string.format("%s - %s", instanceName, diff)
-	end
-	return instanceName
-end
-
-local function registerCombatLogEntry(category, mapID, difficultyID, name, difficultyName)
-	local rules, info = ensureCombatLogTables()
-	if not rules or not info then return nil end
-	if not category or not info[category] then return nil end
-	local key = makeCombatLogKey(mapID, difficultyID)
+local function getCombatLogSelectionTable(category)
+	if not addon.db then return nil end
+	local key = COMBAT_LOG_DIFFICULTY_DB_KEYS[category]
 	if not key then return nil end
-	local entry = info[category][key]
-	if not entry then
-		info[category][key] = {
-			name = name,
-			difficulty = difficultyName,
-			mapID = mapID,
-			difficultyID = difficultyID,
-		}
-	else
-		if (not entry.name or entry.name == "") and name and name ~= "" then entry.name = name end
-		if (not entry.difficulty or entry.difficulty == "") and difficultyName and difficultyName ~= "" then
-			entry.difficulty = difficultyName
+	local selection = addon.db[key]
+	if type(selection) ~= "table" then
+		selection = {}
+		addon.db[key] = selection
+	end
+	return selection
+end
+
+local function buildCombatLogDifficultyData()
+	addon.variables = addon.variables or {}
+	if addon.variables.combatLogDifficultyGroups and addon.variables.combatLogDifficultyLookup then
+		return addon.variables.combatLogDifficultyGroups, addon.variables.combatLogDifficultyLookup
+	end
+
+	local groups = {}
+	local lookup = {}
+	for category, entries in pairs(COMBAT_LOG_DIFFICULTY_GROUPS) do
+		groups[category] = entries
+		lookup[category] = {}
+		for _, entry in ipairs(entries) do
+			for _, difficultyID in ipairs(entry.difficulties or {}) do
+				lookup[category][difficultyID] = entry.key
+			end
 		end
 	end
-	return key
+
+	addon.variables.combatLogDifficultyGroups = groups
+	addon.variables.combatLogDifficultyLookup = lookup
+	return groups, lookup
 end
 
-local function setCombatLogRule(category, key, enabled)
-	local rules = ensureCombatLogTables()
-	if not rules or not category or not key then return end
-	rules[category][key] = enabled and true or false
+local function getCombatLogDifficultyOptions(category)
+	local groups = buildCombatLogDifficultyData()
+	local options = {}
+	for _, entry in ipairs(groups[category] or {}) do
+		options[#options + 1] = { value = entry.key, text = entry.text }
+	end
+	return options
 end
 
-local function getCombatLogRule(category, key)
-	if not addon.db or not addon.db.combatLogRules or not category or not key then return nil end
-	local rules = addon.db.combatLogRules[category]
-	return rules and rules[key]
+local function getCombatLogDifficultyKey(category, difficultyID)
+	local _, lookup = buildCombatLogDifficultyData()
+	local bucket = lookup[category]
+	return bucket and bucket[difficultyID]
+end
+
+local function setCombatLogSelection(category, key, enabled)
+	local selection = getCombatLogSelectionTable(category)
+	if not selection or not key then return end
+	selection[key] = enabled and true or false
+	if addon.db and addon.db.autoCombatLog then
+		if addon.functions.UpdateCombatLogState then addon.functions.UpdateCombatLogState() end
+	end
+end
+
+local function isCombatLogSelected(category, key)
+	local selection = getCombatLogSelectionTable(category)
+	return selection and selection[key] == true
+end
+
+local function isCombatLogToggleEnabled(category)
+	local key = COMBAT_LOG_TOGGLE_DB_KEYS[category]
+	if not key or not addon.db then return false end
+	return addon.db[key] == true
+end
+
+local function getCombatLogDecision(category, difficultyID)
+	if COMBAT_LOG_TOGGLE_DB_KEYS[category] then
+		return isCombatLogToggleEnabled(category)
+	end
+	local key = getCombatLogDifficultyKey(category, difficultyID)
+	if not key then return nil end
+	return isCombatLogSelected(category, key)
 end
 
 local function printCombatLogMessage(message)
@@ -108,138 +151,76 @@ local function printCombatLogMessage(message)
 	end
 end
 
+local function cancelCombatLogStopTimer()
+	if not addon.variables or not addon.variables.combatLogStopTimer then return end
+	if addon.variables.combatLogStopTimer.Cancel then
+		addon.variables.combatLogStopTimer:Cancel()
+	end
+	addon.variables.combatLogStopTimer = nil
+end
+
 local function applyCombatLogState(enabled)
 	local logger = _G.LoggingCombat
 	if not logger then return end
 	local target = enabled and true or false
+	if target then
+		cancelCombatLogStopTimer()
+		local current = logger()
+		if current == true then return end
+		logger(true)
+		printCombatLogMessage(L["combatLogEnabledMsg"] or "Combat logging enabled.")
+		return
+	end
+
+	if addon.db and addon.db.combatLogDelayedStop and C_Timer and C_Timer.NewTimer then
+		local current = logger()
+		if current == false then return end
+		cancelCombatLogStopTimer()
+		addon.variables = addon.variables or {}
+		addon.variables.combatLogStopTimer = C_Timer.NewTimer(COMBAT_LOG_DELAY_SECONDS, function()
+			addon.variables.combatLogStopTimer = nil
+			if logger() then
+				logger(false)
+				printCombatLogMessage(L["combatLogDisabledMsg"] or "Combat logging disabled.")
+			end
+		end)
+		return
+	end
+
+	cancelCombatLogStopTimer()
 	local current = logger()
 	if current == target then return end
-	logger(target)
-	if target then
-		printCombatLogMessage(L["combatLogEnabledMsg"] or "Combat logging enabled.")
-	else
-		printCombatLogMessage(L["combatLogDisabledMsg"] or "Combat logging disabled.")
-	end
-end
-
-local function handleCombatLogPromptDecision(data, enabled)
-	if not data or not data.category or not data.key then return end
-	setCombatLogRule(data.category, data.key, enabled)
-	addon.variables.combatLogPromptKey = nil
-	applyCombatLogState(enabled)
-end
-
-local function showCombatLogPrompt(category, key)
-	if not StaticPopupDialogs or not StaticPopup_Show then return end
-	if StaticPopup_Visible and StaticPopup_Visible(COMBAT_LOG_PROMPT) then return end
-	local info = addon.db and addon.db.combatLogInfo and addon.db.combatLogInfo[category]
-	local entry = info and info[key]
-	if not entry then return end
-
-	if not StaticPopupDialogs[COMBAT_LOG_PROMPT] then
-		StaticPopupDialogs[COMBAT_LOG_PROMPT] = {
-			text = "",
-			button1 = YES,
-			button2 = NO,
-			OnAccept = function(_, data) handleCombatLogPromptDecision(data, true) end,
-			OnCancel = function(_, data) handleCombatLogPromptDecision(data, false) end,
-			timeout = 0,
-			whileDead = true,
-			hideOnEscape = true,
-			preferredIndex = 3,
-		}
-	end
-
-	local label = buildCombatLogLabel(entry.name, entry.difficulty, entry.difficultyID)
-	StaticPopupDialogs[COMBAT_LOG_PROMPT].text = (L["combatLogPrompt"] or "Enable combat logging for %s?"):format(label)
-	addon.variables.combatLogPromptKey = key
-	StaticPopup_Show(COMBAT_LOG_PROMPT, nil, nil, { category = category, key = key })
-end
-
-local function getCombatLogOptions(category)
-	local info = addon.db and addon.db.combatLogInfo and addon.db.combatLogInfo[category]
-	local options = {}
-	for key, entry in pairs(info or {}) do
-		options[#options + 1] = {
-			value = key,
-			text = buildCombatLogLabel(entry.name, entry.difficulty, entry.difficultyID),
-			sortName = entry.name or "",
-			sortDifficulty = entry.difficulty or "",
-			sortId = entry.difficultyID or 0,
-		}
-	end
-	table.sort(options, function(a, b)
-		if a.sortName == b.sortName then
-			if a.sortDifficulty == b.sortDifficulty then
-				return a.sortId < b.sortId
-			end
-			return a.sortDifficulty < b.sortDifficulty
-		end
-		return a.sortName < b.sortName
-	end)
-	return options
-end
-
-local function setCombatLogSelection(category, key, selected)
-	setCombatLogRule(category, key, selected)
-	if addon.db and addon.db.autoCombatLog then
-		if addon.variables and addon.variables.combatLogLastKey == key and addon.variables.combatLogLastCategory == category then
-			applyCombatLogState(selected)
-		end
-	end
-end
-
-local function isCombatLogSelected(category, key)
-	return getCombatLogRule(category, key) == true
+	logger(false)
+	printCombatLogMessage(L["combatLogDisabledMsg"] or "Combat logging disabled.")
 end
 
 local function updateCombatLogState()
 	if not addon.db or not addon.db.autoCombatLog then
-		if StaticPopup_Hide then StaticPopup_Hide(COMBAT_LOG_PROMPT) end
 		if addon.variables and addon.variables.combatLogRestoreState ~= nil then
 			applyCombatLogState(addon.variables.combatLogRestoreState)
 			addon.variables.combatLogRestoreState = nil
-			addon.variables.combatLogLastKey = nil
-			addon.variables.combatLogLastCategory = nil
 		end
 		return
 	end
 
-	local name, instanceType, difficultyID, difficultyName, _, _, _, mapID = GetInstanceInfo()
+	local _, instanceType, difficultyID = GetInstanceInfo()
 	if not instanceType or instanceType == "none" then
-		if StaticPopup_Hide then StaticPopup_Hide(COMBAT_LOG_PROMPT) end
 		if addon.variables and addon.variables.combatLogRestoreState ~= nil then
 			applyCombatLogState(addon.variables.combatLogRestoreState)
 			addon.variables.combatLogRestoreState = nil
 		end
-		addon.variables.combatLogLastKey = nil
-		addon.variables.combatLogLastCategory = nil
-		addon.variables.combatLogPromptKey = nil
 		return
 	end
 
 	local category = getCombatLogCategory(instanceType)
-	if not category or not mapID or not difficultyID then return end
-
-	ensureCombatLogTables()
+	if not category then return end
 	if addon.variables and addon.variables.combatLogRestoreState == nil then
 		local logger = _G.LoggingCombat
 		addon.variables.combatLogRestoreState = logger and logger() or false
 	end
 
-	local key = registerCombatLogEntry(category, mapID, difficultyID, name, difficultyName)
-	if not key then return end
-	if addon.variables and addon.variables.combatLogLastKey == key and addon.variables.combatLogLastCategory == category then return end
-	addon.variables.combatLogLastKey = key
-	addon.variables.combatLogLastCategory = category
-
-	local decision = getCombatLogRule(category, key)
-	if decision == nil then
-		if addon.variables and addon.variables.combatLogPromptKey == key then return end
-		showCombatLogPrompt(category, key)
-		return
-	end
-
+	local decision = getCombatLogDecision(category, difficultyID)
+	if decision == nil then return end
 	applyCombatLogState(decision)
 end
 
@@ -375,8 +356,12 @@ function addon.functions.initDungeonFrame()
 	addon.functions.InitDBValue("enableChatIMRaiderIO", false)
 	addon.functions.InitDBValue("timeoutReleaseDifficulties", {})
 	addon.functions.InitDBValue("autoCombatLog", false)
-	addon.functions.InitDBValue("combatLogRules", {})
-	addon.functions.InitDBValue("combatLogInfo", {})
+	addon.functions.InitDBValue("combatLogDungeonDifficulties", {})
+	addon.functions.InitDBValue("combatLogRaidDifficulties", {})
+	addon.functions.InitDBValue("combatLogPvp", false)
+	addon.functions.InitDBValue("combatLogScenario", false)
+	addon.functions.InitDBValue("combatLogDelve", false)
+	addon.functions.InitDBValue("combatLogDelayedStop", false)
 
 	local combatLogSection = addon.functions.SettingsCreateExpandableSection(cChar, {
 		name = L["combatLogSection"] or "Combat logging",
@@ -399,12 +384,43 @@ function addon.functions.initDungeonFrame()
 		return combatLogEnabled and combatLogEnabled.setting and combatLogEnabled.setting:GetValue() == true
 	end
 
+	addon.functions.SettingsCreateCheckbox(cChar, {
+		var = "combatLogDelayedStop",
+		text = L["combatLogDelayStop"] or "Delayed log stop",
+		desc = L["combatLogDelayStopDesc"],
+		func = function(value) addon.db.combatLogDelayedStop = value and true or false end,
+		element = combatLogEnabled.element,
+		parentSection = combatLogSection,
+		parentCheck = isCombatLogEnabled,
+		parent = true,
+	})
+
+	local function createCombatLogToggle(var, label, desc)
+		addon.functions.SettingsCreateCheckbox(cChar, {
+			var = var,
+			text = label,
+			desc = desc,
+			func = function(value)
+				addon.db[var] = value and true or false
+				if addon.db.autoCombatLog and addon.functions.UpdateCombatLogState then addon.functions.UpdateCombatLogState() end
+			end,
+			element = combatLogEnabled.element,
+			parentSection = combatLogSection,
+			parentCheck = isCombatLogEnabled,
+			parent = true,
+		})
+	end
+
+	createCombatLogToggle("combatLogPvp", L["combatLogPvp"] or "PvP", L["combatLogPvpDesc"] or "Automatically toggle combat logging in PvP instances.")
+	createCombatLogToggle("combatLogScenario", L["combatLogScenario"] or "Scenarios", L["combatLogScenarioDesc"] or "Automatically toggle combat logging in scenarios.")
+	createCombatLogToggle("combatLogDelve", L["combatLogDelve"] or "Delves", L["combatLogDelveDesc"] or "Automatically toggle combat logging in delves.")
+
 	local function createCombatLogDropdown(var, label, category)
 		addon.functions.SettingsCreateMultiDropdown(cChar, {
 			var = var,
 			text = label,
 			desc = L["combatLogListDesc"],
-			listFunc = function() return getCombatLogOptions(category) end,
+			listFunc = function() return getCombatLogDifficultyOptions(category) end,
 			isSelectedFunc = function(key) return isCombatLogSelected(category, key) end,
 			setSelectedFunc = function(key, selected) setCombatLogSelection(category, key, selected) end,
 			menuHeight = 260,
@@ -415,9 +431,8 @@ function addon.functions.initDungeonFrame()
 		})
 	end
 
-	createCombatLogDropdown("combatLogDungeonList", L["combatLogDungeon"] or "Dungeons", "dungeon")
-	createCombatLogDropdown("combatLogRaidList", L["combatLogRaid"] or "Raids", "raid")
-	createCombatLogDropdown("combatLogPvpList", L["combatLogPvp"] or "PvP", "pvp")
+	createCombatLogDropdown("combatLogDungeonDifficulties", L["combatLogDungeon"] or "Dungeons", "dungeon")
+	createCombatLogDropdown("combatLogRaidDifficulties", L["combatLogRaid"] or "Raids", "raid")
 
 	local find = {
 		["CLICK EQOLWorldMarkerCycler:LeftButton"] = true,
