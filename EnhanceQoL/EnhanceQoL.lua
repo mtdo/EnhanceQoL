@@ -191,6 +191,12 @@ function addon.functions.GetActionBarAnchor(index) return DetermineAnchorFromBar
 function addon.functions.SetActionBarAnchor(index, anchorKey) ApplyActionBarAnchor(index, anchorKey) end
 
 local function RefreshAllActionBarAnchors()
+	local enabled = addon.db and addon.db.actionBarAnchorEnabled
+	if not enabled then
+		if addon.variables then addon.variables.pendingActionBarAnchorRefresh = nil end
+		return
+	end
+
 	if InCombatLockdown and InCombatLockdown() then
 		addon.variables = addon.variables or {}
 		addon.variables.pendingActionBarAnchorRefresh = true
@@ -199,7 +205,6 @@ local function RefreshAllActionBarAnchors()
 
 	if addon.variables then addon.variables.pendingActionBarAnchorRefresh = nil end
 	addon.variables.actionBarAnchorDefaults = addon.variables.actionBarAnchorDefaults or {}
-	local enabled = addon.db and addon.db.actionBarAnchorEnabled
 	for i = 1, #ACTION_BAR_FRAME_NAMES do
 		local defaultKey = "actionBarAnchorDefault" .. i
 		local storedDefault = addon.db and addon.db[defaultKey]
@@ -216,11 +221,7 @@ local function RefreshAllActionBarAnchors()
 			if addon.db then addon.db[key] = stored end
 		end
 
-		if enabled then
-			ApplyActionBarAnchor(i, stored)
-		else
-			ApplyActionBarAnchor(i, storedDefault)
-		end
+		ApplyActionBarAnchor(i, stored)
 	end
 end
 addon.functions.RefreshAllActionBarAnchors = RefreshAllActionBarAnchors
@@ -4703,12 +4704,7 @@ local function CreateUI()
 		if addon.functions.ShowOptionsPage and addon.functions.ShowOptionsPage(container, group) then return end
 
 		if type(group) ~= "string" then return end
-		if
-			group == "bufftracker"
-			or group == "combat"
-			or group:sub(1, #"combat\001") == "combat\001"
-			or group:sub(1, #"aura\001") == "aura\001"
-		then
+		if group == "bufftracker" or group == "combat" or group:sub(1, #"combat\001") == "combat\001" or group:sub(1, #"aura\001") == "aura\001" then
 			if addon.Aura and addon.Aura.functions and addon.Aura.functions.treeCallback then addon.Aura.functions.treeCallback(container, group) end
 		end
 	end)

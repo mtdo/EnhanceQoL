@@ -249,10 +249,17 @@ local function createAnchorControls(category, expandable)
 		desc = L["actionBarAnchorEnableDesc"],
 		func = function(value)
 			addon.db["actionBarAnchorEnabled"] = value and true or false
-			RefreshAllActionBarAnchors()
+			if value then
+				RefreshAllActionBarAnchors()
+			else
+				addon.variables.requireReload = true
+				addon.functions.checkReloadFrame()
+			end
 		end,
 		parentSection = expandable,
 	})
+	local warning = L["actionBarAnchorWarning"] or "Warning: Enabling this can cause protected action errors when switching specs or opening Edit Mode."
+	addon.functions.SettingsCreateText(category, "|cffff0000" .. warning .. "|r", { parentSection = expandable })
 
 	local anchorOptions = {
 		TOPLEFT = L["topLeft"] or "Top Left",

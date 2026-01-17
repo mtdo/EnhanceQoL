@@ -23,6 +23,10 @@
 - Gear & Upgrades: Gem Helper tracker under the character frame (shows equipped gem types and missing highlights).
 - Food: Added Midnight drinks and mana potions.
 
+### ⚠️ Warning
+
+- **Action Bars: "Button growth" (Modify Action Bar anchor) can cause protected action errors when switching specs or opening Edit Mode.**
+
 ### 🔄 Changed
 
 - Minimap Button Bin: Buttons are now sorted alphabetically by default.
