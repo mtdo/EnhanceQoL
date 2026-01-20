@@ -3332,7 +3332,11 @@ updateBarThresholds = function(pType)
 	local useAbsolute = cfg.useAbsoluteThresholds == true
 	local maxValue
 	if useAbsolute then
-		local _, maxV = bar.GetMinMaxValues and bar:GetMinMaxValues()
+		local maxV
+		if bar.GetMinMaxValues then
+			local _, tmpMax = bar:GetMinMaxValues()
+			maxV = tmpMax
+		end
 		maxValue = maxV or bar._lastMax or 0
 		if not maxValue or maxValue <= 0 then
 			if bar.thresholdMarks then
