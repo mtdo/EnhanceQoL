@@ -2305,11 +2305,8 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 	if not visible then
 		visible = {}
 		runtime.visibleEntries = visible
-	else
-		for i = 1, #visible do
-			visible[i] = nil
-		end
 	end
+	local visibleCount = 0
 
 	local order = panel.order or {}
 	runtime.readyState = runtime.readyState or {}
@@ -2444,36 +2441,44 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 					glowTimers[entryId] = nil
 				end
 				runtime.readyState[entryId] = readyNow
-				visible[#visible + 1] = {
-					icon = iconTexture or PREVIEW_ICON,
-					showCooldown = showCooldown,
-					showCooldownText = showCooldownText,
-					showCharges = showCharges,
-					showStacks = showStacks,
-					showItemCount = showItemCount,
-					glowReady = glowReady,
-					glowDuration = glowDuration,
-					soundReady = soundReady,
-					soundName = soundName,
-					readyNow = readyNow,
-					readyAt = runtime.readyAt[entryId],
-					stackCount = stackCount,
-					itemCount = itemCount,
-					emptyItem = emptyItem,
-					chargesInfo = chargesInfo,
-					cooldownDurationObject = cooldownDurationObject,
-					cooldownRemaining = cooldownRemaining,
-					cooldownStart = cooldownStart or 0,
-					cooldownDuration = cooldownDuration or 0,
-					cooldownEnabled = cooldownEnabled,
-					cooldownRate = cooldownRate or 1,
-					cooldownGCD = cooldownGCD or nil,
-				}
+				visibleCount = visibleCount + 1
+				local data = visible[visibleCount]
+				if not data then
+					data = {}
+					visible[visibleCount] = data
+				end
+				data.icon = iconTexture or PREVIEW_ICON
+				data.showCooldown = showCooldown
+				data.showCooldownText = showCooldownText
+				data.showCharges = showCharges
+				data.showStacks = showStacks
+				data.showItemCount = showItemCount
+				data.glowReady = glowReady
+				data.glowDuration = glowDuration
+				data.soundReady = soundReady
+				data.soundName = soundName
+				data.readyNow = readyNow
+				data.readyAt = runtime.readyAt[entryId]
+				data.stackCount = stackCount
+				data.itemCount = itemCount
+				data.emptyItem = emptyItem
+				data.chargesInfo = chargesInfo
+				data.cooldownDurationObject = cooldownDurationObject
+				data.cooldownRemaining = cooldownRemaining
+				data.cooldownStart = cooldownStart or 0
+				data.cooldownDuration = cooldownDuration or 0
+				data.cooldownEnabled = cooldownEnabled
+				data.cooldownRate = cooldownRate or 1
+				data.cooldownGCD = cooldownGCD or nil
 			end
 		end
 	end
 
-	local count = #visible
+	for i = visibleCount + 1, #visible do
+		visible[i] = nil
+	end
+
+	local count = visibleCount
 	local layoutCount = count > 0 and count or 1
 	if runtime._eqolLastLayoutCount ~= layoutCount then
 		self:ApplyLayout(panelId, layoutCount)
