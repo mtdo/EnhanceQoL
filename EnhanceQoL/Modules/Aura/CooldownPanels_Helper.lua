@@ -47,6 +47,8 @@ Helper.ENTRY_DEFAULTS = {
 	showWhenEmpty = false,
 	glowReady = false,
 	glowDuration = 0,
+	soundReady = false,
+	soundReadyFile = "None",
 }
 
 function Helper.CopyTableShallow(source)
@@ -113,6 +115,8 @@ function Helper.NormalizeRoot(root)
 	root.defaults.entry.showCooldownText = Helper.ENTRY_DEFAULTS.showCooldownText
 	root.defaults.entry.glowReady = Helper.ENTRY_DEFAULTS.glowReady
 	root.defaults.entry.glowDuration = Helper.ENTRY_DEFAULTS.glowDuration
+	root.defaults.entry.soundReady = Helper.ENTRY_DEFAULTS.soundReady
+	root.defaults.entry.soundReadyFile = Helper.ENTRY_DEFAULTS.soundReadyFile
 	return root
 end
 
@@ -151,6 +155,8 @@ function Helper.NormalizeEntry(entry, defaults)
 	if duration < 0 then duration = 0 end
 	if duration > 30 then duration = 30 end
 	entry.glowDuration = math.floor(duration + 0.5)
+	if type(entry.soundReady) ~= "boolean" then entry.soundReady = Helper.ENTRY_DEFAULTS.soundReady end
+	if type(entry.soundReadyFile) ~= "string" or entry.soundReadyFile == "" then entry.soundReadyFile = Helper.ENTRY_DEFAULTS.soundReadyFile end
 end
 
 function Helper.SyncOrder(order, map)

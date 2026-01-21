@@ -226,6 +226,68 @@ local function getFontOptions(defaultPath)
 	return list
 end
 
+local function normalizeSoundName(value)
+	if type(value) ~= "string" or value == "" then return (Helper and Helper.ENTRY_DEFAULTS and Helper.ENTRY_DEFAULTS.soundReadyFile) or "None" end
+	return value
+end
+
+local function getSoundLabel(value)
+	local soundName = normalizeSoundName(value)
+	if soundName == "None" then return L["None"] or _G.NONE or "None" end
+	return soundName
+end
+
+local function getSoundButtonText(value) return (L["CooldownPanelSound"] or "Sound") .. ": " .. getSoundLabel(value) end
+
+local function getSoundOptions()
+	local list = {}
+	local seen = {}
+	local function add(name)
+		if type(name) ~= "string" or name == "" then return end
+		local key = string.lower(name)
+		if seen[key] then return end
+		seen[key] = true
+		list[#list + 1] = name
+	end
+	if LSM and LSM.HashTable then
+		for name in pairs(LSM:HashTable("sound") or {}) do
+			add(name)
+		end
+	end
+	add((LSM and LSM.DefaultMedia and LSM.DefaultMedia.sound) or nil)
+	add((Helper and Helper.ENTRY_DEFAULTS and Helper.ENTRY_DEFAULTS.soundReadyFile) or nil)
+	table.sort(list, function(a, b) return tostring(a) < tostring(b) end)
+	for i, name in ipairs(list) do
+		if name == "None" then
+			table.remove(list, i)
+			table.insert(list, 1, name)
+			break
+		end
+	end
+	return list
+end
+
+local function resolveSoundFile(soundName)
+	local value = normalizeSoundName(soundName)
+	if value == "None" then return nil end
+	if LSM and LSM.Fetch then
+		local file = LSM:Fetch("sound", value, true)
+		if file then return file end
+	end
+	return value
+end
+
+local function playReadySound(soundName)
+	if not soundName or soundName == "" then return end
+	local numeric = tonumber(soundName)
+	if numeric and PlaySound then
+		PlaySound(numeric, "Master")
+		return
+	end
+	local file = resolveSoundFile(soundName)
+	if file and PlaySoundFile then PlaySoundFile(file, "Master") end
+end
+
 local function setExampleCooldown(cooldown)
 	if not cooldown then return end
 	local setAsPercent = _G.CooldownFrame_SetDisplayAsPercentage
@@ -683,7 +745,8 @@ local function setGlow(frame, enabled)
 	end
 end
 
-local function onCooldownDone()
+local function onCooldownDone(self)
+	if self and self._eqolSoundReady then playReadySound(self._eqolSoundName) end
 	if CooldownPanels and CooldownPanels.RequestUpdate then CooldownPanels:RequestUpdate() end
 end
 
@@ -1152,6 +1215,29 @@ local function showSlotMenu(owner, panelId)
 	end)
 end
 
+local function showSoundMenu(owner, panelId, entryId)
+	if not panelId or not entryId or not MenuUtil or not MenuUtil.CreateContextMenu then return end
+	local panel = CooldownPanels:GetPanel(panelId)
+	local entry = panel and panel.entries and panel.entries[entryId]
+	if not entry then return end
+	local options = getSoundOptions()
+	if not options or #options == 0 then return end
+	MenuUtil.CreateContextMenu(owner, function(_, rootDescription)
+		rootDescription:SetTag("MENU_EQOL_COOLDOWN_PANEL_SOUND")
+		if rootDescription.SetScrollMode then rootDescription:SetScrollMode(260) end
+		rootDescription:CreateTitle(L["CooldownPanelSoundReady"] or "Sound when ready")
+		for _, soundName in ipairs(options) do
+			local label = getSoundLabel(soundName)
+			rootDescription:CreateRadio(label, function() return normalizeSoundName(entry.soundReadyFile) == soundName end, function()
+				entry.soundReadyFile = soundName
+				playReadySound(soundName)
+				CooldownPanels:RefreshPanel(panelId)
+				CooldownPanels:RefreshEditor()
+			end)
+		end
+	end)
+end
+
 getEditor = function()
 	local runtime = CooldownPanels.runtime and CooldownPanels.runtime["editor"]
 	return runtime and runtime.editor or nil
@@ -1288,6 +1374,12 @@ local function ensureEditor()
 	local glowDuration = createSlider(right, 180, 0, 30, 1)
 	glowDuration:SetPoint("TOPLEFT", cbGlow, "BOTTOMLEFT", 18, -8)
 
+	local cbSound = createCheck(right, L["CooldownPanelSoundReady"] or "Sound when ready")
+	cbSound:SetPoint("TOPLEFT", glowDuration, "BOTTOMLEFT", -18, -6)
+
+	local soundButton = createButton(right, "", 180, 20)
+	soundButton:SetPoint("TOPLEFT", cbSound, "BOTTOMLEFT", 18, -6)
+
 	local removeEntry = createButton(right, L["CooldownPanelRemoveEntry"] or "Remove entry", 180, 22)
 	removeEntry:SetPoint("BOTTOM", right, "BOTTOM", 0, 14)
 
@@ -1418,7 +1510,9 @@ local function ensureEditor()
 			cbItemCount = cbItemCount,
 			cbShowWhenEmpty = cbShowWhenEmpty,
 			cbGlow = cbGlow,
+			cbSound = cbSound,
 			glowDuration = glowDuration,
+			soundButton = soundButton,
 			removeEntry = removeEntry,
 		},
 	}
@@ -1561,7 +1655,14 @@ local function ensureEditor()
 	bindEntryToggle(cbItemCount, "showItemCount")
 	bindEntryToggle(cbShowWhenEmpty, "showWhenEmpty")
 	bindEntryToggle(cbGlow, "glowReady")
+	bindEntryToggle(cbSound, "soundReady")
 	bindEntrySlider(glowDuration, "glowDuration", 0, 30)
+
+	soundButton:SetScript("OnClick", function(self)
+		local panelId = editor.selectedPanelId
+		local entryId = editor.selectedEntryId
+		if panelId and entryId then showSoundMenu(self, panelId, entryId) end
+	end)
 
 	removeEntry:SetScript("OnClick", function()
 		local panelId = editor.selectedPanelId
@@ -1860,6 +1961,11 @@ local function layoutInspectorToggles(inspector, entry)
 		cb:Disable()
 		cb:SetChecked(false)
 	end
+	local function hideControl(control)
+		if not control then return end
+		control:Hide()
+		if control.Disable then control:Disable() end
+	end
 	if not entry then
 		hideToggle(inspector.cbCooldownText)
 		hideToggle(inspector.cbCharges)
@@ -1867,25 +1973,24 @@ local function layoutInspectorToggles(inspector, entry)
 		hideToggle(inspector.cbItemCount)
 		hideToggle(inspector.cbShowWhenEmpty)
 		hideToggle(inspector.cbGlow)
-		if inspector.glowDuration then
-			inspector.glowDuration:Hide()
-			inspector.glowDuration:Disable()
-		end
+		hideToggle(inspector.cbSound)
+		hideControl(inspector.glowDuration)
+		hideControl(inspector.soundButton)
 		return
 	end
 
 	local prev = inspector.entryId
-	local function place(cb, show)
-		if not cb then return end
-		cb:ClearAllPoints()
-		cb:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", -2, -6)
+	local function place(control, show, offsetX, offsetY)
+		if not control then return end
+		control:ClearAllPoints()
+		control:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", offsetX or -2, offsetY or -6)
 		if show then
-			cb:Show()
-			cb:Enable()
-			prev = cb
+			control:Show()
+			if control.Enable then control:Enable() end
+			prev = control
 		else
-			cb:Hide()
-			cb:Disable()
+			control:Hide()
+			if control.Disable then control:Disable() end
 		end
 	end
 
@@ -1913,9 +2018,25 @@ local function layoutInspectorToggles(inspector, entry)
 		if entry.glowReady then
 			inspector.glowDuration:Show()
 			inspector.glowDuration:Enable()
+			prev = inspector.glowDuration
 		else
 			inspector.glowDuration:Hide()
 			inspector.glowDuration:Disable()
+		end
+	end
+	local soundOffsetX = -2
+	if inspector.glowDuration and entry.glowReady then soundOffsetX = -20 end
+	place(inspector.cbSound, true, soundOffsetX, -6)
+	if inspector.soundButton then
+		inspector.soundButton:ClearAllPoints()
+		inspector.soundButton:SetPoint("TOPLEFT", inspector.cbSound, "BOTTOMLEFT", 18, -6)
+		if entry.soundReady then
+			inspector.soundButton:Show()
+			inspector.soundButton:Enable()
+			prev = inspector.soundButton
+		else
+			inspector.soundButton:Hide()
+			inspector.soundButton:Disable()
 		end
 	end
 end
@@ -1948,6 +2069,8 @@ local function refreshInspector(editor, panel, entry)
 		inspector.cbItemCount:SetChecked(entry.type == "ITEM" and entry.showItemCount ~= false)
 		inspector.cbShowWhenEmpty:SetChecked(entry.type == "ITEM" and entry.showWhenEmpty == true)
 		inspector.cbGlow:SetChecked(entry.glowReady and true or false)
+		inspector.cbSound:SetChecked(entry.soundReady and true or false)
+		if inspector.soundButton then inspector.soundButton:SetText(getSoundButtonText(entry.soundReadyFile)) end
 		if inspector.glowDuration then
 			local duration = clampInt(entry.glowDuration, 0, 30, 0)
 			inspector.glowDuration._suspend = true
@@ -1969,6 +2092,7 @@ local function refreshInspector(editor, panel, entry)
 
 		inspector.entryId:Disable()
 		inspector.removeEntry:Disable()
+		if inspector.soundButton then inspector.soundButton:SetText(getSoundButtonText(nil)) end
 		layoutInspectorToggles(inspector, nil)
 	end
 end
@@ -2192,6 +2316,8 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 			local alwaysShow = entry.alwaysShow ~= false
 			local glowReady = entry.glowReady ~= false
 			local glowDuration = clampInt(entry.glowDuration, 0, 30, 0)
+			local soundReady = entry.soundReady == true
+			local soundName = normalizeSoundName(entry.soundReadyFile)
 
 			local iconTexture = getEntryIcon(entry)
 			local stackCount
@@ -2314,6 +2440,8 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 					showItemCount = showItemCount,
 					glowReady = glowReady,
 					glowDuration = glowDuration,
+					soundReady = soundReady,
+					soundName = soundName,
 					readyNow = readyNow,
 					readyAt = runtime.readyAt[entryId],
 					stackCount = stackCount,
@@ -2342,6 +2470,8 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 		local icon = frame.icons[i]
 		icon.texture:SetTexture(data.icon or PREVIEW_ICON)
 		icon.cooldown:SetHideCountdownNumbers(not data.showCooldownText)
+		icon.cooldown._eqolSoundReady = data.soundReady
+		icon.cooldown._eqolSoundName = data.soundName
 		if icon.cooldown.Resume then icon.cooldown:Resume() end
 		if icon.previewGlow then icon.previewGlow:Hide() end
 		if icon.previewBling then icon.previewBling:Hide() end
@@ -2459,6 +2589,8 @@ function CooldownPanels:UpdateRuntimeIcons(panelId)
 		local icon = frame.icons[i]
 		if icon then
 			icon.cooldown:Clear()
+			icon.cooldown._eqolSoundReady = nil
+			icon.cooldown._eqolSoundName = nil
 			if icon.cooldown.SetScript then icon.cooldown:SetScript("OnCooldownDone", nil) end
 			if icon.cooldown.Resume then icon.cooldown:Resume() end
 			icon.count:Hide()
