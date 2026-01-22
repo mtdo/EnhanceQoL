@@ -1501,6 +1501,24 @@ local function registerEditModeBars()
 				}
 
 				settingsList[#settingsList + 1] = {
+					name = L["Use short numbers"] or "Use short numbers",
+					kind = settingType.Checkbox,
+					field = "shortNumbers",
+					parentId = "textsettings",
+					get = function()
+						local c = curSpecCfg()
+						return (not c) or c.shortNumbers ~= false
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.shortNumbers = value and true or false
+						queueRefresh()
+					end,
+					default = true,
+				}
+
+				settingsList[#settingsList + 1] = {
 					name = HUD_EDIT_MODE_SETTING_OBJECTIVE_TRACKER_TEXT_SIZE,
 					kind = settingType.Slider,
 					allowInput = true,

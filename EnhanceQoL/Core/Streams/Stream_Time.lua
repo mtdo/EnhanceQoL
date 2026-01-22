@@ -1,4 +1,4 @@
--- luacheck: globals EnhanceQoL GetGameTime GAMEMENU_OPTIONS FONT_SIZE UIParent TIMEMANAGER_AM TIMEMANAGER_PM C_Timer NORMAL_FONT_COLOR
+-- luacheck: globals EnhanceQoL GetGameTime GAMEMENU_OPTIONS FONT_SIZE UIParent TIMEMANAGER_AM TIMEMANAGER_PM C_Timer NORMAL_FONT_COLOR ToggleTimeManager
 local addonName, addon = ...
 local L = addon.L
 
@@ -232,7 +232,11 @@ local provider = {
 		PLAYER_ENTERING_WORLD = function(s) addon.DataHub:RequestUpdate(s) end,
 	},
 	OnClick = function(_, btn)
-		if btn == "RightButton" then createAceWindow() end
+		if btn == "RightButton" then
+			createAceWindow()
+		elseif btn == "LeftButton" then
+			if ToggleTimeManager then ToggleTimeManager() end
+		end
 	end,
 }
 

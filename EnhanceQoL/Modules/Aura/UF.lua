@@ -380,6 +380,7 @@ local defaults = {
 			countOffset = { x = -2, y = 2 },
 			countFontSize = nil,
 			countFontOutline = nil,
+			cooldownFontSize = 0,
 		},
 		cast = {
 			enabled = true,
@@ -1095,6 +1096,12 @@ function AuraUtil.styleAuraCount(btn, ac)
 	btn.count:SetFont(UFHelper.getFont(ac.countFont), size, flags)
 end
 
+function AuraUtil.styleAuraCooldownText(btn, ac)
+	if not btn or not btn.cd or not UFHelper or not UFHelper.applyCooldownTextStyle then return end
+	ac = ac or {}
+	UFHelper.applyCooldownTextStyle(btn.cd, ac.cooldownFontSize)
+end
+
 function AuraUtil.applyAuraToButton(btn, aura, ac, isDebuff, unitToken)
 	if not btn or not aura then return end
 	unitToken = unitToken or "target"
@@ -1118,6 +1125,7 @@ function AuraUtil.applyAuraToButton(btn, aura, ac, isDebuff, unitToken)
 	end
 	btn.cd:SetHideCountdownNumbers(ac.showCooldown == false)
 	AuraUtil.styleAuraCount(btn, ac)
+	AuraUtil.styleAuraCooldownText(btn, ac)
 	if issecretvalue and issecretvalue(aura.applications) or aura.applications and aura.applications > 1 then
 		local appStacks = aura.applications
 		if not aura.isSample and C_UnitAuras.GetAuraApplicationDisplayCount then
@@ -1375,6 +1383,7 @@ function AuraUtil.updateTargetAuraIcons(startIndex, unit)
 	ac.padding = ac.padding or 0
 	ac.max = ac.max or 16
 	if ac.showTooltip == nil then ac.showTooltip = true end
+	if ac.cooldownFontSize == nil then ac.cooldownFontSize = 0 end
 	if ac.max < 1 then ac.max = 1 end
 	local buffSize = ac.size
 	local debuffSize = ac.debuffSize or buffSize
@@ -2870,6 +2879,7 @@ local function syncTextFrameLevels(st)
 	setFrameLevelAbove(st.statusTextLayer, st.status, 5)
 	if st.restLoop and st.statusTextLayer then setFrameLevelAbove(st.restLoop, st.statusTextLayer, 3) end
 	if st.castTextLayer then setFrameLevelAbove(st.castTextLayer, st.castBar, 5) end
+	if st.castIconLayer then setFrameLevelAbove(st.castIconLayer, st.castBar, 4) end
 end
 
 local function hookTextFrameLevels(st)
@@ -2888,6 +2898,7 @@ local function hookTextFrameLevels(st)
 	hookFrame(st.health)
 	hookFrame(st.power)
 	hookFrame(st.status)
+	hookFrame(st.castBar)
 	syncTextFrameLevels(st)
 end
 
@@ -3627,9 +3638,12 @@ local function ensureFrames(unit)
 		st.castBar:SetStatusBarDesaturated(true)
 		st.castTextLayer = CreateFrame("Frame", nil, st.castBar)
 		st.castTextLayer:SetAllPoints(st.castBar)
+		st.castIconLayer = CreateFrame("Frame", nil, st.castBar)
+		st.castIconLayer:SetAllPoints(st.castBar)
+		st.castIconLayer:EnableMouse(false)
 		st.castName = st.castTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 		st.castDuration = st.castTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-		st.castIcon = st.castBar:CreateTexture(nil, "ARTWORK")
+		st.castIcon = st.castIconLayer:CreateTexture(nil, "ARTWORK")
 		st.castIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 		st.castBar:SetMinMaxValues(0, 1)
 		st.castBar:SetValue(0)

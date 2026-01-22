@@ -202,6 +202,41 @@ data = {
 		parentSection = mapExpandable,
 	},
 	{
+		var = "enableMinimapClusterScale",
+		text = L["enableMinimapClusterScale"],
+		desc = L["enableMinimapClusterScaleDesc"],
+		func = function(key)
+			addon.db["enableMinimapClusterScale"] = key
+			if addon.functions.applyMinimapClusterScale then addon.functions.applyMinimapClusterScale() end
+		end,
+		default = false,
+		parentSection = mapExpandable,
+		children = {
+			{
+				var = "minimapClusterScale",
+				text = L["minimapClusterScale"],
+				desc = L["minimapClusterScaleDesc"],
+				parentCheck = function()
+					return addon.SettingsLayout.elements["enableMinimapClusterScale"]
+						and addon.SettingsLayout.elements["enableMinimapClusterScale"].setting
+						and addon.SettingsLayout.elements["enableMinimapClusterScale"].setting:GetValue() == true
+				end,
+				get = function() return addon.db and addon.db.minimapClusterScale or 1 end,
+				set = function(value)
+					addon.db["minimapClusterScale"] = value
+					if addon.functions.applyMinimapClusterScale then addon.functions.applyMinimapClusterScale() end
+				end,
+				min = 0.5,
+				max = 2,
+				step = 0.05,
+				parent = true,
+				default = 1,
+				sType = "slider",
+				parentSection = mapExpandable,
+			},
+		},
+	},
+	{
 		var = "hideMinimapButton",
 		text = L["hideMinimapButton"],
 		func = function(v)

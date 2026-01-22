@@ -1,5 +1,22 @@
 # Changelog
 
+## [7.4.0] - 2026-01-22
+
+### ✨ Added
+
+- DataPanels: Stream gap slider per panel.
+- DataPanels: Time stream left-click opens the Time Manager (stopwatch/alarm).
+- UF Plus: Aura cooldown text size slider.
+- Resource Bars: Added "Use short numbers" toggle for text to control AbbreviateNumbers usage.
+
+### 🐛 Fixed
+
+- Action Tracker: Ignore list updated for recent profession/cooking casts and arachnophobia.
+- Buff Tracker: Avoid secret-value table indexing when resolving pending aura spell IDs.
+- UF Plus: Castbar icon no longer renders behind the castbar.
+
+---
+
 ## [7.3.1] - 2026-01-21
 
 ### 🐛 Fixed
@@ -13,7 +30,7 @@
 ## [7.3.0] - 2026-01-21
 
 ### ⏰ Temporarily disabled
- 
+
 - Money tracker in bags still has a tooltip error (secret related) in latest retail version
 - Close all Bags option in restricted Environment (m+ key running) when opening auction house - leads to lua error when opening mailbox afterwards...
 

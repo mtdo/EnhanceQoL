@@ -128,9 +128,19 @@ function Helper.NormalizePanel(panel, defaults)
 	for key, value in pairs(layoutDefaults) do
 		if panel.layout[key] == nil then panel.layout[key] = value end
 	end
+	if type(panel.anchor) ~= "table" then panel.anchor = {} end
+	local anchor = panel.anchor
+	if anchor.point == nil then anchor.point = panel.point or "CENTER" end
+	if anchor.relativePoint == nil then anchor.relativePoint = anchor.point end
+	if anchor.x == nil then anchor.x = panel.x or 0 end
+	if anchor.y == nil then anchor.y = panel.y or 0 end
+	if not anchor.relativeFrame or anchor.relativeFrame == "" then anchor.relativeFrame = "UIParent" end
 	if panel.point == nil then panel.point = "CENTER" end
 	if panel.x == nil then panel.x = 0 end
 	if panel.y == nil then panel.y = 0 end
+	panel.point = anchor.point or panel.point
+	panel.x = anchor.x or panel.x
+	panel.y = anchor.y or panel.y
 	if type(panel.entries) ~= "table" then panel.entries = {} end
 	if type(panel.order) ~= "table" then panel.order = {} end
 	if panel.enabled == nil then panel.enabled = true end
@@ -189,6 +199,13 @@ function Helper.CreatePanel(name, defaults)
 		point = "CENTER",
 		x = 0,
 		y = 0,
+		anchor = {
+			point = "CENTER",
+			relativePoint = "CENTER",
+			relativeFrame = "UIParent",
+			x = 0,
+			y = 0,
+		},
 		layout = Helper.CopyTableShallow(layoutDefaults),
 		entries = {},
 		order = {},

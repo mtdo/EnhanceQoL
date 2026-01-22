@@ -127,6 +127,12 @@ local function getRuntime(panelId)
 	return runtime
 end
 
+local function refreshEditModeSettingValues()
+	if addon.EditModeLib and addon.EditModeLib.internal and addon.EditModeLib.internal.RefreshSettingValues then
+		addon.EditModeLib.internal:RefreshSettingValues()
+	end
+end
+
 local getEditor
 
 local function clampNumber(value, minValue, maxValue, fallback)
@@ -165,6 +171,48 @@ local function normalizeAnchor(anchor, fallback)
 	if anchor and VALID_ANCHORS[anchor] then return anchor end
 	if fallback and VALID_ANCHORS[fallback] then return fallback end
 	return "CENTER"
+end
+
+local function normalizeRelativeFrameName(value)
+	if type(value) ~= "string" or value == "" then return "UIParent" end
+	return value
+end
+
+local function ensurePanelAnchor(panel)
+	if not panel then return nil end
+	panel.anchor = panel.anchor or {}
+	local anchor = panel.anchor
+	if anchor.point == nil then anchor.point = panel.point or "CENTER" end
+	if anchor.relativePoint == nil then anchor.relativePoint = anchor.point end
+	if anchor.x == nil then anchor.x = panel.x or 0 end
+	if anchor.y == nil then anchor.y = panel.y or 0 end
+	anchor.relativeFrame = normalizeRelativeFrameName(anchor.relativeFrame)
+	panel.point = anchor.point or panel.point
+	panel.x = anchor.x or panel.x
+	panel.y = anchor.y or panel.y
+	return anchor
+end
+
+local function anchorUsesUIParent(anchor)
+	return not anchor or (anchor.relativeFrame or "UIParent") == "UIParent"
+end
+
+local function resolveAnchorFrame(anchor)
+	local relativeName = normalizeRelativeFrameName(anchor and anchor.relativeFrame)
+	if relativeName == "UIParent" then return UIParent end
+	local frame = _G[relativeName]
+	if frame then return frame end
+	return UIParent
+end
+
+local function panelFrameName(panelId)
+	return "EQOL_CooldownPanel" .. tostring(panelId)
+end
+
+local function frameNameToPanelId(frameName)
+	if type(frameName) ~= "string" then return nil end
+	local id = frameName:match("^EQOL_CooldownPanel(%d+)$")
+	return id and tonumber(id) or nil
 end
 
 local function normalizeFontStyle(style, fallback)
@@ -2633,11 +2681,14 @@ function CooldownPanels:ApplyPanelPosition(panelId)
 	local runtime = getRuntime(panelId)
 	local frame = runtime.frame
 	if not frame then return end
-	local point = panel.point or "CENTER"
-	local x = tonumber(panel.x) or 0
-	local y = tonumber(panel.y) or 0
+	local anchor = ensurePanelAnchor(panel)
+	local point = normalizeAnchor(anchor and anchor.point, panel.point or "CENTER")
+	local relativePoint = normalizeAnchor(anchor and anchor.relativePoint, point)
+	local x = tonumber(anchor and anchor.x) or 0
+	local y = tonumber(anchor and anchor.y) or 0
+	local relativeFrame = resolveAnchorFrame(anchor)
 	frame:ClearAllPoints()
-	frame:SetPoint(point, UIParent, point, x, y)
+	frame:SetPoint(point, relativeFrame, relativePoint, x, y)
 end
 
 function CooldownPanels:HandlePositionChanged(panelId, data)
@@ -2645,9 +2696,15 @@ function CooldownPanels:HandlePositionChanged(panelId, data)
 	if not panel or type(data) ~= "table" then return end
 	local runtime = getRuntime(panelId)
 	if runtime.suspendEditSync then return end
-	panel.point = data.point or panel.point or "CENTER"
-	if data.x ~= nil then panel.x = data.x end
-	if data.y ~= nil then panel.y = data.y end
+	local anchor = ensurePanelAnchor(panel)
+	if not anchor or not anchorUsesUIParent(anchor) then return end
+	anchor.point = data.point or anchor.point or "CENTER"
+	anchor.relativePoint = data.relativePoint or anchor.relativePoint or anchor.point
+	if data.x ~= nil then anchor.x = data.x end
+	if data.y ~= nil then anchor.y = data.y end
+	panel.point = anchor.point or panel.point or "CENTER"
+	panel.x = anchor.x or panel.x or 0
+	panel.y = anchor.y or panel.y or 0
 end
 
 function CooldownPanels:IsInEditMode() return EditMode and EditMode.IsInEditMode and EditMode:IsInEditMode() end
@@ -2842,13 +2899,294 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 
 	panel.layout = panel.layout or Helper.CopyTableShallow(Helper.PANEL_LAYOUT_DEFAULTS)
 	local layout = panel.layout
+	local anchor = ensurePanelAnchor(panel)
+	local panelKey = normalizeId(panelId)
 	local countFontPath, countFontSize, countFontStyle = getCountFontDefaults(frame)
 	local chargesFontPath, chargesFontSize, chargesFontStyle = getChargesFontDefaults(frame)
 	local fontOptions = getFontOptions(countFontPath)
 	local chargesFontOptions = getFontOptions(chargesFontPath)
+	local function ensureAnchorTable()
+		return ensurePanelAnchor(panel)
+	end
+	local function syncPanelPositionFromAnchor()
+		local a = ensureAnchorTable()
+		if not a then return end
+		panel.point = a.point or panel.point or "CENTER"
+		panel.x = a.x or panel.x or 0
+		panel.y = a.y or panel.y or 0
+	end
+	local function syncEditModeLayoutFromAnchor()
+		if not (EditMode and EditMode.EnsureLayoutData and EditMode.GetActiveLayoutName) then return end
+		local a = ensureAnchorTable()
+		if not a then return end
+		local layoutName = EditMode:GetActiveLayoutName()
+		local data = EditMode:EnsureLayoutData(editModeId, layoutName)
+		if not data then return end
+		data.point = a.point or "CENTER"
+		data.relativePoint = a.relativePoint or data.point
+		data.x = a.x or 0
+		data.y = a.y or 0
+	end
+	local function applyAnchorPosition()
+		syncPanelPositionFromAnchor()
+		syncEditModeLayoutFromAnchor()
+		CooldownPanels:ApplyPanelPosition(panelId)
+		CooldownPanels:UpdateVisibility(panelId)
+		if EditMode and EditMode.RefreshFrame then EditMode:RefreshFrame(editModeId) end
+		refreshEditModeSettingValues()
+	end
+	local function wouldCauseLoop(candidateName)
+		local targetId = frameNameToPanelId(candidateName)
+		if not targetId then return false end
+		if targetId == panelKey then return true end
+		local seen = {}
+		local currentId = targetId
+		local limit = 20
+		while currentId and limit > 0 do
+			if seen[currentId] then break end
+			seen[currentId] = true
+			if currentId == panelKey then return true end
+			local other = CooldownPanels:GetPanel(currentId)
+			local otherAnchor = other and ensurePanelAnchor(other)
+			currentId = frameNameToPanelId(otherAnchor and otherAnchor.relativeFrame)
+			limit = limit - 1
+		end
+		return false
+	end
+	local function applyAnchorDefaults(a, target)
+		if not a then return end
+		if target == "UIParent" then
+			a.point = "CENTER"
+			a.relativePoint = "CENTER"
+			a.x = 0
+			a.y = 0
+		else
+			a.point = "TOPLEFT"
+			a.relativePoint = "BOTTOMLEFT"
+			a.x = 0
+			a.y = 0
+		end
+	end
 	local settings
 	if SettingType then
+		local function relativeFrameEntries()
+			local entries = {}
+			local seen = {}
+			local function add(key, label)
+				if not key or key == "" or seen[key] then return end
+				if wouldCauseLoop(key) then return end
+				seen[key] = true
+				entries[#entries + 1] = { key = key, label = label or key }
+			end
+
+			add("UIParent", "UIParent")
+
+			if addon.variables and addon.variables.unitFrameNames then
+				for _, info in ipairs(addon.variables.unitFrameNames) do
+					if info.name then
+						local label = info.text or info.name
+						add(info.name, "Blizzard: " .. tostring(label))
+					end
+				end
+			else
+				add("PlayerFrame", "Blizzard: PlayerFrame")
+				add("TargetFrame", "Blizzard: TargetFrame")
+				add("FocusFrame", "Blizzard: FocusFrame")
+				add("PetFrame", "Blizzard: PetFrame")
+			end
+
+			local ufCfg = addon.db and addon.db.ufFrames
+			if ufCfg then
+				if ufCfg.player and ufCfg.player.enabled then add("EQOLUFPlayerFrame", "UF: " .. (L["UFPlayerFrame"] or "Player Frame")) end
+				if ufCfg.target and ufCfg.target.enabled then add("EQOLUFTargetFrame", "UF: " .. (L["UFTargetFrame"] or "Target Frame")) end
+				if ufCfg.targettarget and ufCfg.targettarget.enabled then add("EQOLUFToTFrame", "UF: " .. (L["UFToTFrame"] or "Target of Target")) end
+				if ufCfg.focus and ufCfg.focus.enabled then add("EQOLUFFocusFrame", "UF: " .. (L["UFFocusFrame"] or "Focus Frame")) end
+				if ufCfg.pet and ufCfg.pet.enabled then add("EQOLUFPetFrame", "UF: " .. (L["UFPetFrame"] or "Pet Frame")) end
+				if ufCfg.boss and ufCfg.boss.enabled then add("EQOLUFBossContainer", "UF: " .. (L["UFBossFrame"] or "Boss Frame")) end
+			end
+
+			local root = CooldownPanels:GetRoot()
+			if root and root.panels then
+				for id, other in pairs(root.panels) do
+					local otherId = normalizeId(id)
+					if otherId ~= panelKey then
+						local label = string.format("Panel %s: %s", tostring(otherId), other and other.name or "Cooldown Panel")
+						add(panelFrameName(otherId), label)
+					end
+				end
+			end
+
+			local a = ensureAnchorTable()
+			local cur = a and a.relativeFrame
+			if cur and not seen[cur] then add(cur, cur) end
+
+			return entries
+		end
+
+		local function validateRelativeFrame(a)
+			if not a then return "UIParent" end
+			local cur = normalizeRelativeFrameName(a.relativeFrame)
+			local entries = relativeFrameEntries()
+			for _, entry in ipairs(entries) do
+				if entry.key == cur then return cur end
+			end
+			a.relativeFrame = "UIParent"
+			return "UIParent"
+		end
+
 		settings = {
+			{
+				name = "Anchor",
+				kind = SettingType.Collapsible,
+				id = "cooldownPanelAnchor",
+				defaultCollapsed = false,
+			},
+			{
+				name = "Relative frame",
+				kind = SettingType.Dropdown,
+				field = "anchorRelativeFrame",
+				parentId = "cooldownPanelAnchor",
+				height = 200,
+				get = function()
+					local a = ensureAnchorTable()
+					return validateRelativeFrame(a)
+				end,
+				set = function(_, value)
+					local a = ensureAnchorTable()
+					if not a then return end
+					local target = normalizeRelativeFrameName(value)
+					if wouldCauseLoop(target) then target = "UIParent" end
+					a.relativeFrame = target
+					applyAnchorDefaults(a, target)
+					applyAnchorPosition()
+				end,
+				generator = function(_, root)
+					local entries = relativeFrameEntries()
+					for _, entry in ipairs(entries) do
+						root:CreateRadio(entry.label, function()
+							local a = ensureAnchorTable()
+							return validateRelativeFrame(a) == entry.key
+						end, function()
+							local a = ensureAnchorTable()
+							if not a then return end
+							local target = entry.key
+							if wouldCauseLoop(target) then target = "UIParent" end
+							a.relativeFrame = target
+							applyAnchorDefaults(a, target)
+							applyAnchorPosition()
+						end)
+					end
+				end,
+				default = "UIParent",
+			},
+			{
+				name = "Anchor point",
+				kind = SettingType.Dropdown,
+				field = "anchorPoint",
+				parentId = "cooldownPanelAnchor",
+				height = 160,
+				get = function()
+					local a = ensureAnchorTable()
+					return normalizeAnchor(a and a.point, "CENTER")
+				end,
+				set = function(_, value)
+					local a = ensureAnchorTable()
+					if not a then return end
+					a.point = normalizeAnchor(value, a.point or "CENTER")
+					if not a.relativePoint then a.relativePoint = a.point end
+					applyAnchorPosition()
+				end,
+				generator = function(_, root)
+					for _, option in ipairs(anchorOptions) do
+						root:CreateRadio(option.label, function()
+							local a = ensureAnchorTable()
+							return normalizeAnchor(a and a.point, "CENTER") == option.value
+						end, function()
+							local a = ensureAnchorTable()
+							if not a then return end
+							a.point = option.value
+							if not a.relativePoint then a.relativePoint = option.value end
+							applyAnchorPosition()
+						end)
+					end
+				end,
+			},
+			{
+				name = "Relative point",
+				kind = SettingType.Dropdown,
+				field = "anchorRelativePoint",
+				parentId = "cooldownPanelAnchor",
+				height = 160,
+				get = function()
+					local a = ensureAnchorTable()
+					return normalizeAnchor(a and a.relativePoint, a and a.point or "CENTER")
+				end,
+				set = function(_, value)
+					local a = ensureAnchorTable()
+					if not a then return end
+					a.relativePoint = normalizeAnchor(value, a.relativePoint or "CENTER")
+					applyAnchorPosition()
+				end,
+				generator = function(_, root)
+					for _, option in ipairs(anchorOptions) do
+						root:CreateRadio(option.label, function()
+							local a = ensureAnchorTable()
+							return normalizeAnchor(a and a.relativePoint, a and a.point or "CENTER") == option.value
+						end, function()
+							local a = ensureAnchorTable()
+							if not a then return end
+							a.relativePoint = option.value
+							applyAnchorPosition()
+						end)
+					end
+				end,
+			},
+			{
+				name = "X Offset",
+				kind = SettingType.Slider,
+				allowInput = true,
+				field = "anchorOffsetX",
+				parentId = "cooldownPanelAnchor",
+				minValue = -1000,
+				maxValue = 1000,
+				valueStep = 1,
+				get = function()
+					local a = ensureAnchorTable()
+					return a and a.x or 0
+				end,
+				set = function(_, value)
+					local a = ensureAnchorTable()
+					if not a then return end
+					local new = tonumber(value) or 0
+					if a.x == new then return end
+					a.x = new
+					applyAnchorPosition()
+				end,
+				default = 0,
+			},
+			{
+				name = "Y Offset",
+				kind = SettingType.Slider,
+				allowInput = true,
+				field = "anchorOffsetY",
+				parentId = "cooldownPanelAnchor",
+				minValue = -1000,
+				maxValue = 1000,
+				valueStep = 1,
+				get = function()
+					local a = ensureAnchorTable()
+					return a and a.y or 0
+				end,
+				set = function(_, value)
+					local a = ensureAnchorTable()
+					if not a then return end
+					local new = tonumber(value) or 0
+					if a.y == new then return end
+					a.y = new
+					applyAnchorPosition()
+				end,
+				default = 0,
+			},
 			{
 				name = "Icon size",
 				kind = SettingType.Slider,
@@ -3197,10 +3535,10 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 		frame = frame,
 		title = panel.name or "Cooldown Panel",
 		layoutDefaults = {
-			point = panel.point or "CENTER",
-			relativePoint = panel.point or "CENTER",
-			x = panel.x or 0,
-			y = panel.y or 0,
+			point = (anchor and anchor.point) or panel.point or "CENTER",
+			relativePoint = (anchor and anchor.relativePoint) or (anchor and anchor.point) or panel.point or "CENTER",
+			x = (anchor and anchor.x) or panel.x or 0,
+			y = (anchor and anchor.y) or panel.y or 0,
 			iconSize = layout.iconSize,
 			spacing = layout.spacing,
 			direction = normalizeDirection(layout.direction, Helper.PANEL_LAYOUT_DEFAULTS.direction),
@@ -3226,11 +3564,26 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 			cooldownGcdDrawBling = layout.cooldownGcdDrawBling == true,
 			cooldownGcdDrawSwipe = layout.cooldownGcdDrawSwipe == true,
 		},
-		onApply = function(_, _, data) self:ApplyEditMode(panelId, data) end,
+		onApply = function(_, _, data)
+			local a = ensureAnchorTable()
+			if a and anchorUsesUIParent(a) and data and data.point then
+				a.point = data.point or a.point or "CENTER"
+				a.relativePoint = data.relativePoint or a.relativePoint or a.point
+				a.x = data.x or a.x or 0
+				a.y = data.y or a.y or 0
+				syncPanelPositionFromAnchor()
+			elseif a and data and data.point then
+				syncEditModeLayoutFromAnchor()
+			end
+			self:ApplyEditMode(panelId, data)
+			refreshEditModeSettingValues()
+		end,
 		onPositionChanged = function(_, _, data) self:HandlePositionChanged(panelId, data) end,
 		onEnter = function() self:ShowEditModeHint(panelId, true) end,
 		onExit = function() self:ShowEditModeHint(panelId, false) end,
 		isEnabled = function() return panel.enabled ~= false end,
+		relativeTo = function() return resolveAnchorFrame(ensureAnchorTable()) end,
+		allowDrag = function() return anchorUsesUIParent(ensureAnchorTable()) end,
 		settings = settings,
 		showOutsideEditMode = true,
 	})

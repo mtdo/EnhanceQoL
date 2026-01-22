@@ -740,9 +740,7 @@ local function buildUnitSettings(unit)
 	list[#list + 1] = checkbox(
 		L["UFTooltipUseEditMode"] or "Use Edit Mode tooltip position",
 		function() return getValue(unit, { "tooltipUseEditMode" }, def.tooltipUseEditMode == true) == true end,
-		function(val)
-			setValue(unit, { "tooltipUseEditMode" }, val and true or false)
-		end,
+		function(val) setValue(unit, { "tooltipUseEditMode" }, val and true or false) end,
 		def.tooltipUseEditMode == true,
 		"frame",
 		isTooltipEnabled
@@ -3339,6 +3337,29 @@ local function buildUnitSettings(unit)
 			setValue(unit, { "auraIcons", "showCooldown" }, val and true or false)
 			refresh()
 		end, auraDef.showCooldown ~= false, "auras")
+		list[#list].isEnabled = isAuraEnabled
+
+		list[#list + 1] = slider(
+			L["Cooldown Text Size"] or "Cooldown text size",
+			0,
+			32,
+			1,
+			function() return getValue(unit, { "auraIcons", "cooldownFontSize" }, auraDef.cooldownFontSize or 0) end,
+			function(val)
+				val = tonumber(val) or 0
+				if val < 0 then val = 0 end
+				setValue(unit, { "auraIcons", "cooldownFontSize" }, val)
+				refresh()
+			end,
+			auraDef.cooldownFontSize or 0,
+			"auras",
+			true,
+			function(value)
+				value = tonumber(value) or 0
+				if value <= 0 then return L["Auto"] or "Auto" end
+				return tostring(math.floor(value + 0.5))
+			end
+		)
 		list[#list].isEnabled = isAuraEnabled
 
 		list[#list + 1] = slider(L["Aura stack size"] or "Aura stack size", 8, 32, 1, function() return getValue(unit, { "auraIcons", "countFontSize" }, auraDef.countFontSize or 14) end, function(val)

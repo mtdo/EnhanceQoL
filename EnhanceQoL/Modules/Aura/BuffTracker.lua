@@ -1508,7 +1508,7 @@ local function FlushPendingAuras()
 		if getter then
 			for inst in pairs(pendingAuraInstances) do
 				local aura = getter("player", inst)
-				if aura and aura.spellId then
+				if aura and aura.spellId and ((issecretvalue and not issecretvalue(aura.spellId)) or not issecretvalue) then
 					local base = altToBase[aura.spellId] or aura.spellId
 					changed[base] = aura.spellId
 				elseif auraInstanceMap[inst] then

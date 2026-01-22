@@ -12,6 +12,7 @@ local DEFAULT_BACKDROP_ALPHA = 0.5
 local DEFAULT_BORDER_ALPHA = 1
 local DEFAULT_FONT_OUTLINE = true
 local DEFAULT_FONT_SHADOW = false
+local DEFAULT_STREAM_GAP = 5
 local SHADOW_OFFSET_X = 1
 local SHADOW_OFFSET_Y = -1
 local SHADOW_ALPHA = 0.8
@@ -61,6 +62,15 @@ local function normalizePercent(value, fallback)
 	local num = tonumber(value)
 	if not num then num = tonumber(fallback) end
 	if not num then return DEFAULT_TEXT_ALPHA end
+	if num < 0 then return 0 end
+	if num > 100 then return 100 end
+	return num
+end
+
+local function normalizeStreamGap(value, fallback)
+	local num = tonumber(value)
+	if not num then num = tonumber(fallback) end
+	if not num then return DEFAULT_STREAM_GAP end
 	if num < 0 then return 0 end
 	if num > 100 then return 100 end
 	return num
@@ -292,6 +302,7 @@ local function registerEditModePanel(panel)
 		strata = normalizeStrata(panel.info.strata, panel.frame:GetFrameStrata()),
 		contentAnchor = normalizeContentAnchor(panel.info.contentAnchor, "LEFT"),
 		streams = copyList(panel.info.streams),
+		streamGap = normalizeStreamGap(panel.info.streamGap, DEFAULT_STREAM_GAP),
 		fontOutline = panel.info.fontOutline ~= false,
 		fontShadow = panel.info.fontShadow == true,
 		fontFace = normalizeFontFace(panel.info.fontFace) or defaultFontFace(),
@@ -303,6 +314,7 @@ local function registerEditModePanel(panel)
 	panel.info.contentAnchor = defaults.contentAnchor
 	panel.info.fontFace = defaults.fontFace
 	panel.info.showTooltips = defaults.showTooltips
+	panel.info.streamGap = defaults.streamGap
 
 	local settings
 	if SettingType then
@@ -374,6 +386,15 @@ local function registerEditModePanel(panel)
 						end)
 					end
 				end,
+			},
+			{
+				name = L["DataPanelStreamGap"] or "Stream gap",
+				kind = SettingType.Slider,
+				field = "streamGap",
+				default = defaults.streamGap,
+				minValue = 0,
+				maxValue = 100,
+				valueStep = 1,
 			},
 			{
 				name = L["DataPanelContentAlignment"] or "Content alignment",
@@ -558,6 +579,7 @@ local function ensureSettings(id, name)
 			clickThrough = false,
 			strata = "MEDIUM",
 			contentAnchor = "LEFT",
+			streamGap = DEFAULT_STREAM_GAP,
 			fontOutline = DEFAULT_FONT_OUTLINE,
 			fontShadow = DEFAULT_FONT_SHADOW,
 			fontFace = defaultFontFace(),
@@ -573,6 +595,7 @@ local function ensureSettings(id, name)
 		if info.clickThrough == nil then info.clickThrough = false end
 		info.strata = normalizeStrata(info.strata, "MEDIUM")
 		info.contentAnchor = normalizeContentAnchor(info.contentAnchor, "LEFT")
+		info.streamGap = normalizeStreamGap(info.streamGap, DEFAULT_STREAM_GAP)
 		if info.fontOutline == nil then info.fontOutline = DEFAULT_FONT_OUTLINE end
 		if info.fontShadow == nil then info.fontShadow = DEFAULT_FONT_SHADOW end
 		if not info.fontFace or info.fontFace == "" then info.fontFace = defaultFontFace() end
@@ -829,6 +852,7 @@ function DataPanel.Create(id, name, existingOnly)
 			or field == "streams"
 			or field == "strata"
 			or field == "contentAnchor"
+			or field == "streamGap"
 			or field == "fontFace"
 			or field == "fontOutline"
 			or field == "fontShadow"
@@ -928,6 +952,13 @@ function DataPanel.Create(id, name, existingOnly)
 				layoutChanged = true
 			end
 		end
+		if data.streamGap ~= nil then
+			local value = normalizeStreamGap(data.streamGap, info.streamGap)
+			if info.streamGap ~= value then
+				info.streamGap = value
+				layoutChanged = true
+			end
+		end
 		if data.fontFace ~= nil then
 			local desired = normalizeFontFace(data.fontFace) or defaultFontFace()
 			if info.fontFace ~= desired then
@@ -996,7 +1027,8 @@ function DataPanel.Create(id, name, existingOnly)
 
 		local frameWidth = self.frame and self.frame.GetWidth and self.frame:GetWidth() or 0
 		local contentAnchor = normalizeContentAnchor(self.info and self.info.contentAnchor, "LEFT")
-		local changed = force and true or self.lastLayoutAnchor ~= contentAnchor or self.lastLayoutWidth ~= frameWidth
+		local spacing = normalizeStreamGap(self.info and self.info.streamGap, DEFAULT_STREAM_GAP)
+		local changed = force and true or self.lastLayoutAnchor ~= contentAnchor or self.lastLayoutWidth ~= frameWidth or self.lastLayoutSpacing ~= spacing
 		if not self.lastOrder or #self.lastOrder ~= #visible then
 			changed = true
 		else
@@ -1010,7 +1042,6 @@ function DataPanel.Create(id, name, existingOnly)
 		end
 		if not changed then return end
 
-		local spacing = 5
 		local padding = 5
 		local totalWidth = 0
 		for i, name in ipairs(visible) do
@@ -1050,6 +1081,7 @@ function DataPanel.Create(id, name, existingOnly)
 		end
 		self.lastLayoutAnchor = contentAnchor
 		self.lastLayoutWidth = frameWidth
+		self.lastLayoutSpacing = spacing
 	end
 
 	function panel:AddStream(name)

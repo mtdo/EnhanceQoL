@@ -77,14 +77,19 @@ local ignorelist = {
 	[434144] = true, -- Infliction of Sorrow fake cast
 	[437965] = true, -- Pulsing Flames, fake cast in Cinderbrew Area first pull
 	[441426] = true, -- Exterminate cleave
+	[441437] = true, -- Arachnophobia
 	[456640] = true, -- Consuming Fire fake cast
 	[455706] = true, -- Profession DNT
+	[455701] = true, -- Profession Engineering
 	[455773] = true, -- Profession DNT
+	[455712] = true, -- Cooking
+	[455738] = true, -- Cooking
 	[458357] = true, -- Chain Heal via Lively Totems
 	[470411] = true, -- Flame Shock fake cast
 	[1251595] = true, -- Flamefang Pitch, Midnight Survival Hunter
 	[1253859] = true, -- Takedown, Midnight Survival Hunter
 	[1263886] = true, -- Transmog fake call
+	[395472] = true, -- Cooking
 }
 
 ActionTracker.ignoreList = ignorelist

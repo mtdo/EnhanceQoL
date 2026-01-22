@@ -3478,6 +3478,8 @@ local function initUI()
 	addon.functions.InitDBValue("squareMinimapBorderColor", { r = 0, g = 0, b = 0 })
 	addon.functions.InitDBValue("minimapButtonsMouseover", false)
 	addon.functions.InitDBValue("unclampMinimapCluster", false)
+	addon.functions.InitDBValue("enableMinimapClusterScale", false)
+	addon.functions.InitDBValue("minimapClusterScale", 1)
 	addon.functions.InitDBValue("showWorldMapCoordinates", false)
 	addon.functions.InitDBValue("hiddenMinimapElements", addon.db["hiddenMinimapElements"] or {})
 	addon.functions.InitDBValue("persistAuctionHouseFilter", false)
@@ -3634,6 +3636,23 @@ local function initUI()
 	end
 
 	if addon.functions.applyMinimapClusterClamp then addon.functions.applyMinimapClusterClamp() end
+
+	function addon.functions.applyMinimapClusterScale()
+		if not MinimapCluster or not MinimapCluster.SetScale then return end
+		if addon.db and addon.db.enableMinimapClusterScale then
+			local scale = tonumber(addon.db.minimapClusterScale) or 1
+			if scale < 0.5 then
+				scale = 0.5
+			elseif scale > 2 then
+				scale = 2
+			end
+			MinimapCluster:SetScale(scale)
+		else
+			MinimapCluster:SetScale(1)
+		end
+	end
+
+	if addon.functions.applyMinimapClusterScale then addon.functions.applyMinimapClusterScale() end
 
 	function addon.functions.toggleMinimapButton(value)
 		if value == false then

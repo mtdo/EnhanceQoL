@@ -82,6 +82,39 @@ function H.applyFont(fs, fontPath, size, outline)
 	end
 end
 
+local function ensureCooldownFontDefault(cooldown, fontString)
+	if not cooldown or not fontString or cooldown._eqolCooldownFontDefault then return end
+	local fontFile, fontSize, fontFlags = fontString:GetFont()
+	if not fontFile or not fontSize then return end
+	cooldown._eqolCooldownFontDefault = {
+		font = fontFile,
+		size = fontSize,
+		flags = fontFlags,
+	}
+end
+
+function H.applyCooldownTextStyle(cooldown, size)
+	if not cooldown or not cooldown.GetCountdownFontString then return end
+	local fontString = cooldown:GetCountdownFontString()
+	if not fontString or not fontString.GetFont or not fontString.SetFont then return end
+	ensureCooldownFontDefault(cooldown, fontString)
+	local def = cooldown._eqolCooldownFontDefault
+	if not def or not def.font or not def.size then return end
+	local desired = tonumber(size) or 0
+	local flags = def.flags or ""
+	if desired > 0 then
+		local key = def.font .. "|" .. tostring(desired) .. "|" .. tostring(flags)
+		if cooldown._eqolCooldownFontKey == key then return end
+		fontString:SetFont(def.font, desired, flags)
+		cooldown._eqolCooldownFontKey = key
+	else
+		local key = "default|" .. def.font .. "|" .. tostring(def.size) .. "|" .. tostring(flags)
+		if cooldown._eqolCooldownFontKey == key then return end
+		fontString:SetFont(def.font, def.size, flags)
+		cooldown._eqolCooldownFontKey = key
+	end
+end
+
 function H.resolveBorderTexture(key)
 	if not key or key == "" or key == "DEFAULT" then return "Interface\\Buttons\\WHITE8x8" end
 	if LSM then

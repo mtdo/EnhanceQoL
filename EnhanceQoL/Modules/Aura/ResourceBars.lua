@@ -103,6 +103,7 @@ local COSMETIC_BAR_KEYS = {
 	"width",
 	"height",
 	"textStyle",
+	"shortNumbers",
 	"fontSize",
 	"fontFace",
 	"fontOutline",
@@ -194,6 +195,12 @@ local function formatSoulShardValue(value)
 	if value == nil then return "0" end
 	local text = string.format("%.1f", value)
 	return text:gsub("%.0$", "")
+end
+
+local function formatNumber(value, useShort)
+	if value == nil then return "0" end
+	if useShort then return AbbreviateNumbers(value) end
+	return tostring(value)
 end
 
 ResourceBars.PowerLabels = {
@@ -1991,6 +1998,7 @@ function updateHealthBar(evt)
 		end
 		if healthBar.text then
 			local style = settings and settings.textStyle or "PERCENT"
+			local useShortNumbers = settings.shortNumbers ~= false
 			if style == "NONE" then
 				if healthBar._textShown then
 					healthBar.text:SetText("")
@@ -2006,9 +2014,9 @@ function updateHealthBar(evt)
 				if style == "PERCENT" then
 					text = percentStr
 				elseif style == "CURRENT" then
-					text = AbbreviateNumbers(curHealth)
+					text = formatNumber(curHealth, useShortNumbers)
 				else -- CURMAX
-					text = AbbreviateNumbers(curHealth) .. " / " .. (AbbreviateNumbers(maxHealth))
+					text = formatNumber(curHealth, useShortNumbers) .. " / " .. formatNumber(maxHealth, useShortNumbers)
 				end
 				if not addon.variables.isMidnight and healthBar._lastText ~= text then
 					healthBar.text:SetText(text)
@@ -2836,6 +2844,7 @@ function updatePowerBar(type, runeSlot)
 			percentStr = tostring(floor(percentDisplay + 0.5))
 		end
 		if bar.text then
+			local useShortNumbers = cfg.shortNumbers ~= false
 			if style == "NONE" then
 				if bar._textShown then
 					bar.text:SetText("")
@@ -2851,9 +2860,9 @@ function updatePowerBar(type, runeSlot)
 				if style == "PERCENT" then
 					text = percentStr
 				elseif style == "CURRENT" then
-					text = tostring(curPower)
+					text = formatNumber(curPower, useShortNumbers)
 				else
-					text = AbbreviateNumbers(curPower) .. " / " .. (AbbreviateNumbers(maxHealth))
+					text = formatNumber(curPower, useShortNumbers) .. " / " .. formatNumber(maxHealth, useShortNumbers)
 				end
 				if (not addon.variables.isMidnight or (issecretvalue and not issecretvalue(text))) and bar._lastText ~= text then
 					bar.text:SetText(text)
@@ -2937,6 +2946,7 @@ function updatePowerBar(type, runeSlot)
 		local percentStr = addon.variables.isMidnight and string.format("%s%%", AbbreviateLargeNumbers(percent)) or tostring(floor(percent + 0.5))
 
 		if bar.text then
+			local useShortNumbers = cfg.shortNumbers ~= false
 			if style == "NONE" then
 				if bar._textShown then
 					bar.text:SetText("")
@@ -2952,9 +2962,9 @@ function updatePowerBar(type, runeSlot)
 				if style == "PERCENT" then
 					text = percentStr
 				elseif style == "CURRENT" then
-					text = tostring(stacks)
+					text = formatNumber(stacks, useShortNumbers)
 				else
-					text = tostring(stacks) .. " / " .. tostring(logicalMax)
+					text = formatNumber(stacks, useShortNumbers) .. " / " .. formatNumber(logicalMax, useShortNumbers)
 				end
 				if (not addon.variables.isMidnight or (issecretvalue and not issecretvalue(text))) and bar._lastText ~= text then
 					bar.text:SetText(text)
@@ -3063,6 +3073,7 @@ function updatePowerBar(type, runeSlot)
 		percentStr = tostring(floor(percent + 0.5))
 	end
 	if bar.text then
+		local useShortNumbers = cfg.shortNumbers ~= false
 		if style == "NONE" then
 			if bar._textShown then
 				bar.text:SetText("")
@@ -3081,14 +3092,13 @@ function updatePowerBar(type, runeSlot)
 				if isSoulShards then
 					text = formatSoulShardValue(displayCur)
 				else
-					text = AbbreviateNumbers(curPower)
-					text = tostring(curPower)
+					text = formatNumber(curPower, useShortNumbers)
 				end
 			else -- CURMAX
 				if isSoulShards then
 					text = formatSoulShardValue(displayCur) .. " / " .. formatSoulShardValue(displayMax)
 				else
-					text = AbbreviateNumbers(curPower) .. " / " .. (AbbreviateNumbers(maxPower))
+					text = formatNumber(curPower, useShortNumbers) .. " / " .. formatNumber(maxPower, useShortNumbers)
 				end
 			end
 			if (not addon.variables.isMidnight or (issecretvalue and not issecretvalue(text))) and bar._lastText ~= text then
