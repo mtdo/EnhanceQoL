@@ -584,6 +584,7 @@ function EditMode:RegisterFrame(id, opts)
 			dividerHeight = opts.dividerHeight,
 			showSettingsReset = opts.showSettingsReset,
 			showReset = opts.showReset,
+			settingsMaxHeight = opts.settingsMaxHeight,
 		}
 
 		self.lib:AddFrame(frame, function(_, layoutName, point, x, y)

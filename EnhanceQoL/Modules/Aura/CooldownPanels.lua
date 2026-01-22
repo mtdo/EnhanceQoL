@@ -269,6 +269,11 @@ local function resolveAnchorFrame(anchor)
 		local blizzFrame = _G[generic.blizz]
 		if blizzFrame then return blizzFrame end
 	end
+	local anchorHelper = CooldownPanels.AnchorHelper
+	if anchorHelper and anchorHelper.ResolveExternalFrame then
+		local externalFrame = anchorHelper:ResolveExternalFrame(relativeName)
+		if externalFrame then return externalFrame end
+	end
 	local frame = _G[relativeName]
 	if frame then return frame end
 	return UIParent
@@ -3050,6 +3055,9 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 				if info then add(key, info.label) end
 			end
 
+			local anchorHelper = CooldownPanels.AnchorHelper
+			if anchorHelper and anchorHelper.CollectAnchorEntries then anchorHelper:CollectAnchorEntries(entries, seen) end
+
 			local root = CooldownPanels:GetRoot()
 			if root and root.panels then
 				for id, other in pairs(root.panels) do
@@ -3063,7 +3071,11 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 
 			local a = ensureAnchorTable()
 			local cur = a and a.relativeFrame
-			if cur and not seen[cur] then add(cur, cur) end
+			if cur and not seen[cur] then
+				local anchorHelper = CooldownPanels.AnchorHelper
+				local label = anchorHelper and anchorHelper.GetAnchorLabel and anchorHelper:GetAnchorLabel(cur)
+				add(cur, label or cur)
+			end
 
 			return entries
 		end
@@ -3104,6 +3116,8 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 					a.relativeFrame = target
 					applyAnchorDefaults(a, target)
 					applyAnchorPosition()
+					local anchorHelper = CooldownPanels.AnchorHelper
+					if anchorHelper and anchorHelper.MaybeScheduleRefresh then anchorHelper:MaybeScheduleRefresh(target) end
 				end,
 				generator = function(_, root)
 					local entries = relativeFrameEntries()
@@ -3119,6 +3133,8 @@ function CooldownPanels:RegisterEditModePanel(panelId)
 							a.relativeFrame = target
 							applyAnchorDefaults(a, target)
 							applyAnchorPosition()
+							local anchorHelper = CooldownPanels.AnchorHelper
+							if anchorHelper and anchorHelper.MaybeScheduleRefresh then anchorHelper:MaybeScheduleRefresh(target) end
 						end)
 					end
 				end,
@@ -3675,6 +3691,17 @@ local function ensureUpdateFrame()
 	if CooldownPanels.runtime and CooldownPanels.runtime.updateFrame then return end
 	local frame = CreateFrame("Frame")
 	frame:SetScript("OnEvent", function(_, event, ...)
+		if event == "ADDON_LOADED" then
+			local name = ...
+			local anchorHelper = CooldownPanels.AnchorHelper
+			if anchorHelper and anchorHelper.HandleAddonLoaded then anchorHelper:HandleAddonLoaded(name) end
+			return
+		end
+		if event == "PLAYER_LOGIN" then
+			local anchorHelper = CooldownPanels.AnchorHelper
+			if anchorHelper and anchorHelper.HandlePlayerLogin then anchorHelper:HandlePlayerLogin() end
+			return
+		end
 		if event == "UNIT_AURA" then
 			local unit = ...
 			if unit ~= "player" then return end
@@ -3685,6 +3712,8 @@ local function ensureUpdateFrame()
 		CooldownPanels:RequestUpdate()
 	end)
 	frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+	frame:RegisterEvent("PLAYER_LOGIN")
+	frame:RegisterEvent("ADDON_LOADED")
 	frame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 	frame:RegisterEvent("SPELL_UPDATE_CHARGES")
 	frame:RegisterEvent("SPELLS_CHANGED")
