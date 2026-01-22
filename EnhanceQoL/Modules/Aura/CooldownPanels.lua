@@ -1750,7 +1750,7 @@ local function ensureEditor()
 
 	local function updateEditModeButton()
 		if not editModeButton then return end
-		if InCombatLockdown and InCombatLockdown() then
+		if InCombatLockdown and InCombatLockdown() or addon.functions.isRestrictedContent() then
 			editModeButton:Disable()
 		else
 			editModeButton:Enable()
@@ -1758,7 +1758,7 @@ local function ensureEditor()
 	end
 
 	editModeButton:SetScript("OnClick", function()
-		if InCombatLockdown and InCombatLockdown() then return end
+		if InCombatLockdown and InCombatLockdown() or addon.functions.isRestrictedContent() then return end
 		if EditModeManagerFrame and ShowUIPanel then ShowUIPanel(EditModeManagerFrame) end
 	end)
 
