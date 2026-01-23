@@ -7,7 +7,7 @@
 - Quest Tracker: Minimized '+' anchor now supports bottom corners properly.
 - UF Plus: Detached power bar can use a custom strata.
 - UF Plus: Optional handling for empty power bars (max 0) when power is detached.
-- Cooldown Viewer: Optional /cdm (and /wa if WeakAuras is not loaded) slash commands to open settings.
+- Cooldown Viewer: Optional /cdm and /wa slash commands to open settings.
 
 ### 🐛 Fixed
 
