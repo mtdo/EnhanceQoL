@@ -25,6 +25,13 @@ local ICON_INACTIVE = "Interface\\AddOns\\EnhanceQoL\\Modules\\MythicPlus\\Art\\
 
 _G["BINDING_NAME_EQOL_TOGGLE_WORLDMAP_TELEPORT"] = L["teleportsWorldMapBinding"] or "Toggle World Map Teleport panel"
 
+local function GetPlayerMapID()
+	if C_Map and C_Map.GetBestMapForUnit then
+		return C_Map.GetBestMapForUnit("player")
+	end
+	return nil
+end
+
 -- Cache some frequently used API
 local FirstOwnedItemID
 do
@@ -1185,7 +1192,21 @@ function addon.MythicPlus.functions.OpenWorldMapTeleportPanel(force)
 
 	if not WorldMapFrame then return end
 
-	if not WorldMapFrame:IsShown() then
+	local playerMapID = GetPlayerMapID()
+	local function shouldOpenQuestLog()
+		if not WorldMapFrame then return false end
+		if not WorldMapFrame:IsShown() then return true end
+		if WorldMapFrame.IsMinimized and WorldMapFrame:IsMinimized() then
+			if WorldMapFrame.IsSidePanelShown and not WorldMapFrame:IsSidePanelShown() then
+				return true
+			end
+		end
+		return false
+	end
+
+	if WorldMapFrame and WorldMapFrame.HandleUserActionOpenQuestLog and shouldOpenQuestLog() then
+		WorldMapFrame:HandleUserActionOpenQuestLog(playerMapID)
+	elseif not WorldMapFrame:IsShown() then
 		if ToggleMap then
 			ToggleMap()
 		else

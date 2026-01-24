@@ -12,7 +12,7 @@
 - UF Plus: Optional handling for empty power bars (max 0) when power is detached.
 - UF Plus: Added Heal Absorb Bar options (texture, color, sample, reverse fill) for anti-heal displays.
 - UF Plus: Absorb Bar to boss frames
-- Cooldown Viewer: Optional /cdm and /wa9 slash commands to open settings.
+- Cooldown Viewer: Optional /cdm and /wa slash commands to open settings.
 - DataPanels: Combat time stream with optional boss timer (stacked or inline).
 - World Map: Coordinate updates can run faster (down to 0.01s) and cursor coords hide off-map.
 - Mount Keybinding: Druid random mount now chooses Travel Form outdoors and Cat Form indoors when moving.
@@ -22,6 +22,7 @@
 - Action Tracker: Ignore list updated for Spark of Madness and alchemy/cooking DNT casts.
 - Mythic+: Party keystone list now includes your own key during prepatch (uses player expansion max level).
 - Mythic+: Dungeon portal UI now ignores restriction type 4 (matching world map behavior).
+- Mythic+: World map teleport panel now opens correctly from the collapsed map state.
 - UF Plus: Debuff border colors now use the modern dispel color API (DebuffTypeColor removed).
 - World Marker Cycle: Sometimes not working for some users
 - Mount Keybinding: Only Druids should cancel their respective form now
