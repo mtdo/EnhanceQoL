@@ -152,7 +152,11 @@ end
 local function buildMountMacro(spellID)
 	local name = getSpellNameByID(spellID)
 	if not name or name == "" then return nil end
-	return "/cancelform\n/cast " .. name
+	if addon.variables.unitClass == "DRUID" then
+		return "/cancelform\n/cast " .. name
+	else
+		return "/cast " .. name
+	end
 end
 
 local function getMountDebugInfo(spellID)

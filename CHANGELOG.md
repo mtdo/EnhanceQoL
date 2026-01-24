@@ -22,6 +22,7 @@
 - Mythic+: Dungeon portal UI now ignores restriction type 4 (matching world map behavior).
 - UF Plus: Debuff border colors now use the modern dispel color API (DebuffTypeColor removed).
 - World Marker Cycle: Sometimes not working for some users
+- Mount Keybinding: Only Druids should cancel their respective form now
 
 ---
 
