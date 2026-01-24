@@ -1347,9 +1347,7 @@ end
 function AuraUtil.applyAuraToButton(btn, aura, ac, isDebuff, unitToken)
 	if not btn or not aura then return end
 	unitToken = unitToken or "target"
-	local issecretAura = false
 	if issecretvalue and issecretvalue(isDebuff) then
-		issecretAura = true
 		local _, harmfulFilter = AuraUtil.getAuraFilters(unitToken)
 		isDebuff = not C_UnitAuras.IsAuraFilteredOutByInstanceID(unitToken, aura.auraInstanceID, harmfulFilter)
 	end

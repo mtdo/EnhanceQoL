@@ -305,6 +305,8 @@ globals = {
 	"BigWigsLoader",
 	"CUSTOM_CLASS_COLORS",
 	"DBM",
+	"IsTargetLoose",
+	"C_PlayerInteractionManager",
 	"DBT",
 	"ElvUIPlayerNamePlateAnchor",
 	"GTFO",
