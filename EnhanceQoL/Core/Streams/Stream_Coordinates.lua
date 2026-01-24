@@ -119,11 +119,11 @@ local function updateCoordinates(s)
 	if s and s.interval ~= db.updateInterval then s.interval = db.updateInterval end
 
 	if db.hideInInstance and IsInInstance and IsInInstance() then
-		s.snapshot.text = ""
+		s.snapshot.text = " "
 	else
 		local px, py = getPlayerCoords()
 		local playerText = formatCoords(px, py)
-		s.snapshot.text = playerText or ""
+		s.snapshot.text = playerText or "0, 0"
 	end
 
 	s.snapshot.fontSize = db.fontSize or 14

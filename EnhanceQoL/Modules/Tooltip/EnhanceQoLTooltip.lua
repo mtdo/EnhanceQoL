@@ -143,6 +143,7 @@ end
 fInspect:SetScript("OnEvent", function(_, ev, arg1, arg2)
 	if ev == "INSPECT_READY" then
 		local guid = arg1
+		if issecretvalue(guid) then return end
 		if not guid or guid ~= pendingGUID then return end
 		local unit = (pendingUnit and UnitGUID(pendingUnit) == guid) and pendingUnit or nil
 		pendingGUID, pendingUnit = nil, nil
@@ -217,7 +218,7 @@ EnsureUnitData = function(unit)
 	if addon.db["TooltipUnitInspectRequireModifier"] and not IsConfiguredModifierDown() then return end
 
 	-- Others: request inspect if possible
-	if CanInspect and CanInspect(unit) and not InCombatLockdown() then
+	if CanInspect and CanInspect(unit) and not InCombatLockdown() and not issecretvalue(unit) then
 		if pendingGUID and pendingUnit and UnitGUID(pendingUnit) == pendingGUID and pendingGUID == guid then return end
 		pendingGUID = guid
 		pendingUnit = unit
