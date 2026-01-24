@@ -1,6 +1,6 @@
 # Changelog
 
-## [7.6.0] - 2026-01-23
+## [7.6.0] - 2026-01-24
 
 ### ✨ Added
 
@@ -15,6 +15,7 @@
 - Cooldown Viewer: Optional /cdm and /wa9 slash commands to open settings.
 - DataPanels: Combat time stream with optional boss timer (stacked or inline).
 - World Map: Coordinate updates can run faster (down to 0.01s) and cursor coords hide off-map.
+- Mount Keybinding: Druid random mount now chooses Travel Form outdoors and Cat Form indoors when moving.
 
 ### 🐛 Fixed
 

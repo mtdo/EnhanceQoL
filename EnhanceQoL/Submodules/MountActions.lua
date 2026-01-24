@@ -149,6 +149,26 @@ local function getSpellNameByID(spellID)
 	return name
 end
 
+local function getDruidMoveFormSpell()
+	local travelID = 783
+	local catID = 768
+	local isOutdoors = IsOutdoors and IsOutdoors()
+	local isIndoors = IsIndoors and IsIndoors()
+	if isOutdoors then
+		if C_SpellBook.IsSpellKnown(travelID) then return travelID end
+		if C_SpellBook.IsSpellKnown(catID) then return catID end
+		return travelID
+	end
+	if isIndoors then
+		if C_SpellBook.IsSpellKnown(catID) then return catID end
+		if C_SpellBook.IsSpellKnown(travelID) then return travelID end
+		return catID
+	end
+	if C_SpellBook.IsSpellKnown(travelID) then return travelID end
+	if C_SpellBook.IsSpellKnown(catID) then return catID end
+	return travelID
+end
+
 local function buildMountMacro(spellID)
 	local name = getSpellNameByID(spellID)
 	if not name or name == "" then return nil end
@@ -248,6 +268,15 @@ function MountActions:PrepareActionButton(btn)
 	if not btn or not btn._eqolAction then return end
 	btn:SetAttribute("type1", "macro")
 	btn:SetAttribute("type", "macro")
+	if btn._eqolAction == "random" and addon.variables.unitClass == "DRUID" and IsMounted and IsMounted() and IsPlayerMoving()
+		and (C_SpellBook.IsSpellKnown(783) or C_SpellBook.IsSpellKnown(768)) then
+		if not (IsFlying and IsFlying()) then
+			local macro = buildMountMacro(getDruidMoveFormSpell())
+			btn:SetAttribute("macrotext1", macro)
+			btn:SetAttribute("macrotext", macro)
+			return
+		end
+	end
 	if IsMounted and IsMounted() then
 		btn:SetAttribute("macrotext1", "/dismount")
 		btn:SetAttribute("macrotext", "/dismount")
@@ -255,8 +284,8 @@ function MountActions:PrepareActionButton(btn)
 	end
 	if btn._eqolAction == "random" then
 		local spellID
-		if addon.variables.unitClass == "DRUID" and IsPlayerMoving() and C_SpellBook.IsSpellKnown(783) then
-			spellID = 783
+		if addon.variables.unitClass == "DRUID" and IsPlayerMoving() and (C_SpellBook.IsSpellKnown(783) or C_SpellBook.IsSpellKnown(768)) then
+			spellID = getDruidMoveFormSpell()
 		else
 			local targetSpellID = getMountedTargetSpellID()
 			if targetSpellID and isMountSpellUsable(targetSpellID) then
