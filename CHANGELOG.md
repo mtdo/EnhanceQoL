@@ -28,6 +28,7 @@
 - Mount Keybinding: Only Druids should cancel their respective form now
 - Tooltips: Secret error on inspect in restricted environment
 - Money Stream: Missed to add the remove dropdown for characters
+- Resource Bars: Void Metamorphosis now respects Soul Glutton (max 35) and Collapsing Star (max 30)
 
 ---
 

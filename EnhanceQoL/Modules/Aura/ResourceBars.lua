@@ -78,6 +78,8 @@ local ResourcebarVars = {
 	MAELSTROM_WEAPON_SEGMENTS = 5,
 	MAELSTROM_WEAPON_SPELL_ID = 344179,
 	VOID_METAMORPHOSIS_SPELL_ID = 1225789,
+	VOID_META_TALENT_SOUL_GLUTTON_SPELL_ID = 1247534,
+	COLLAPSING_STAR_SPELL_ID = 1227702,
 	DEFAULT_MAELSTROM_WEAPON_FIVE_COLOR = { 0.10, 0.85, 0.55, 1 },
 	CUSTOM_POWER_COLORS = {
 		MAELSTROM_WEAPON = { 0.15, 0.45, 1.00 },
@@ -204,6 +206,13 @@ local function formatNumber(value, useShort)
 	return tostring(value)
 end
 
+local function isSpellKnownSafe(spellId)
+	if not spellId then return false end
+	if issecretvalue and issecretvalue(spellId) then return false end
+	if C_SpellBook and C_SpellBook.IsSpellKnown then return C_SpellBook.IsSpellKnown(spellId) end
+	return false
+end
+
 ResourceBars.PowerLabels = {
 	MAELSTROM_WEAPON = (C_Spell.GetSpellName(RB.MAELSTROM_WEAPON_SPELL_ID)) or "Maelstrom Weapon",
 	VOID_METAMORPHOSIS = (C_Spell.GetSpellName(RB.VOID_METAMORPHOSIS_SPELL_ID)) or "Void Metamorphosis",
@@ -222,8 +231,12 @@ RB.AURA_POWER_CONFIG = {
 		defaultShowSeparator = true,
 	},
 	VOID_METAMORPHOSIS = {
-		spellIds = { RB.VOID_METAMORPHOSIS_SPELL_ID },
+		spellIds = { RB.VOID_METAMORPHOSIS_SPELL_ID, RB.COLLAPSING_STAR_SPELL_ID },
 		maxStacks = 50,
+		maxStacksBySpellId = {
+			[RB.COLLAPSING_STAR_SPELL_ID] = 30,
+		},
+		maxStacksTalent = { spellId = RB.VOID_META_TALENT_SOUL_GLUTTON_SPELL_ID, value = 35 },
 		visualSegments = 0,
 		defaultColor = { 0.35, 0.25, 0.73, 1 }, -- #5940BA (Blizzard voidMetamorphosisProgess)
 		useMaxColorDefault = true,
@@ -349,6 +362,11 @@ local function getAuraPowerCounts(pType)
 	end
 	local stacks = auraData.applications or auraData.charges or 0
 	local logicalMax = auraData.maxCharges or auraData.pointsMax or cfg.maxStacks or stacks
+	if auraData.spellId and cfg.maxStacksBySpellId and cfg.maxStacksBySpellId[auraData.spellId] then
+		logicalMax = cfg.maxStacksBySpellId[auraData.spellId]
+	elseif cfg.maxStacksTalent and auraData.spellId == RB.VOID_METAMORPHOSIS_SPELL_ID then
+		if isSpellKnownSafe(cfg.maxStacksTalent.spellId) then logicalMax = cfg.maxStacksTalent.value or logicalMax end
+	end
 	local visualSegments = cfg.visualSegments or logicalMax or stacks
 	return stacks or 0, logicalMax or 0, visualSegments or logicalMax
 end
