@@ -192,6 +192,15 @@ local frames = {
 		defaultEnabled = true,
 	},
 	{
+		id = "CooldownViewerSettings",
+		label = HUD_EDIT_MODE_COOLDOWN_VIEWER_OPTIONS,
+		group = "character",
+		names = { "CooldownViewerSettings" },
+		addon = "Blizzard_CooldownViewer",
+		defaultEnabled = true,
+		
+	},
+	{
 		id = "InspectFrame",
 		label = INSPECT,
 		group = "character",

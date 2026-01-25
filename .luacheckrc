@@ -361,6 +361,7 @@ globals = {
 	"DRUID_FLIGHT_FORM",
 	"Round",
 	"SafePack",
+	"HUD_EDIT_MODE_COOLDOWN_VIEWER_OPTIONS",
 	"SafeUnpack",
 	"Saturate",
 	"SecondsFormatter",
