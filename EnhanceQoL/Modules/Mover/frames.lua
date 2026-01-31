@@ -729,6 +729,14 @@ local frames = {
 		addon = "Blizzard_CovenantPreviewUI",
 		defaultEnabled = true,
 	},
+	{
+		id = "GarrisonLandingPage",
+		label = L["Garrison Landing Page"] or "Garrison Landing Page",
+		group = "activities",
+		names = { "GarrisonLandingPage" },
+		addon = "Blizzard_GarrisonUI",
+		defaultEnabled = true,
+	},
 }
 
 local settings = {
