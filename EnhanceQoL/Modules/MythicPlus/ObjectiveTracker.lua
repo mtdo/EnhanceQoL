@@ -20,25 +20,41 @@ local alreadyHooked = {}
 function addon.MythicPlus.functions.setObjectiveFrames()
 	if IsInInstance() and select(3, GetInstanceInfo()) == 8 and addon.db["mythicPlusEnableObjectiveTracker"] then
 		for i, v in pairs(addon.MythicPlus.variables.collapseFrames) do
-			if addon.db["mythicPlusObjectiveTrackerSetting"] == 1 and v.frame and v.frame:IsVisible() then
-				v.frame:Hide()
-				table.insert(hiddenElements, v)
-				if not alreadyHooked[v.frame] then
-					v.frame:HookScript("OnShow", function(self)
+			if not v.frame and v.name then v.frame = _G[v.name] end
+			local frame = v.frame
+			if addon.db["mythicPlusObjectiveTrackerSetting"] == 1 and frame then
+				if frame:IsVisible() then
+					frame:Hide()
+					table.insert(hiddenElements, v)
+				end
+				if not alreadyHooked[frame] then
+					frame:HookScript("OnShow", function(self)
 						if IsInInstance() and select(3, GetInstanceInfo()) == 8 and addon.db["mythicPlusEnableObjectiveTracker"] and addon.db["mythicPlusObjectiveTrackerSetting"] == 1 then
 							self:Hide()
 						end
 					end)
-					alreadyHooked[v.frame] = true
+					alreadyHooked[frame] = true
 				end
-			elseif addon.db["mythicPlusObjectiveTrackerSetting"] == 2 and v.frame and not v.frame:IsCollapsed() then
-				if v.frame.Header and v.frame.Header.MinimizeButton then v.frame.Header.MinimizeButton:Click() end
+			elseif addon.db["mythicPlusObjectiveTrackerSetting"] == 2 and frame and frame.IsCollapsed and not frame:IsCollapsed() then
+				if frame.SetCollapsed then
+					frame:SetCollapsed(true)
+				elseif frame.Header and frame.Header.MinimizeButton then
+					frame.Header.MinimizeButton:Click()
+				end
 			end
 		end
 	elseif #hiddenElements > 0 then
 		for i, v in pairs(hiddenElements) do
-			if v.frame and not v.frame:IsVisible() then v.frame:Show() end
-			if v.frame:IsCollapsed() and v.frame.Header and v.frame.Header.MinimizeButton then v.frame.Header.MinimizeButton:Click() end
+			if not v.frame and v.name then v.frame = _G[v.name] end
+			local frame = v.frame
+			if frame and not frame:IsVisible() then frame:Show() end
+			if frame and frame.IsCollapsed and frame:IsCollapsed() then
+				if frame.SetCollapsed then
+					frame:SetCollapsed(false)
+				elseif frame.Header and frame.Header.MinimizeButton then
+					frame.Header.MinimizeButton:Click()
+				end
+			end
 		end
 		wipe(hiddenElements)
 	end

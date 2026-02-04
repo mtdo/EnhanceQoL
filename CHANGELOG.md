@@ -10,6 +10,7 @@
 - Cooldown Panels: Hide on CD option for cooldown icons
 - Cooldown Panels: Show on CD option for cooldown icons
 - Unit Frames: Combat feedback text with configurable font/anchor/events
+- Skinner: Character Frame flat skin (buttons, dropdowns, title pane hover/selection)
 
 ### ⚡ Performance
 

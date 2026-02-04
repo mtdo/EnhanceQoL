@@ -82,6 +82,7 @@ Modules\Aura\Locales\[TextLocale].lua
 Modules\Aura\Init.lua
 Modules\Aura\ResourceBars.lua
 Modules\Aura\ResourceBarsHelpers.lua
+Modules\Skinner\Init.lua
 Settings\SettingsUI.xml
 
 # Aura

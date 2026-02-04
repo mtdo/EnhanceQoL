@@ -11,9 +11,7 @@ addon.Skinner = addon.Skinner or {}
 addon.Skinner.functions = addon.Skinner.functions or {}
 addon.Skinner.variables = addon.Skinner.variables or {}
 
-local function isCharacterFrameSkinEnabled()
-	return addon.db and addon.db.skinnerCharacterFrameEnabled == true
-end
+local function isCharacterFrameSkinEnabled() return addon.db and addon.db.skinnerCharacterFrameEnabled == true end
 
 local characterSlotNames = {
 	"CharacterHeadSlot",
@@ -88,22 +86,55 @@ local FLAT_STATS_ROW_BG_INSET_X = 4
 local FLAT_STATS_ROW_BG_INSET_Y = 2
 local FLAT_HEADER_HEIGHT = 20
 local FLAT_HEADER_TOP = 4
-local FLAT_HEADER_PAD = 4
+local FLAT_HEADER_PAD = 0
 local FLAT_CLOSE_SIZE = 16
 local DEFAULT_SIDEBAR_TAB_WIDTH = 33
 local DEFAULT_SIDEBAR_TAB_HEIGHT = 35
 local DEFAULT_SIDEBAR_TABS_WIDTH = 168
 local DEFAULT_SIDEBAR_TABS_HEIGHT = 35
 
+local function getCharacterFrameSkinAlpha()
+	local alpha = addon.db and addon.db.skinnerCharacterFrameAlpha
+	if alpha == nil then return FLAT_PANEL_BG.a end
+	alpha = tonumber(alpha) or FLAT_PANEL_BG.a
+	if alpha < 0 then alpha = 0 end
+	if alpha > 1 then alpha = 1 end
+	return alpha
+end
+
+local function getCharacterFrameBorderSettings()
+	local enabled = addon.db and addon.db.skinnerCharacterFrameBorderEnabled == true
+	local size = tonumber(addon.db and addon.db.skinnerCharacterFrameBorderSize) or 1
+	if size < 1 then size = 1 end
+	local col = addon.db and addon.db.skinnerCharacterFrameBorderColor
+	if type(col) ~= "table" then col = FLAT_BORDER_COLOR end
+	local r = col.r or FLAT_BORDER_COLOR.r
+	local g = col.g or FLAT_BORDER_COLOR.g
+	local b = col.b or FLAT_BORDER_COLOR.b
+	local a = col.a
+	if a == nil then a = FLAT_BORDER_COLOR.a end
+	return enabled, size, { r = r, g = g, b = b, a = a }
+end
+
 local function createFlatBorder(frame, key)
-	if not frame or frame[key] then return frame and frame[key] end
-	local border = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-	border:SetPoint("TOPLEFT", frame, "TOPLEFT", -1, 1)
-	border:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 1, -1)
-	border:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
-	border:SetBackdropBorderColor(FLAT_BORDER_COLOR.r, FLAT_BORDER_COLOR.g, FLAT_BORDER_COLOR.b, FLAT_BORDER_COLOR.a)
+	if not frame then return nil end
+	local enabled, size, color = getCharacterFrameBorderSettings()
+	if not enabled then
+		if frame[key] then frame[key]:Hide() end
+		return nil
+	end
+	local border = frame[key]
+	if not border then
+		border = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+		frame[key] = border
+	end
+	border:ClearAllPoints()
+	border:SetPoint("TOPLEFT", frame, "TOPLEFT", -size, size - 3)
+	border:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", size, -size)
+	border:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = size })
+	border:SetBackdropBorderColor(color.r, color.g, color.b, color.a)
 	border:SetFrameLevel((frame:GetFrameLevel() or 1) + 2)
-	frame[key] = border
+	border:Show()
 	return border
 end
 
@@ -141,9 +172,7 @@ local function applyTitleButtonFlatSkin(button)
 		button:HookScript("OnEnter", function(self)
 			if self.eqolTitleHover and not self.eqolTitleSelected:IsShown() then
 				self.eqolTitleHover:Show()
-				if self.text and self.text.SetTextColor then
-					self.text:SetTextColor(FLAT_TITLE_TEXT_HOVER.r, FLAT_TITLE_TEXT_HOVER.g, FLAT_TITLE_TEXT_HOVER.b)
-				end
+				if self.text and self.text.SetTextColor then self.text:SetTextColor(FLAT_TITLE_TEXT_HOVER.r, FLAT_TITLE_TEXT_HOVER.g, FLAT_TITLE_TEXT_HOVER.b) end
 			end
 		end)
 		button:HookScript("OnLeave", function(self)
@@ -154,18 +183,10 @@ local function applyTitleButtonFlatSkin(button)
 		end)
 	end
 
-	if button.text and button.text.SetTextColor then
-		button.text:SetTextColor(FLAT_TITLE_TEXT.r, FLAT_TITLE_TEXT.g, FLAT_TITLE_TEXT.b)
-	end
-	if button.eqolTitleBg and button.eqolTitleBg.SetDrawLayer then
-		button.eqolTitleBg:SetDrawLayer("BACKGROUND", 0)
-	end
-	if button.eqolTitleSelected and button.eqolTitleSelected.SetDrawLayer then
-		button.eqolTitleSelected:SetDrawLayer("BACKGROUND", 1)
-	end
-	if button.eqolTitleHover and button.eqolTitleHover.SetDrawLayer then
-		button.eqolTitleHover:SetDrawLayer("BACKGROUND", 2)
-	end
+	if button.text and button.text.SetTextColor then button.text:SetTextColor(FLAT_TITLE_TEXT.r, FLAT_TITLE_TEXT.g, FLAT_TITLE_TEXT.b) end
+	if button.eqolTitleBg and button.eqolTitleBg.SetDrawLayer then button.eqolTitleBg:SetDrawLayer("BACKGROUND", 0) end
+	if button.eqolTitleSelected and button.eqolTitleSelected.SetDrawLayer then button.eqolTitleSelected:SetDrawLayer("BACKGROUND", 1) end
+	if button.eqolTitleHover and button.eqolTitleHover.SetDrawLayer then button.eqolTitleHover:SetDrawLayer("BACKGROUND", 2) end
 
 	local selected = false
 	if button.titleId and _G.PaperDollFrame and _G.PaperDollFrame.TitleManagerPane then
@@ -186,9 +207,7 @@ updateTitleButtonState = function(button, selected)
 		end
 	end
 	if button.eqolTitleHover then
-		if selected then
-			button.eqolTitleHover:Hide()
-		end
+		if selected then button.eqolTitleHover:Hide() end
 	end
 	if button.text and button.text.SetTextColor then
 		local col = selected and FLAT_TITLE_TEXT_SELECTED or FLAT_TITLE_TEXT
@@ -208,104 +227,112 @@ local function applyFlatBackground(frame, key, color, inset)
 end
 
 local function applyCharacterSlotFlatSkin(slot)
-	if not slot or slot.eqolFlatSlot then return end
-	slot.eqolFlatSlot = true
+	if not slot then return end
+	if not slot.eqolFlatSlot then
+		slot.eqolFlatSlot = true
 
-	if slot.icon and slot.icon.SetTexCoord then slot.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+		if slot.icon and slot.icon.SetTexCoord then slot.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
 
-	applyFlatBackground(slot, "eqolFlatBg", FLAT_SLOT_BG, 0)
-	createFlatBorder(slot, "eqolFlatBorder")
+		applyFlatBackground(slot, "eqolFlatBg", FLAT_SLOT_BG, 0)
 
-	local highlight = slot.GetHighlightTexture and slot:GetHighlightTexture()
-	if highlight then
-		highlight:SetColorTexture(1, 1, 1, 0.08)
-		highlight:SetAllPoints(slot)
+		local highlight = slot.GetHighlightTexture and slot:GetHighlightTexture()
+		if highlight then
+			highlight:SetColorTexture(1, 1, 1, 0.08)
+			highlight:SetAllPoints(slot)
+		end
 	end
+	if slot.eqolFlatBorder then slot.eqolFlatBorder:Hide() end
 end
 
 local function applyFlatButtonSkin(button)
-	if not button or button.eqolFlatButton then return end
-	button.eqolFlatButton = true
+	if not button then return end
+	if not button.eqolFlatButton then
+		button.eqolFlatButton = true
 
-	hideSlotTexture(button:GetNormalTexture())
-	hideSlotTexture(button:GetPushedTexture())
-	hideSlotTexture(button:GetHighlightTexture())
-	hideSlotTexture(button:GetDisabledTexture())
-	hideSlotTexture(button.Left)
-	hideSlotTexture(button.Middle)
-	hideSlotTexture(button.Right)
-	hideSlotTexture(button.LeftDisabled)
-	hideSlotTexture(button.MiddleDisabled)
-	hideSlotTexture(button.RightDisabled)
-	hideSlotTexture(button.LeftHighlight)
-	hideSlotTexture(button.MiddleHighlight)
-	hideSlotTexture(button.RightHighlight)
+		hideSlotTexture(button:GetNormalTexture())
+		hideSlotTexture(button:GetPushedTexture())
+		hideSlotTexture(button:GetHighlightTexture())
+		hideSlotTexture(button:GetDisabledTexture())
+		hideSlotTexture(button.Left)
+		hideSlotTexture(button.Middle)
+		hideSlotTexture(button.Right)
+		hideSlotTexture(button.LeftDisabled)
+		hideSlotTexture(button.MiddleDisabled)
+		hideSlotTexture(button.RightDisabled)
+		hideSlotTexture(button.LeftHighlight)
+		hideSlotTexture(button.MiddleHighlight)
+		hideSlotTexture(button.RightHighlight)
 
-	button.eqolFlatBg = button:CreateTexture(nil, "BACKGROUND")
-	button.eqolFlatBg:SetAllPoints(button)
-	button.eqolFlatBg:SetColorTexture(FLAT_BUTTON_BG.r, FLAT_BUTTON_BG.g, FLAT_BUTTON_BG.b, FLAT_BUTTON_BG.a)
-	createFlatBorder(button, "eqolFlatBorder")
+		button.eqolFlatBg = button:CreateTexture(nil, "BACKGROUND")
+		button.eqolFlatBg:SetAllPoints(button)
+		button.eqolFlatBg:SetColorTexture(FLAT_BUTTON_BG.r, FLAT_BUTTON_BG.g, FLAT_BUTTON_BG.b, FLAT_BUTTON_BG.a)
 
-	if button.SetNormalFontObject then button:SetNormalFontObject("GameFontHighlight") end
-	if button.SetHighlightFontObject then button:SetHighlightFontObject("GameFontHighlight") end
-	if button.SetDisabledFontObject then button:SetDisabledFontObject("GameFontDisable") end
-	local label = button.GetFontString and button:GetFontString()
+		if button.SetNormalFontObject then button:SetNormalFontObject("GameFontHighlight") end
+		if button.SetHighlightFontObject then button:SetHighlightFontObject("GameFontHighlight") end
+		if button.SetDisabledFontObject then button:SetDisabledFontObject("GameFontDisable") end
+		local label = button.GetFontString and button:GetFontString()
 
-	local function setState(isEnabled)
-		if button.eqolFlatBg then
-			local col = isEnabled and FLAT_BUTTON_BG or FLAT_BUTTON_BG_DISABLED
-			button.eqolFlatBg:SetColorTexture(col.r, col.g, col.b, col.a)
+		local function setState(isEnabled)
+			if button.eqolFlatBg then
+				local col = isEnabled and FLAT_BUTTON_BG or FLAT_BUTTON_BG_DISABLED
+				button.eqolFlatBg:SetColorTexture(col.r, col.g, col.b, col.a)
+			end
+			if label and label.SetTextColor then
+				local col = isEnabled and FLAT_BUTTON_TEXT_ENABLED or FLAT_BUTTON_TEXT_DISABLED
+				label:SetTextColor(col.r, col.g, col.b)
+			end
 		end
-		if label and label.SetTextColor then
-			local col = isEnabled and FLAT_BUTTON_TEXT_ENABLED or FLAT_BUTTON_TEXT_DISABLED
-			label:SetTextColor(col.r, col.g, col.b)
-		end
+
+		setState(button.IsEnabled and button:IsEnabled())
+
+		button:HookScript("OnEnter", function(self)
+			if self.IsEnabled and self:IsEnabled() and self.eqolFlatBg then
+				self.eqolFlatBg:SetColorTexture(FLAT_BUTTON_BG_HOVER.r, FLAT_BUTTON_BG_HOVER.g, FLAT_BUTTON_BG_HOVER.b, FLAT_BUTTON_BG_HOVER.a)
+			end
+		end)
+		button:HookScript("OnLeave", function(self) setState(self.IsEnabled and self:IsEnabled()) end)
+		button:HookScript("OnEnable", function() setState(true) end)
+		button:HookScript("OnDisable", function() setState(false) end)
 	end
-
-	setState(button.IsEnabled and button:IsEnabled())
-
-	button:HookScript("OnEnter", function(self)
-		if self.IsEnabled and self:IsEnabled() and self.eqolFlatBg then
-			self.eqolFlatBg:SetColorTexture(FLAT_BUTTON_BG_HOVER.r, FLAT_BUTTON_BG_HOVER.g, FLAT_BUTTON_BG_HOVER.b, FLAT_BUTTON_BG_HOVER.a)
-		end
-	end)
-	button:HookScript("OnLeave", function(self)
-		setState(self.IsEnabled and self:IsEnabled())
-	end)
-	button:HookScript("OnEnable", function() setState(true) end)
-	button:HookScript("OnDisable", function() setState(false) end)
+	if button.eqolFlatBorder then button.eqolFlatBorder:Hide() end
 end
 
 local function applyFlatDropdownSkin(dropdown)
-	if not dropdown or dropdown.eqolFlatDropdown then return end
-	dropdown.eqolFlatDropdown = true
+	if not dropdown then return end
+	if not dropdown.eqolFlatDropdown then
+		dropdown.eqolFlatDropdown = true
 
-	if dropdown.Background then hideSlotTexture(dropdown.Background) end
-	if dropdown.Left then hideSlotTexture(dropdown.Left) end
-	if dropdown.Middle then hideSlotTexture(dropdown.Middle) end
-	if dropdown.Right then hideSlotTexture(dropdown.Right) end
+		if dropdown.Background then hideSlotTexture(dropdown.Background) end
+		if dropdown.Left then hideSlotTexture(dropdown.Left) end
+		if dropdown.Middle then hideSlotTexture(dropdown.Middle) end
+		if dropdown.Right then hideSlotTexture(dropdown.Right) end
 
-	dropdown.eqolFlatBg = dropdown:CreateTexture(nil, "BACKGROUND")
-	dropdown.eqolFlatBg:SetPoint("TOPLEFT", dropdown, "TOPLEFT", -2, 2)
-	dropdown.eqolFlatBg:SetPoint("BOTTOMRIGHT", dropdown, "BOTTOMRIGHT", 2, -2)
-	dropdown.eqolFlatBg:SetColorTexture(FLAT_DROPDOWN_BG.r, FLAT_DROPDOWN_BG.g, FLAT_DROPDOWN_BG.b, FLAT_DROPDOWN_BG.a)
-	createFlatBorder(dropdown, "eqolFlatBorder")
+		dropdown.eqolFlatBg = dropdown:CreateTexture(nil, "BACKGROUND")
+		dropdown.eqolFlatBg:SetPoint("TOPLEFT", dropdown, "TOPLEFT", -2, 2)
+		dropdown.eqolFlatBg:SetPoint("BOTTOMRIGHT", dropdown, "BOTTOMRIGHT", 2, -2)
+		dropdown.eqolFlatBg:SetColorTexture(FLAT_DROPDOWN_BG.r, FLAT_DROPDOWN_BG.g, FLAT_DROPDOWN_BG.b, FLAT_DROPDOWN_BG.a)
 
-	if dropdown.Arrow and dropdown.Arrow.SetDesaturation then
-		dropdown.Arrow:SetDesaturation(1)
-		dropdown.Arrow:SetVertexColor(1, 1, 1, 0.85)
+		if dropdown.Arrow and dropdown.Arrow.SetDesaturation then
+			dropdown.Arrow:SetDesaturation(1)
+			dropdown.Arrow:SetVertexColor(1, 1, 1, 0.85)
+		end
 	end
+	if dropdown.eqolFlatBorder then dropdown.eqolFlatBorder:Hide() end
 end
 
 local function updateFlatTabState(tab, selected)
 	if not tab or not tab.eqolFlatBg then return end
-	local col = selected and FLAT_TAB_BG_SELECTED or FLAT_TAB_BG
+	local alpha = getCharacterFrameSkinAlpha()
+	local col = selected and { r = FLAT_TAB_BG_SELECTED.r, g = FLAT_TAB_BG_SELECTED.g, b = FLAT_TAB_BG_SELECTED.b, a = math.min(1, alpha + 0.15) }
+		or { r = FLAT_TAB_BG.r, g = FLAT_TAB_BG.g, b = FLAT_TAB_BG.b, a = alpha }
 	tab.eqolFlatBg:SetColorTexture(col.r, col.g, col.b, col.a)
 end
 
 local function updateSidebarTabState(tab, selected)
 	if not tab or not tab.eqolFlatBg then return end
-	local col = selected and FLAT_TAB_BG_SELECTED or FLAT_HEADER_BG
+	local alpha = getCharacterFrameSkinAlpha()
+	local base = { r = FLAT_HEADER_BG.r, g = FLAT_HEADER_BG.g, b = FLAT_HEADER_BG.b, a = alpha }
+	local col = selected and { r = FLAT_TAB_BG_SELECTED.r, g = FLAT_TAB_BG_SELECTED.g, b = FLAT_TAB_BG_SELECTED.b, a = math.min(1, alpha + 0.15) } or base
 	tab.eqolFlatBg:SetColorTexture(col.r, col.g, col.b, col.a)
 	if tab.Icon and tab.Icon.SetDesaturation then tab.Icon:SetDesaturation(selected and 0 or 1) end
 	if tab.Icon and tab.Icon.SetAlpha then tab.Icon:SetAlpha(selected and 1 or 0.75) end
@@ -323,8 +350,6 @@ local function applySidebarTabFlatSkin(tab, index)
 	tab.eqolFlatBg:SetAllPoints(tab)
 	updateSidebarTabState(tab, false)
 
-	if tab.eqolFlatBorder then tab.eqolFlatBorder:Hide() end
-
 	tab:SetSize(DEFAULT_SIDEBAR_TAB_WIDTH, DEFAULT_SIDEBAR_TAB_HEIGHT)
 	if tab.Icon and tab.Icon.ClearAllPoints then
 		tab.Icon:ClearAllPoints()
@@ -338,39 +363,40 @@ local function applySidebarTabFlatSkin(tab, index)
 end
 
 local function applyCharacterTabFlatSkin(tab)
-	if not tab or tab.eqolFlatTab then return end
-	tab.eqolFlatTab = true
+	if not tab then return end
+	if not tab.eqolFlatTab then
+		tab.eqolFlatTab = true
 
-	local keys = {
-		"Left",
-		"Middle",
-		"Right",
-		"LeftDisabled",
-		"MiddleDisabled",
-		"RightDisabled",
-		"LeftHighlight",
-		"MiddleHighlight",
-		"RightHighlight",
-		"HighlightTexture",
-	}
-	for _, key in ipairs(keys) do
-		hideSlotTexture(tab[key])
+		local keys = {
+			"Left",
+			"Middle",
+			"Right",
+			"LeftDisabled",
+			"MiddleDisabled",
+			"RightDisabled",
+			"LeftHighlight",
+			"MiddleHighlight",
+			"RightHighlight",
+			"HighlightTexture",
+		}
+		for _, key in ipairs(keys) do
+			hideSlotTexture(tab[key])
+		end
+
+		tab.eqolFlatBg = tab:CreateTexture(nil, "BACKGROUND")
+		tab.eqolFlatBg:SetAllPoints(tab)
+		updateFlatTabState(tab, false)
+
+		tab.selectedTextY = 0
+		tab.deselectedTextY = 0
+		tab.selectedTextX = 0
+		tab.deselectedTextX = 0
+		if tab.Text then
+			tab.Text:ClearAllPoints()
+			tab.Text:SetPoint("CENTER", tab, "CENTER", 0, 0)
+		end
 	end
-
-	tab.eqolFlatBg = tab:CreateTexture(nil, "BACKGROUND")
-	tab.eqolFlatBg:SetAllPoints(tab)
-	updateFlatTabState(tab, false)
-
-	createFlatBorder(tab, "eqolFlatBorder")
-
-	tab.selectedTextY = 0
-	tab.deselectedTextY = 0
-	tab.selectedTextX = 0
-	tab.deselectedTextX = 0
-	if tab.Text then
-		tab.Text:ClearAllPoints()
-		tab.Text:SetPoint("CENTER", tab, "CENTER", 0, 0)
-	end
+	if tab.eqolFlatBorder then tab.eqolFlatBorder:Hide() end
 end
 
 local function applyCharacterTabsFlatSkin()
@@ -519,6 +545,7 @@ end
 local function applyCharacterFrameHeaderSkin()
 	local frame = _G.CharacterFrame
 	if not frame then return end
+	local headerAlpha = getCharacterFrameSkinAlpha()
 
 	if not frame.eqolHeader then
 		local header = CreateFrame("Frame", nil, frame, "BackdropTemplate")
@@ -526,13 +553,13 @@ local function applyCharacterFrameHeaderSkin()
 		header:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -FLAT_HEADER_PAD, -FLAT_HEADER_TOP)
 		header:SetHeight(FLAT_HEADER_HEIGHT)
 		header:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
-		header:SetBackdropColor(FLAT_HEADER_BG.r, FLAT_HEADER_BG.g, FLAT_HEADER_BG.b, FLAT_HEADER_BG.a)
+		header:SetBackdropColor(FLAT_HEADER_BG.r, FLAT_HEADER_BG.g, FLAT_HEADER_BG.b, headerAlpha)
 		header:SetFrameStrata(frame:GetFrameStrata())
 		header:SetFrameLevel((frame:GetFrameLevel() or 1) + 10)
 		frame.eqolHeader = header
 	else
 		frame.eqolHeader:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
-		frame.eqolHeader:SetBackdropColor(FLAT_HEADER_BG.r, FLAT_HEADER_BG.g, FLAT_HEADER_BG.b, FLAT_HEADER_BG.a)
+		frame.eqolHeader:SetBackdropColor(FLAT_HEADER_BG.r, FLAT_HEADER_BG.g, FLAT_HEADER_BG.b, headerAlpha)
 	end
 
 	if frame.TitleContainer and frame.eqolHeader then
@@ -557,7 +584,7 @@ local function applyCharacterFrameHeaderSkin()
 
 		close.eqolBg = close:CreateTexture(nil, "BACKGROUND")
 		close.eqolBg:SetAllPoints(close)
-		close.eqolBg:SetColorTexture(FLAT_CLOSE_BG.r, FLAT_CLOSE_BG.g, FLAT_CLOSE_BG.b, FLAT_CLOSE_BG.a)
+		close.eqolBg:SetColorTexture(FLAT_CLOSE_BG.r, FLAT_CLOSE_BG.g, FLAT_CLOSE_BG.b, headerAlpha)
 
 		if close.eqolFlatBorder then close.eqolFlatBorder:Hide() end
 
@@ -574,15 +601,31 @@ local function applyCharacterFrameHeaderSkin()
 		close.eqolX2:SetRotation(math.rad(-45))
 
 		close:HookScript("OnEnter", function()
-			if close.eqolBg then close.eqolBg:SetColorTexture(FLAT_CLOSE_BG_HOVER.r, FLAT_CLOSE_BG_HOVER.g, FLAT_CLOSE_BG_HOVER.b, FLAT_CLOSE_BG_HOVER.a) end
+			local col = close.eqolBgHoverColor or FLAT_CLOSE_BG_HOVER
+			if close.eqolBg then close.eqolBg:SetColorTexture(col.r, col.g, col.b, col.a) end
 			if close.eqolX1 then close.eqolX1:SetColorTexture(1, 0.8, 0.8, 1) end
 			if close.eqolX2 then close.eqolX2:SetColorTexture(1, 0.8, 0.8, 1) end
 		end)
 		close:HookScript("OnLeave", function()
-			if close.eqolBg then close.eqolBg:SetColorTexture(FLAT_CLOSE_BG.r, FLAT_CLOSE_BG.g, FLAT_CLOSE_BG.b, FLAT_CLOSE_BG.a) end
+			local col = close.eqolBgColor or FLAT_CLOSE_BG
+			if close.eqolBg then close.eqolBg:SetColorTexture(col.r, col.g, col.b, col.a) end
 			if close.eqolX1 then close.eqolX1:SetColorTexture(1, 0.9, 0.9, 0.9) end
 			if close.eqolX2 then close.eqolX2:SetColorTexture(1, 0.9, 0.9, 0.9) end
 		end)
+	end
+
+	if close and close.eqolBg then
+		close.eqolBgColor = close.eqolBgColor or {}
+		close.eqolBgColor.r = FLAT_CLOSE_BG.r
+		close.eqolBgColor.g = FLAT_CLOSE_BG.g
+		close.eqolBgColor.b = FLAT_CLOSE_BG.b
+		close.eqolBgColor.a = headerAlpha
+		close.eqolBgHoverColor = close.eqolBgHoverColor or {}
+		close.eqolBgHoverColor.r = FLAT_CLOSE_BG_HOVER.r
+		close.eqolBgHoverColor.g = FLAT_CLOSE_BG_HOVER.g
+		close.eqolBgHoverColor.b = FLAT_CLOSE_BG_HOVER.b
+		close.eqolBgHoverColor.a = headerAlpha
+		close.eqolBg:SetColorTexture(close.eqolBgColor.r, close.eqolBgColor.g, close.eqolBgColor.b, close.eqolBgColor.a)
 	end
 end
 
@@ -599,13 +642,16 @@ local function applyCharacterFrameFlatSkin()
 	end
 
 	applyCharacterFrameHeaderSkin()
-	if frame.eqolOuterBorder then frame.eqolOuterBorder:Hide() end
+	createFlatBorder(frame, "eqolOuterBorder")
+	local panelAlpha = getCharacterFrameSkinAlpha()
 	if not frame.eqolBodyBg then
 		local bodyBg = frame:CreateTexture(nil, "BACKGROUND")
 		bodyBg:SetPoint("TOPLEFT", frame, "TOPLEFT", FLAT_HEADER_PAD, -(FLAT_HEADER_TOP + FLAT_HEADER_HEIGHT))
 		bodyBg:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -FLAT_HEADER_PAD, FLAT_HEADER_PAD)
-		bodyBg:SetColorTexture(FLAT_PANEL_BG.r, FLAT_PANEL_BG.g, FLAT_PANEL_BG.b, FLAT_PANEL_BG.a)
+		bodyBg:SetColorTexture(FLAT_PANEL_BG.r, FLAT_PANEL_BG.g, FLAT_PANEL_BG.b, panelAlpha)
 		frame.eqolBodyBg = bodyBg
+	else
+		frame.eqolBodyBg:SetColorTexture(FLAT_PANEL_BG.r, FLAT_PANEL_BG.g, FLAT_PANEL_BG.b, panelAlpha)
 	end
 	applyCharacterTabsFlatSkin()
 	applyCharacterSidebarTabsFlatSkin()
@@ -625,12 +671,8 @@ local function applyCharacterFrameFlatSkin()
 	if _G.PaperDollTitlesPane_InitButton and not (addon.variables and addon.variables.eqolTitleButtonHook) then
 		addon.variables = addon.variables or {}
 		addon.variables.eqolTitleButtonHook = true
-		hooksecurefunc("PaperDollTitlesPane_InitButton", function(button)
-			applyTitleButtonFlatSkin(button)
-		end)
-		hooksecurefunc("PaperDollTitlesPane_SetButtonSelected", function(button, selected)
-			updateTitleButtonState(button, selected)
-		end)
+		hooksecurefunc("PaperDollTitlesPane_InitButton", function(button) applyTitleButtonFlatSkin(button) end)
+		hooksecurefunc("PaperDollTitlesPane_SetButtonSelected", function(button, selected) updateTitleButtonState(button, selected) end)
 	end
 end
 
@@ -716,6 +758,15 @@ addon.Skinner.functions.ApplyCharacterFrameSkin = applyCharacterFrameSkin
 function addon.Skinner.functions.InitDB()
 	if addon.functions and addon.functions.InitDBValue then
 		addon.functions.InitDBValue("skinnerCharacterFrameEnabled", false)
+		addon.functions.InitDBValue("skinnerCharacterFrameAlpha", FLAT_PANEL_BG.a)
+		addon.functions.InitDBValue("skinnerCharacterFrameBorderEnabled", true)
+		addon.functions.InitDBValue("skinnerCharacterFrameBorderSize", 1)
+		addon.functions.InitDBValue("skinnerCharacterFrameBorderColor", {
+			r = FLAT_BORDER_COLOR.r,
+			g = FLAT_BORDER_COLOR.g,
+			b = FLAT_BORDER_COLOR.b,
+			a = FLAT_BORDER_COLOR.a,
+		})
 	end
 end
 
@@ -735,16 +786,81 @@ function addon.Skinner.functions.InitSettings()
 
 	addon.Skinner.variables.settingsExpandable = expandable
 
+	addon.functions.SettingsCreateSlider(category, {
+		var = "skinnerCharacterFrameAlpha",
+		text = "Character Frame Alpha",
+		default = FLAT_PANEL_BG.a,
+		min = 0,
+		max = 1,
+		step = 0.05,
+		set = function(value)
+			addon.db["skinnerCharacterFrameAlpha"] = value
+			if addon.Skinner and addon.Skinner.functions and addon.Skinner.functions.ApplyCharacterFrameSkin and isCharacterFrameSkinEnabled() then
+				addon.Skinner.functions.ApplyCharacterFrameSkin()
+			end
+		end,
+		parentSection = expandable,
+	})
+
 	addon.functions.SettingsCreateCheckbox(category, {
 		var = "skinnerCharacterFrameEnabled",
 		text = "Character Frame",
 		default = false,
 		func = function(value)
 			addon.db["skinnerCharacterFrameEnabled"] = value
-			if value and addon.Skinner and addon.Skinner.functions and addon.Skinner.functions.ApplyCharacterFrameSkin then
+			if value then
+				if addon.Skinner and addon.Skinner.functions and addon.Skinner.functions.ApplyCharacterFrameSkin then addon.Skinner.functions.ApplyCharacterFrameSkin() end
+			else
+				addon.variables = addon.variables or {}
+				addon.variables.requireReload = true
+				if addon.functions and addon.functions.checkReloadFrame then addon.functions.checkReloadFrame() end
+			end
+		end,
+		parentSection = expandable,
+	})
+
+	local borderToggle = addon.functions.SettingsCreateCheckbox(category, {
+		var = "skinnerCharacterFrameBorderEnabled",
+		text = "Outer Frame Border",
+		default = true,
+		func = function(value)
+			addon.db["skinnerCharacterFrameBorderEnabled"] = value and true or false
+			if addon.Skinner and addon.Skinner.functions and addon.Skinner.functions.ApplyCharacterFrameSkin and isCharacterFrameSkinEnabled() then
 				addon.Skinner.functions.ApplyCharacterFrameSkin()
 			end
 		end,
+		parentSection = expandable,
+	})
+
+	addon.functions.SettingsCreateSlider(category, {
+		var = "skinnerCharacterFrameBorderSize",
+		text = "Outer Border Size",
+		default = 1,
+		min = 1,
+		max = 6,
+		step = 1,
+		set = function(value)
+			addon.db["skinnerCharacterFrameBorderSize"] = value
+			if addon.Skinner and addon.Skinner.functions and addon.Skinner.functions.ApplyCharacterFrameSkin and isCharacterFrameSkinEnabled() then
+				addon.Skinner.functions.ApplyCharacterFrameSkin()
+			end
+		end,
+		element = borderToggle and borderToggle.element,
+		parentCheck = function() return addon.db and addon.db.skinnerCharacterFrameBorderEnabled == true end,
+		parentSection = expandable,
+	})
+
+	addon.functions.SettingsCreateColorPicker(category, {
+		var = "skinnerCharacterFrameBorderColor",
+		text = "Outer Border Color",
+		hasOpacity = true,
+		callback = function()
+			if addon.Skinner and addon.Skinner.functions and addon.Skinner.functions.ApplyCharacterFrameSkin and isCharacterFrameSkinEnabled() then
+				addon.Skinner.functions.ApplyCharacterFrameSkin()
+			end
+		end,
+		element = borderToggle and borderToggle.element,
+		parentCheck = function() return addon.db and addon.db.skinnerCharacterFrameBorderEnabled == true end,
 		parentSection = expandable,
 	})
 end

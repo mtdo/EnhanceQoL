@@ -263,6 +263,9 @@ end
 
 local FAKE_CURSOR_FRAME_NAME = "EQOL_CooldownPanelsFakeCursor"
 local FAKE_CURSOR_ATLAS = "Cursor_Point_32"
+local FAKE_CURSOR_SIZE = 32
+local FAKE_CURSOR_HOTSPOT_X = 0
+local FAKE_CURSOR_HOTSPOT_Y = 0
 local FAKE_CURSOR_DEFAULT_X = 0
 local FAKE_CURSOR_DEFAULT_Y = 100
 local fakeCursorFrame
@@ -274,7 +277,7 @@ local cursorSpecRetryPending
 local function ensureFakeCursorFrame()
 	if fakeCursorFrame then return fakeCursorFrame end
 	local frame = CreateFrame("Frame", FAKE_CURSOR_FRAME_NAME, UIParent)
-	frame:SetSize(32, 32)
+	frame:SetSize(FAKE_CURSOR_SIZE, FAKE_CURSOR_SIZE)
 	frame:SetFrameStrata("TOOLTIP")
 	frame:SetClampedToScreen(true)
 	frame:EnableMouse(true)
@@ -285,7 +288,15 @@ local function ensureFakeCursorFrame()
 
 	local tex = frame:CreateTexture(nil, "OVERLAY")
 	tex:SetAtlas(FAKE_CURSOR_ATLAS, true)
-	tex:SetAllPoints(frame)
+	tex:ClearAllPoints()
+	tex:SetSize(FAKE_CURSOR_SIZE, FAKE_CURSOR_SIZE)
+	tex:SetPoint(
+		"CENTER",
+		frame,
+		"CENTER",
+		(FAKE_CURSOR_SIZE * 0.5) - FAKE_CURSOR_HOTSPOT_X,
+		FAKE_CURSOR_HOTSPOT_Y - (FAKE_CURSOR_SIZE * 0.5)
+	)
 	frame.texture = tex
 
 	frame:Hide()

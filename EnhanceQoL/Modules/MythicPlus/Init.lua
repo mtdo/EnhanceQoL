@@ -1064,13 +1064,17 @@ function addon.MythicPlus.functions.setRandomHearthstone()
 end
 
 addon.MythicPlus.variables.collapseFrames = {
-	{ frame = AchievementObjectiveTracker },
-	{ frame = AdventureObjectiveTracker },
-	{ frame = BonusObjectiveTracker },
-	{ frame = CampaignQuestObjectiveTracker },
-	{ frame = QuestObjectiveTracker },
-	{ frame = ProfessionsRecipeTracker },
-	{ frame = WorldQuestObjectiveTracker },
+	{ frame = ScenarioObjectiveTracker, name = "ScenarioObjectiveTracker" },
+	{ frame = UIWidgetObjectiveTracker, name = "UIWidgetObjectiveTracker" },
+	{ frame = CampaignQuestObjectiveTracker, name = "CampaignQuestObjectiveTracker" },
+	{ frame = QuestObjectiveTracker, name = "QuestObjectiveTracker" },
+	{ frame = AdventureObjectiveTracker, name = "AdventureObjectiveTracker" },
+	{ frame = AchievementObjectiveTracker, name = "AchievementObjectiveTracker" },
+	{ frame = MonthlyActivitiesObjectiveTracker, name = "MonthlyActivitiesObjectiveTracker" },
+	{ frame = InitiativeTasksObjectiveTracker, name = "InitiativeTasksObjectiveTracker" },
+	{ frame = ProfessionsRecipeTracker, name = "ProfessionsRecipeTracker" },
+	{ frame = BonusObjectiveTracker, name = "BonusObjectiveTracker" },
+	{ frame = WorldQuestObjectiveTracker, name = "WorldQuestObjectiveTracker" },
 }
 
 addon.MythicPlus.variables.challengeMapID = {
