@@ -420,6 +420,18 @@ end
 
 local function isGroupByGroup(cfg, def) return resolveGroupByValue(cfg, def) == "GROUP" end
 
+local EMPTY_NAMELIST_TOKEN = "__EQOL_EMPTY__"
+
+local function isGroupCustomLayout(cfg)
+	if not cfg then return false end
+	if resolveSortMethod(cfg) ~= "NAMELIST" then return false end
+	local rawGroupBy = cfg.groupBy
+	local normalized = resolveGroupByValue(cfg, DEFAULTS.raid) or "GROUP"
+	if normalized ~= "GROUP" then return false end
+	if rawGroupBy and tostring(rawGroupBy):upper() == "CLASS" then return false end
+	return true
+end
+
 local function resolveGroupNumberSettingEnabled(cfg, def)
 	local _, us, gn, defUS, defGN = getGroupNumberConfig(cfg, def)
 	local enabled = gn.enabled
@@ -4760,7 +4772,7 @@ local function applyVisibility(header, kind, cfg)
 	end
 
 	local cond = "hide"
-	if header._eqolForceHide then
+	if header._eqolForceHide or header._eqolSpecialHide then
 		cond = "hide"
 	elseif header._eqolForceShow then
 		cond = "show"
@@ -4776,6 +4788,31 @@ local function applyVisibility(header, kind, cfg)
 
 	RegisterStateDriver(header, "visibility", cond)
 	header._eqolVisibilityCond = cond
+end
+
+local function getRaidGroupHeaderKey(index) return "raidGroup" .. tostring(index) end
+
+function GF:EnsureRaidGroupHeaders()
+	GF._raidGroupHeaders = GF._raidGroupHeaders or {}
+	local parent = _G.PetBattleFrameHider or UIParent
+	for i = 1, 8 do
+		local header = GF._raidGroupHeaders[i]
+		if not header then
+			header = CreateFrame("Frame", "EQOLUFRaidGroupHeader" .. i, parent, "SecureGroupHeaderTemplate")
+			header._eqolKind = "raid"
+			header._eqolGroupIndex = i
+			header:Hide()
+			GF._raidGroupHeaders[i] = header
+			GF.headers[getRaidGroupHeaderKey(i)] = header
+		end
+		if header and not header._eqolLayoutHooked then
+			header._eqolLayoutHooked = true
+			header:HookScript("OnShow", function(self)
+				if self._eqolPendingLayout then nudgeHeaderLayout(self) end
+			end)
+		end
+	end
+	return GF._raidGroupHeaders
 end
 
 function GF:EnsurePreviewFrames(kind)
@@ -5186,7 +5223,17 @@ function GF:RefreshGroupIndicators()
 	if not cfg then return end
 	local def = DEFAULTS.raid or {}
 	local header = GF.headers and GF.headers.raid
-	if header then
+	if isGroupCustomLayout(cfg) and GF._raidGroupHeaders then
+		for _, gh in ipairs(GF._raidGroupHeaders) do
+			if gh and not gh._eqolSpecialHide then
+				local frames = {}
+				forEachChild(gh, function(child)
+					if child then frames[#frames + 1] = child end
+				end)
+				updateGroupIndicatorsForFrames(gh, frames, cfg, def, false)
+			end
+		end
+	elseif header then
 		local frames = {}
 		forEachChild(header, function(child)
 			if child then frames[#frames + 1] = child end
@@ -5358,11 +5405,113 @@ function GF:RefreshCustomSortNameList()
 	local sortMethod = resolveSortMethod(cfg)
 	if sortMethod ~= "NAMELIST" then
 		header:SetAttribute("nameList", nil)
+		if GF._raidGroupHeaders then
+			for _, gh in ipairs(GF._raidGroupHeaders) do
+				if gh then gh:SetAttribute("nameList", nil) end
+			end
+		end
 		return
 	end
-	local nameList = GFH.BuildCustomSortNameList(cfg)
-	if nameList == "" then nameList = nil end
-	header:SetAttribute("nameList", nameList)
+	if isGroupCustomLayout(cfg) and GFH and GFH.BuildCustomSortNameListsByGroup then
+		local lists = GFH.BuildCustomSortNameListsByGroup(cfg) or {}
+		if not GF._raidGroupHeaders then GF:EnsureRaidGroupHeaders() end
+		if GF._raidGroupHeaders then
+			for i, gh in ipairs(GF._raidGroupHeaders) do
+				if gh then
+					local nameList = lists[i]
+					if not nameList or nameList == "" then nameList = EMPTY_NAMELIST_TOKEN end
+					gh:SetAttribute("nameList", nameList)
+				end
+			end
+		end
+		header:SetAttribute("nameList", nil)
+	else
+		local nameList = GFH.BuildCustomSortNameList(cfg)
+		if nameList == "" then nameList = nil end
+		header:SetAttribute("nameList", nameList)
+	end
+end
+
+local function applyRaidGroupHeaders(cfg, layout, nameLists, forceShow, forceHide, maxGroups)
+	local headers = GF:EnsureRaidGroupHeaders()
+	local anchor = GF.anchors and GF.anchors.raid
+	if not (headers and anchor) then return end
+	local maxIndex = tonumber(maxGroups)
+	if maxIndex == nil then maxIndex = 8 end
+	if maxIndex < 0 then maxIndex = 0 end
+	if maxIndex > 8 then maxIndex = 8 end
+
+	for i = 1, 8 do
+		local header = headers[i]
+		if header then
+			local active = i <= maxIndex
+			header._eqolForceShow = forceShow
+			header._eqolForceHide = forceHide
+			header._eqolSpecialHide = not active
+
+			if active then
+				local nameList = nameLists and nameLists[i]
+				if not nameList or nameList == "" then nameList = EMPTY_NAMELIST_TOKEN end
+
+				header:SetAttribute("showParty", false)
+				header:SetAttribute("showRaid", true)
+				header:SetAttribute("showPlayer", true)
+				header:SetAttribute("showSolo", false)
+				header:SetAttribute("groupBy", nil)
+				header:SetAttribute("groupFilter", nil)
+				header:SetAttribute("roleFilter", nil)
+				header:SetAttribute("strictFiltering", false)
+				header:SetAttribute("sortMethod", "NAMELIST")
+				header:SetAttribute("sortDir", cfg.sortDir or "ASC")
+				header:SetAttribute("nameList", nameList)
+				header:SetAttribute("unitsPerColumn", layout.unitsPerColumn)
+				header:SetAttribute("maxColumns", 1)
+				header:SetAttribute("minWidth", layout.minWidth)
+				header:SetAttribute("minHeight", layout.minHeight)
+
+				header:SetAttribute("point", layout.point)
+				header:SetAttribute("xOffset", layout.xOffset)
+				header:SetAttribute("yOffset", layout.yOffset)
+				header:SetAttribute("columnSpacing", layout.columnSpacing)
+				header:SetAttribute("columnAnchorPoint", layout.columnAnchorPoint)
+				header:SetAttribute("template", "EQOLUFGroupUnitButtonTemplate")
+				header:SetAttribute("initialConfigFunction", layout.initConfigFunction)
+
+				header:ClearAllPoints()
+				local offsetX = 0
+				local offsetY = 0
+				if layout.isHorizontal then
+					offsetY = roundToPixel((i - 1) * (layout.perHeaderH + layout.columnSpacing) * -1, layout.scale)
+				else
+					offsetX = roundToPixel((i - 1) * (layout.perHeaderW + layout.columnSpacing), layout.scale)
+				end
+				header:SetPoint(layout.startPoint, anchor, layout.startPoint, offsetX, offsetY)
+
+				forEachChild(header, function(child)
+					child._eqolGroupKind = "raid"
+					child._eqolCfg = cfg
+					updateButtonConfig(child, cfg)
+					GF:LayoutAuras(child)
+					if child.unit then GF:UnitButton_RegisterUnitEvents(child, child.unit) end
+					child:SetSize(layout.w, layout.h)
+					if child._eqolUFState then
+						GF:LayoutButton(child)
+						GF:UpdateAll(child)
+					end
+				end)
+			end
+
+			applyVisibility(header, "raid", cfg)
+
+			if header.IsShown and header:IsShown() then
+				nudgeHeaderLayout(header)
+			else
+				header._eqolPendingLayout = true
+			end
+
+			if not active and header.Hide then header:Hide() end
+		end
+	end
 end
 
 function GF:ApplyHeaderAttributes(kind)
@@ -5379,6 +5528,11 @@ function GF:ApplyHeaderAttributes(kind)
 	local growth = (cfg.growth or "DOWN"):upper()
 	local scale = GFH.GetEffectiveScale(UIParent)
 	spacing = roundToPixel(spacing, scale)
+	local raidUnitsPerColumn
+	local raidMaxColumns
+	local useGroupHeaders = false
+	local sortMethod
+	local rawGroupBy
 
 	if kind == "party" then
 		header:SetAttribute("showParty", true)
@@ -5396,7 +5550,7 @@ function GF:ApplyHeaderAttributes(kind)
 		header:SetAttribute("showSolo", false)
 		local groupingOrder = cfg.groupingOrder
 		if groupingOrder == "" then groupingOrder = nil end
-		local rawGroupBy = cfg.groupBy
+		rawGroupBy = cfg.groupBy
 		local normalizedGroupBy = resolveGroupByValue(cfg, DEFAULTS.raid) or "GROUP"
 		if rawGroupBy and tostring(rawGroupBy):upper() == "CLASS" then groupingOrder = nil end
 		header:SetAttribute("groupingOrder", groupingOrder or GFH.GROUP_ORDER)
@@ -5408,7 +5562,7 @@ function GF:ApplyHeaderAttributes(kind)
 		if roleFilter == "" then roleFilter = nil end
 		header:SetAttribute("roleFilter", roleFilter)
 		header:SetAttribute("strictFiltering", cfg.strictFiltering == true)
-		local sortMethod = resolveSortMethod(cfg)
+		sortMethod = resolveSortMethod(cfg)
 		header:SetAttribute("sortMethod", sortMethod)
 		header:SetAttribute("sortDir", cfg.sortDir or "ASC")
 		if sortMethod == "NAMELIST" then
@@ -5419,8 +5573,11 @@ function GF:ApplyHeaderAttributes(kind)
 			header:SetAttribute("nameList", nil)
 		end
 		header:SetAttribute("groupBy", normalizedGroupBy)
-		header:SetAttribute("unitsPerColumn", clampNumber(tonumber(cfg.unitsPerColumn) or 5, 1, 10, 5))
-		header:SetAttribute("maxColumns", clampNumber(tonumber(cfg.maxColumns) or 8, 1, 10, 8))
+		raidUnitsPerColumn = clampNumber(tonumber(cfg.unitsPerColumn) or 5, 1, 10, 5)
+		raidMaxColumns = clampNumber(tonumber(cfg.maxColumns) or 8, 1, 10, 8)
+		header:SetAttribute("unitsPerColumn", raidUnitsPerColumn)
+		header:SetAttribute("maxColumns", raidMaxColumns)
+		useGroupHeaders = isGroupCustomLayout(cfg)
 	end
 
 	if header._eqolForceShow then
@@ -5430,29 +5587,41 @@ function GF:ApplyHeaderAttributes(kind)
 		header:SetAttribute("showSolo", true)
 	end
 
+	local layoutPoint, layoutXOffset, layoutYOffset, layoutColumnSpacing, layoutColumnAnchorPoint
 	if growth == "RIGHT" or growth == "LEFT" then
 		local xOff = (growth == "LEFT") and -spacing or spacing
 		local point = (growth == "LEFT") and "RIGHT" or "LEFT"
-		header:SetAttribute("point", point)
-		header:SetAttribute("xOffset", roundToPixel(xOff, scale))
-		header:SetAttribute("yOffset", 0)
+		layoutPoint = point
+		layoutXOffset = roundToPixel(xOff, scale)
+		layoutYOffset = 0
+		header:SetAttribute("point", layoutPoint)
+		header:SetAttribute("xOffset", layoutXOffset)
+		header:SetAttribute("yOffset", layoutYOffset)
 		if kind == "party" then
-			header:SetAttribute("columnSpacing", spacing)
+			layoutColumnSpacing = spacing
+			header:SetAttribute("columnSpacing", layoutColumnSpacing)
 		else
 			local columnSpacing = clampNumber(tonumber(cfg.columnSpacing) or spacing, 0, 40, spacing)
-			header:SetAttribute("columnSpacing", roundToPixel(columnSpacing, scale))
+			layoutColumnSpacing = roundToPixel(columnSpacing, scale)
+			header:SetAttribute("columnSpacing", layoutColumnSpacing)
 		end
 
-		header:SetAttribute("columnAnchorPoint", "TOP")
+		layoutColumnAnchorPoint = "TOP"
+		header:SetAttribute("columnAnchorPoint", layoutColumnAnchorPoint)
 	else
 		local yOff = (growth == "UP") and spacing or -spacing
 		local point = (growth == "UP") and "BOTTOM" or "TOP"
-		header:SetAttribute("point", point)
-		header:SetAttribute("xOffset", 0)
-		header:SetAttribute("yOffset", roundToPixel(yOff, scale))
+		layoutPoint = point
+		layoutXOffset = 0
+		layoutYOffset = roundToPixel(yOff, scale)
+		header:SetAttribute("point", layoutPoint)
+		header:SetAttribute("xOffset", layoutXOffset)
+		header:SetAttribute("yOffset", layoutYOffset)
 		local columnSpacing = clampNumber(tonumber(cfg.columnSpacing) or spacing, 0, 40, spacing)
-		header:SetAttribute("columnSpacing", roundToPixel(columnSpacing, scale))
-		header:SetAttribute("columnAnchorPoint", "LEFT")
+		layoutColumnSpacing = roundToPixel(columnSpacing, scale)
+		header:SetAttribute("columnSpacing", layoutColumnSpacing)
+		layoutColumnAnchorPoint = "LEFT"
+		header:SetAttribute("columnAnchorPoint", layoutColumnAnchorPoint)
 	end
 
 	header:SetAttribute("template", "EQOLUFGroupUnitButtonTemplate")
@@ -5465,10 +5634,8 @@ function GF:ApplyHeaderAttributes(kind)
 	local wStr = ("%.3f"):format(w)
 	local hStr = ("%.3f"):format(h)
 
-	header:SetAttribute(
-		"initialConfigFunction",
-		string.format(
-			[[
+	local initConfigFunction = string.format(
+		[[
 		self:ClearAllPoints()
 		self:SetWidth(%s)
 		self:SetHeight(%s)
@@ -5476,10 +5643,10 @@ function GF:ApplyHeaderAttributes(kind)
 		self:SetAttribute('*type2','togglemenu')
 		RegisterUnitWatch(self)
 	]],
-			wStr,
-			hStr
-		)
+		wStr,
+		hStr
 	)
+	header:SetAttribute("initialConfigFunction", initConfigFunction)
 
 	forEachChild(header, function(child)
 		child._eqolGroupKind = kind
@@ -5504,7 +5671,73 @@ function GF:ApplyHeaderAttributes(kind)
 	else
 		setPointFromCfg(header, cfg)
 	end
+
+	local forceHide = header._eqolForceHide
+	local forceShow = header._eqolForceShow
+	if kind == "raid" then
+		header._eqolSpecialHide = useGroupHeaders == true
+	else
+		header._eqolSpecialHide = nil
+	end
 	applyVisibility(header, kind, cfg)
+
+	if kind == "raid" then
+		if useGroupHeaders then
+			local isHorizontal = (growth == "RIGHT" or growth == "LEFT")
+			local unitsPer = raidUnitsPerColumn or 5
+			local perHeaderW, perHeaderH
+			if isHorizontal then
+				perHeaderW = w * unitsPer + spacing * max(0, unitsPer - 1)
+				perHeaderH = h
+			else
+				perHeaderW = w
+				perHeaderH = h * unitsPer + spacing * max(0, unitsPer - 1)
+			end
+			perHeaderW = roundToPixel(perHeaderW, scale)
+			perHeaderH = roundToPixel(perHeaderH, scale)
+			local layout = {
+				scale = scale,
+				w = w,
+				h = h,
+				point = layoutPoint,
+				xOffset = layoutXOffset,
+				yOffset = layoutYOffset,
+				columnSpacing = layoutColumnSpacing or spacing,
+				columnAnchorPoint = layoutColumnAnchorPoint or "LEFT",
+				unitsPerColumn = unitsPer,
+				perHeaderW = perHeaderW,
+				perHeaderH = perHeaderH,
+				minWidth = isHorizontal and perHeaderW or w,
+				minHeight = isHorizontal and h or perHeaderH,
+				startPoint = getGrowthStartPoint(growth),
+				isHorizontal = isHorizontal,
+				initConfigFunction = initConfigFunction,
+			}
+
+			local lists = (GFH and GFH.BuildCustomSortNameListsByGroup and GFH.BuildCustomSortNameListsByGroup(cfg)) or {}
+			applyRaidGroupHeaders(cfg, layout, lists, forceShow, forceHide, raidMaxColumns or 8)
+		elseif GF._raidGroupHeaders then
+			local layout = {
+				scale = scale,
+				w = w,
+				h = h,
+				point = layoutPoint,
+				xOffset = layoutXOffset,
+				yOffset = layoutYOffset,
+				columnSpacing = layoutColumnSpacing or spacing,
+				columnAnchorPoint = layoutColumnAnchorPoint or "LEFT",
+				unitsPerColumn = raidUnitsPerColumn or 5,
+				perHeaderW = w,
+				perHeaderH = h,
+				minWidth = w,
+				minHeight = h,
+				startPoint = getGrowthStartPoint(growth),
+				isHorizontal = (growth == "RIGHT" or growth == "LEFT"),
+				initConfigFunction = initConfigFunction,
+			}
+			applyRaidGroupHeaders(cfg, layout, nil, forceShow, forceHide, 0)
+		end
+	end
 	if GF._previewActive and GF._previewActive[kind] then GF:UpdatePreviewLayout(kind) end
 
 	if growthChanged and header.GetChildren then

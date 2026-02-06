@@ -893,6 +893,78 @@ function H.BuildCustomSortNameList(cfg)
 	return table.concat(names, ",")
 end
 
+function H.BuildCustomSortNameListsByGroup(cfg)
+	local custom = H.EnsureCustomSortConfig(cfg)
+	if not custom then return {} end
+
+	local separate = custom.separateMeleeRanged == true
+	local roleOrder = H.ExpandRoleOrder(custom.roleOrder, separate)
+	local classOrder = custom.classOrder or H.CLASS_TOKENS
+	local roleMap = H.BuildOrderMapFromList(roleOrder)
+	local classMap = H.BuildOrderMapFromList(classOrder)
+
+	local entriesByGroup = {}
+	local num = (GetNumGroupMembers and GetNumGroupMembers()) or 0
+	for i = 1, num do
+		local unit = "raid" .. i
+		if UnitExists and UnitExists(unit) then
+			local name = H.GetUnitFullName(unit)
+			if name then
+				local _, classToken = UnitClass(unit)
+				local role = UnitGroupRolesAssigned and UnitGroupRolesAssigned(unit) or nil
+				if role == "NONE" or role == nil then role = "DAMAGER" end
+				local sortRole = role
+				if separate and role == "DAMAGER" then
+					local specId = H.GetUnitSpecIdCached(unit)
+					sortRole = H.GetDpsRangeRole(specId, classToken)
+				end
+				local _, _, subgroup = GetRaidRosterInfo(i)
+				subgroup = tonumber(subgroup) or 1
+				local list = entriesByGroup[subgroup]
+				if not list then
+					list = {}
+					entriesByGroup[subgroup] = list
+				end
+				list[#list + 1] = {
+					name = name,
+					role = role,
+					sortRole = sortRole,
+					class = classToken,
+				}
+			end
+		end
+	end
+
+	local function compare(a, b)
+		local roleA = roleMap[a.sortRole or a.role] or 999
+		local roleB = roleMap[b.sortRole or b.role] or 999
+		if roleA ~= roleB then return roleA < roleB end
+		local classA = classMap[a.class] or 999
+		local classB = classMap[b.class] or 999
+		if classA ~= classB then return classA < classB end
+		return tostring(a.name or "") < tostring(b.name or "")
+	end
+
+	local result = {}
+	for group = 1, 8 do
+		local entries = entriesByGroup[group]
+		if entries and #entries > 0 then
+			table.sort(entries, compare)
+			local names = {}
+			local seen = {}
+			for _, entry in ipairs(entries) do
+				local name = entry.name
+				if name and not seen[name] then
+					seen[name] = true
+					names[#names + 1] = name
+				end
+			end
+			if #names > 0 then result[group] = table.concat(names, ",") end
+		end
+	end
+	return result
+end
+
 local function applyRoleQuotaWithLimit(list, limit, maxTanks, maxHealers)
 	local limitCount = tonumber(limit)
 	local limitT = tonumber(maxTanks) or 0
