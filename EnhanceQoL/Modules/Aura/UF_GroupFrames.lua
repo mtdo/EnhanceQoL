@@ -80,6 +80,35 @@ local AURA_FILTERS = GFH.AuraFilters
 local AURA_CACHE_OPTS = GFH.AuraCacheOptions
 local PREVIEW_SAMPLES = GFH.PREVIEW_SAMPLES or { party = {}, raid = {} }
 local groupNumberFormatOptions = GFH.GROUP_NUMBER_FORMAT_OPTIONS or {}
+local groupNumberFormatTokens = {}
+local groupNumberFormatByText = {}
+local groupNumberFormatLabelByValue = {}
+do
+	for _, option in ipairs(groupNumberFormatOptions) do
+		if option then
+			local value = option.value
+			if value ~= nil then
+				groupNumberFormatTokens[value] = true
+				if groupNumberFormatLabelByValue[value] == nil then groupNumberFormatLabelByValue[value] = option.label or option.text or tostring(value) end
+			end
+			if option.text ~= nil then groupNumberFormatByText[option.text] = value end
+			if option.label ~= nil then groupNumberFormatByText[option.label] = value end
+		end
+	end
+end
+
+local function normalizeGroupNumberFormat(format)
+	if format == nil then return nil end
+	if groupNumberFormatTokens[format] then return format end
+	local text = tostring(format)
+	local mapped = groupNumberFormatByText[text]
+	if mapped then return mapped end
+	local upper = text:upper()
+	if groupNumberFormatTokens[upper] then return upper end
+	mapped = groupNumberFormatByText[upper]
+	if mapped then return mapped end
+	return text
+end
 local function hideDispelTint(st)
 	if not (st and st.dispelTint) then return end
 	if st._dispelTintShown == false then return end
@@ -341,7 +370,7 @@ end
 local function formatGroupNumber(subgroup, format)
 	local num = tonumber(subgroup)
 	if not num then return nil end
-	local fmt = format or "GROUP"
+	local fmt = normalizeGroupNumberFormat(format) or "GROUP"
 	if fmt == "NUMBER" then return tostring(num) end
 	if fmt == "PARENS" then return "(" .. num .. ")" end
 	if fmt == "BRACKETS" then return "[" .. num .. "]" end
@@ -5362,6 +5391,17 @@ local function buildEditModeSettings(kind, editModeId)
 		end
 		return mode
 	end
+	local function getGroupFormatValue()
+		local cfg = getCfg(kind)
+		local sc = cfg and cfg.status or {}
+		local us = sc.unitStatus or {}
+		local def = DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.unitStatus or {}
+		return normalizeGroupNumberFormat(us.groupFormat or def.groupFormat or "GROUP") or "GROUP"
+	end
+	local function getGroupFormatLabel()
+		local fmt = getGroupFormatValue()
+		return groupNumberFormatLabelByValue[fmt] or tostring(fmt)
+	end
 	local function getHealthTextMode(key, fallback)
 		local cfg = getCfg(kind)
 		local hc = cfg and cfg.health or {}
@@ -7901,22 +7941,35 @@ local function buildEditModeSettings(kind, editModeId)
 			kind = SettingType.Dropdown,
 			field = "statusTextGroupFormat",
 			parentId = "statustext",
-			values = groupNumberFormatOptions,
-			get = function()
-				local cfg = getCfg(kind)
-				local sc = cfg and cfg.status or {}
-				local us = sc.unitStatus or {}
-				local def = DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status.unitStatus or {}
-				return us.groupFormat or def.groupFormat or "GROUP"
-			end,
+			customDefaultText = getGroupFormatLabel(),
+			get = function() return getGroupFormatValue() end,
 			set = function(_, value)
 				local cfg = getCfg(kind)
 				if not cfg then return end
 				cfg.status = cfg.status or {}
 				cfg.status.unitStatus = cfg.status.unitStatus or {}
-				cfg.status.unitStatus.groupFormat = value or "GROUP"
+				cfg.status.unitStatus.groupFormat = normalizeGroupNumberFormat(value) or "GROUP"
 				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "statusTextGroupFormat", cfg.status.unitStatus.groupFormat, nil, true) end
 				GF:ApplyHeaderAttributes(kind)
+			end,
+			generator = function(_, root, data)
+				for _, option in ipairs(groupNumberFormatOptions) do
+					local value = option and option.value
+					if value ~= nil then
+						local label = option.label or option.text or tostring(value)
+						root:CreateRadio(label, function() return getGroupFormatValue() == value end, function()
+							local cfg = getCfg(kind)
+							if not cfg then return end
+							cfg.status = cfg.status or {}
+							cfg.status.unitStatus = cfg.status.unitStatus or {}
+							cfg.status.unitStatus.groupFormat = value
+							if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "statusTextGroupFormat", value, nil, true) end
+							data.customDefaultText = label
+							if addon.EditModeLib and addon.EditModeLib.internal and addon.EditModeLib.internal.RequestRefreshSettings then addon.EditModeLib.internal:RequestRefreshSettings() end
+							GF:ApplyHeaderAttributes(kind)
+						end)
+					end
+				end
 			end,
 			isEnabled = function()
 				local cfg = getCfg(kind)
