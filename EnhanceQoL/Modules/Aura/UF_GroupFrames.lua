@@ -413,9 +413,7 @@ local function resolveSortMethod(cfg)
 	end
 	local custom = cfg and GFH and GFH.EnsureCustomSortConfig and GFH.EnsureCustomSortConfig(cfg)
 	if v ~= "NAMELIST" and custom and custom.enabled == true then
-		if raw == nil or raw == "" or tostring(raw):upper() == "CUSTOM" then
-			v = "NAMELIST"
-		end
+		if raw == nil or raw == "" or tostring(raw):upper() == "CUSTOM" then v = "NAMELIST" end
 	end
 	return v
 end
@@ -5400,15 +5398,11 @@ function GF:ApplyHeaderAttributes(kind)
 		if groupingOrder == "" then groupingOrder = nil end
 		local rawGroupBy = cfg.groupBy
 		local normalizedGroupBy = resolveGroupByValue(cfg, DEFAULTS.raid) or "GROUP"
-		if rawGroupBy and tostring(rawGroupBy):upper() == "CLASS" then
-			groupingOrder = nil
-		end
+		if rawGroupBy and tostring(rawGroupBy):upper() == "CLASS" then groupingOrder = nil end
 		header:SetAttribute("groupingOrder", groupingOrder or GFH.GROUP_ORDER)
 		local groupFilter = cfg.groupFilter
 		if groupFilter == "" then groupFilter = nil end
-		if rawGroupBy and tostring(rawGroupBy):upper() == "CLASS" then
-			groupFilter = nil
-		end
+		if rawGroupBy and tostring(rawGroupBy):upper() == "CLASS" then groupFilter = nil end
 		header:SetAttribute("groupFilter", groupFilter)
 		local roleFilter = cfg.roleFilter
 		if roleFilter == "" then roleFilter = nil end
@@ -5771,9 +5765,7 @@ local function buildEditModeSettings(kind, editModeId)
 		local cfg = getCfg(kind)
 		return resolveSortMethod(cfg) == "NAMELIST"
 	end
-	local function isCustomSortEditorOpen()
-		return GF._customSortEditor and GF._customSortEditor.IsShown and GF._customSortEditor:IsShown()
-	end
+	local function isCustomSortEditorOpen() return GF._customSortEditor and GF._customSortEditor.IsShown and GF._customSortEditor:IsShown() end
 	local function getGroupByLabel()
 		local mode = getGroupByValue()
 		for _, option in ipairs(sortGroupOptions) do
@@ -5797,7 +5789,9 @@ local function buildEditModeSettings(kind, editModeId)
 			EditMode:SetValue(editModeId, "groupBy", cfg.groupBy, nil, true)
 			EditMode:SetValue(editModeId, "groupingOrder", cfg.groupingOrder, nil, true)
 			EditMode:SetValue(editModeId, "groupFilter", cfg.groupFilter, nil, true)
-			EditMode:SetValue(editModeId, "sortMethod", getSortMethodValue(), nil, true)
+			local sortMethodValue = resolveSortMethod(cfg)
+			if sortMethodValue == "NAMELIST" then sortMethodValue = "CUSTOM" end
+			EditMode:SetValue(editModeId, "sortMethod", sortMethodValue or "INDEX", nil, true)
 		end
 		GF:ApplyHeaderAttributes(kind)
 		if GF._previewActive and GF._previewActive[kind] then GF:UpdatePreviewLayout(kind) end
@@ -14440,9 +14434,7 @@ local function applyEditModeData(kind, data)
 				cfg.sortMethod = "NAMELIST"
 			else
 				local current = tostring(cfg.sortMethod or ""):upper()
-				if current == "NAMELIST" or current == "CUSTOM" then
-					cfg.sortMethod = (DEFAULTS.raid and DEFAULTS.raid.sortMethod) or "INDEX"
-				end
+				if current == "NAMELIST" or current == "CUSTOM" then cfg.sortMethod = (DEFAULTS.raid and DEFAULTS.raid.sortMethod) or "INDEX" end
 			end
 		elseif EditMode and EditMode.SetValue then
 			EditMode:SetValue(EDITMODE_IDS[kind], "customSortEnabled", custom and custom.enabled == true, nil, true)
@@ -15040,17 +15032,13 @@ do
 			end
 			local cfg = getCfg("raid")
 			local custom = cfg and GFH and GFH.EnsureCustomSortConfig and GFH.EnsureCustomSortConfig(cfg)
-			if custom and custom.separateMeleeRanged == true and resolveSortMethod(cfg) == "NAMELIST" and GFH and GFH.QueueInspectGroup then
-				GFH.QueueInspectGroup()
-			end
+			if custom and custom.separateMeleeRanged == true and resolveSortMethod(cfg) == "NAMELIST" and GFH and GFH.QueueInspectGroup then GFH.QueueInspectGroup() end
 		elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
 			GF:RefreshPowerVisibility()
 			GF:RefreshCustomSortNameList()
 			local cfg = getCfg("raid")
 			local custom = cfg and GFH and GFH.EnsureCustomSortConfig and GFH.EnsureCustomSortConfig(cfg)
-			if custom and custom.separateMeleeRanged == true and resolveSortMethod(cfg) == "NAMELIST" and GFH and GFH.QueueInspectGroup then
-				GFH.QueueInspectGroup()
-			end
+			if custom and custom.separateMeleeRanged == true and resolveSortMethod(cfg) == "NAMELIST" and GFH and GFH.QueueInspectGroup then GFH.QueueInspectGroup() end
 		end
 	end)
 end

@@ -975,18 +975,29 @@ function H.BuildRaidPreviewSamples(count)
 
 	local tanks = { "WARRIOR", "PALADIN" }
 	local healers = { "PRIEST", "DRUID", "SHAMAN", "MONK", "EVOKER", "PALADIN" }
-	for _, class in ipairs(tanks) do
-		addSample(class, "TANK")
-	end
-	for _, class in ipairs(healers) do
-		addSample(class, "HEALER")
-	end
+	local dpsClasses = H.CLASS_TOKENS
+	local target = tonumber(count) or 0
+	local tankIdx = 1
+	local healerIdx = 1
+	local dpsIdx = 1
 
-	local i = 1
-	while #samples < (tonumber(count) or 0) do
-		local class = H.CLASS_TOKENS[((i - 1) % #H.CLASS_TOKENS) + 1]
-		addSample(class, "DAMAGER")
-		i = i + 1
+	while #samples < target do
+		local class = tanks[((tankIdx - 1) % #tanks) + 1]
+		addSample(class, "TANK")
+		tankIdx = tankIdx + 1
+		if #samples >= target then break end
+
+		class = healers[((healerIdx - 1) % #healers) + 1]
+		addSample(class, "HEALER")
+		healerIdx = healerIdx + 1
+		if #samples >= target then break end
+
+		for _ = 1, 3 do
+			if #samples >= target then break end
+			class = dpsClasses[((dpsIdx - 1) % #dpsClasses) + 1]
+			addSample(class, "DAMAGER")
+			dpsIdx = dpsIdx + 1
+		end
 	end
 
 	return samples
@@ -1089,9 +1100,7 @@ function H.BuildPreviewSampleList(kind, cfg, baseSamples, limit, quotaTanks, quo
 
 	local function compareByIndex(a, b) return a.index < b.index end
 	local function compareByName(a, b) return (a.sample.name or "") < (b.sample.name or "") end
-	local function compareByNameOrder(a, b)
-		return (nameOrder[a.sample.name or ""] or 999) < (nameOrder[b.sample.name or ""] or 999)
-	end
+	local function compareByNameOrder(a, b) return (nameOrder[a.sample.name or ""] or 999) < (nameOrder[b.sample.name or ""] or 999) end
 
 	if groupBy then
 		if not groupingOrder or groupingOrder == "" then
