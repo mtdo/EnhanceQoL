@@ -24,6 +24,7 @@ addon.variables.ufSampleAbsorb = addon.variables.ufSampleAbsorb or {}
 addon.variables.ufSampleHealAbsorb = addon.variables.ufSampleHealAbsorb or {}
 local maxBossFrames = MAX_BOSS_FRAMES or 5
 local UF_PROFILE_SHARE_KIND = "EQOL_UF_PROFILE"
+local smoothFill = Enum.StatusBarInterpolation.ExponentialEaseOut
 
 local throttleHook
 local function DisableBossFrames()
@@ -3579,7 +3580,7 @@ local function updateHealth(cfg, unit)
 	else
 		st.health:SetMinMaxValues(0, maxv > 0 and maxv or 1)
 	end
-	st.health:SetValue(cur or 0)
+	st.health:SetValue(cur or 0, smoothFill)
 	local hc = cfg.health or {}
 	local percentVal
 	if addon.variables and addon.variables.isMidnight then
@@ -3641,7 +3642,7 @@ local function updateHealth(cfg, unit)
 		st.absorb:SetMinMaxValues(0, maxForValue or 1)
 		local hasVisibleAbsorb = abs and (not issecretvalue or not issecretvalue(abs)) and abs > 0
 		if shouldShowSampleAbsorb(unit) and not hasVisibleAbsorb and (not issecretvalue or not issecretvalue(maxForValue)) then abs = (maxForValue or 1) * 0.6 end
-		st.absorb:SetValue(abs or 0)
+		st.absorb:SetValue(abs or 0, smoothFill)
 		local reverseAbsorb = hc.absorbReverseFill
 		if reverseAbsorb == nil then reverseAbsorb = defH.absorbReverseFill == true end
 		if reverseAbsorb and st.absorb2 then
@@ -3649,9 +3650,9 @@ local function updateHealth(cfg, unit)
 			if maxHealth == nil then maxHealth = maxForValue end
 			st.absorb2:SetMinMaxValues(0, maxHealth or 1)
 			if UFHelper and UFHelper.getClampedAbsorbAmount then
-				st.absorb2:SetValue(UFHelper.getClampedAbsorbAmount(unit))
+				st.absorb2:SetValue(UFHelper.getClampedAbsorbAmount(unit), smoothFill)
 			else
-				st.absorb2:SetValue(UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(unit) or 0)
+				st.absorb2:SetValue(UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(unit) or 0, smoothFill)
 			end
 		end
 		if reverseAbsorb and st.absorb2 then
@@ -3692,7 +3693,7 @@ local function updateHealth(cfg, unit)
 		if not issecretvalue or (not issecretvalue(cur) and not issecretvalue(healAbs)) then
 			if (cur or 0) < (healAbs or 0) then healAbs = cur or 0 end
 		end
-		st.healAbsorb:SetValue(healAbs or 0)
+		st.healAbsorb:SetValue(healAbs or 0, smoothFill)
 		local har, hag, hab, haa = UFHelper.getHealAbsorbColor(hc, defH)
 		st.healAbsorb:SetStatusBarColor(har or 1, hag or 0.3, hab or 0.3, haa or 0.7)
 	end
@@ -3757,7 +3758,7 @@ local function updatePower(cfg, unit)
 	if UFHelper.textModeUsesLevel(leftMode) or UFHelper.textModeUsesLevel(centerMode) or UFHelper.textModeUsesLevel(rightMode) then levelText = UFHelper.getUnitLevelText(unit, nil, hideClassText) end
 	if pcfg.enabled == false then
 		bar:Hide()
-		bar:SetValue(0)
+		bar:SetValue(0, smoothFill)
 		if st.powerTextLeft then st.powerTextLeft:SetText("") end
 		if st.powerTextCenter then st.powerTextCenter:SetText("") end
 		if st.powerTextRight then st.powerTextRight:SetText("") end
@@ -3773,7 +3774,7 @@ local function updatePower(cfg, unit)
 	else
 		bar:SetMinMaxValues(0, maxv > 0 and maxv or 1)
 	end
-	bar:SetValue(cur or 0)
+	bar:SetValue(cur or 0, smoothFill)
 	local percentVal
 	if addon.variables and addon.variables.isMidnight then
 		percentVal = getPowerPercent(unit, powerEnum, cur, maxv)
@@ -4816,13 +4817,13 @@ local function applyBars(cfg, unit)
 			end
 			setFrameLevelAbove(st.absorb2, st.health, 1)
 			st.absorb2:SetMinMaxValues(0, 1)
-			st.absorb2:SetValue(0)
+			st.absorb2:SetValue(0, smoothFill)
 			st.absorb2:Hide()
 		end
 		local borderFrame = st.barGroup and st.barGroup._ufBorder
 		setFrameLevelAbove(st.absorb, st.health, 1)
 		st.absorb:SetMinMaxValues(0, 1)
-		st.absorb:SetValue(0)
+		st.absorb:SetValue(0, smoothFill)
 		if st.overAbsorbGlow then
 			st.overAbsorbGlow:ClearAllPoints()
 			local glowAnchor = st.absorb or st.health
@@ -4847,7 +4848,7 @@ local function applyBars(cfg, unit)
 		local anchorBar = st.absorb or st.health
 		setFrameLevelAbove(st.healAbsorb, anchorBar, 1)
 		st.healAbsorb:SetMinMaxValues(0, 1)
-		st.healAbsorb:SetValue(0)
+		st.healAbsorb:SetValue(0, smoothFill)
 		-- no heal absorb glow
 	end
 	if st.castBar and (unit == UNIT.PLAYER or unit == UNIT.TARGET or unit == UNIT.FOCUS or isBossUnit(unit)) then
@@ -5157,7 +5158,7 @@ local function applyBossEditSample(idx, cfg)
 	local maxv = UnitHealthMax("player") or cur or 1
 	local percentVal = getHealthPercent("player", cur, maxv)
 	st.health:SetMinMaxValues(0, maxv)
-	st.health:SetValue(cur)
+	st.health:SetValue(cur, smoothFill)
 	local color = hc.color or (def.health and def.health.color) or { 0, 0.8, 0, 1 }
 	st.health:SetStatusBarColor(color[1] or 0, color[2] or 0.8, color[3] or 0, color[4] or 1)
 	local leftMode = hc.textLeft or "PERCENT"
@@ -5208,7 +5209,7 @@ local function applyBossEditSample(idx, cfg)
 			local pMax = UnitPowerMax("player", enumId or 0) or 0
 			local pPercent = getPowerPercent("player", enumId or 0, pCur, pMax)
 			st.power:SetMinMaxValues(0, pMax > 0 and pMax or 1)
-			st.power:SetValue(pCur)
+			st.power:SetValue(pCur, smoothFill)
 			local pr, pg, pb, pa = UFHelper.getPowerColor(token)
 			st.power:SetStatusBarColor(pr or 0.1, pg or 0.45, pb or 1, pa or 1)
 			if st.power.SetStatusBarDesaturated then st.power:SetStatusBarDesaturated(UFHelper.isPowerDesaturated(token)) end
@@ -5253,7 +5254,7 @@ local function applyBossEditSample(idx, cfg)
 			end
 			st.power:Show()
 		else
-			st.power:SetValue(0)
+			st.power:SetValue(0, smoothFill)
 			if st.powerTextLeft then st.powerTextLeft:SetText("") end
 			if st.powerTextCenter then st.powerTextCenter:SetText("") end
 			if st.powerTextRight then st.powerTextRight:SetText("") end
@@ -5741,7 +5742,7 @@ local function onEvent(self, event, unit, ...)
 		end
 	elseif event == "PLAYER_DEAD" then
 		local playerCfg = getCfg(UNIT.PLAYER)
-		if states.player and states.player.health then states.player.health:SetValue(0) end
+		if states.player and states.player.health then states.player.health:SetValue(0, smoothFill) end
 		updateHealth(playerCfg, UNIT.PLAYER)
 	elseif event == "PLAYER_ALIVE" then
 		local playerCfg = getCfg(UNIT.PLAYER)
