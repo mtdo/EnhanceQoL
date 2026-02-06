@@ -702,6 +702,11 @@ local DEFAULTS = {
 				hideHealthTextWhenOffline = false,
 				showGroup = false,
 				groupFormat = "GROUP",
+				groupFont = nil,
+				groupFontSize = 12,
+				groupFontOutline = "OUTLINE",
+				groupAnchor = "TOP",
+				groupOffset = { x = 0, y = 0 },
 			},
 			rangeFade = {
 				enabled = true,
@@ -1037,6 +1042,11 @@ local DEFAULTS = {
 				hideHealthTextWhenOffline = false,
 				showGroup = false,
 				groupFormat = "GROUP",
+				groupFont = nil,
+				groupFontSize = 12,
+				groupFontOutline = "OUTLINE",
+				groupAnchor = "TOP",
+				groupOffset = { x = 0, y = 0 },
 			},
 			rangeFade = {
 				enabled = true,
@@ -1309,6 +1319,14 @@ local registerFeatureEvents
 local unregisterFeatureEvents
 
 local function getUnit(self) return (self and (self.unit or (self.GetAttribute and self:GetAttribute("unit")))) end
+local function getUnitSubgroup(unit)
+	if not (unit and UnitInRaid and GetRaidRosterInfo) then return nil end
+	local idx = UnitInRaid(unit)
+	if not idx then return nil end
+	local _, _, raidSubgroup = GetRaidRosterInfo(idx)
+	if issecretvalue and issecretvalue(raidSubgroup) then return nil end
+	return raidSubgroup
+end
 
 local function getState(self)
 	local st = self and self._eqolUFState
@@ -1529,6 +1547,7 @@ function GF:BuildButton(self)
 	st.name = st.nameText
 	if not st.levelText then st.levelText = st.healthTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight") end
 	if not st.statusText then st.statusText = st.healthTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight") end
+	if not st.groupText then st.groupText = st.healthTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight") end
 	if not st.privateAuras then
 		st.privateAuras = CreateFrame("Frame", nil, st.barGroup or self)
 		st.privateAuras:EnableMouse(false)
@@ -1559,6 +1578,21 @@ function GF:BuildButton(self)
 		UFHelper.applyFont(st.powerTextCenter, pcfg.font, pcfg.fontSize or 10, pcfg.fontOutline)
 		UFHelper.applyFont(st.powerTextRight, pcfg.font, pcfg.fontSize or 10, pcfg.fontOutline)
 		UFHelper.applyFont(st.nameText, tc.font or hc.font, tc.fontSize or hc.fontSize or 12, tc.fontOutline or hc.fontOutline)
+		if st.statusText or st.groupText then
+			local scfg = cfg.status or {}
+			local us = scfg.unitStatus or {}
+			if st.statusText then
+				UFHelper.applyFont(st.statusText, us.font or hc.font, us.fontSize or hc.fontSize or 12, us.fontOutline or hc.fontOutline)
+			end
+			if st.groupText then
+				UFHelper.applyFont(
+					st.groupText,
+					us.groupFont or us.font or hc.font,
+					us.groupFontSize or us.fontSize or hc.fontSize or 12,
+					us.groupFontOutline or us.fontOutline or hc.fontOutline
+				)
+			end
+		end
 	end
 
 	if not st._sizeHooked then
@@ -1653,21 +1687,39 @@ function GF:LayoutButton(self)
 		UFHelper.applyFont(st.powerTextLeft, pcfgLocal.font, pcfgLocal.fontSize or 10, pcfgLocal.fontOutline)
 		UFHelper.applyFont(st.powerTextCenter, pcfgLocal.font, pcfgLocal.fontSize or 10, pcfgLocal.fontOutline)
 		UFHelper.applyFont(st.powerTextRight, pcfgLocal.font, pcfgLocal.fontSize or 10, pcfgLocal.fontOutline)
-		if st.statusText then
+		if st.statusText or st.groupText then
 			local scfg = cfg.status or {}
 			local us = scfg.unitStatus or {}
-			UFHelper.applyFont(st.statusText, us.font or hc.font, us.fontSize or hc.fontSize or 12, us.fontOutline or hc.fontOutline)
+			if st.statusText then
+				UFHelper.applyFont(st.statusText, us.font or hc.font, us.fontSize or hc.fontSize or 12, us.fontOutline or hc.fontOutline)
+			end
+			if st.groupText then
+				UFHelper.applyFont(
+					st.groupText,
+					us.groupFont or us.font or hc.font,
+					us.groupFontSize or us.fontSize or hc.fontSize or 12,
+					us.groupFontOutline or us.fontOutline or hc.fontOutline
+				)
+			end
 		end
 	end
 	layoutTexts(st.health, st.healthTextLeft, st.healthTextCenter, st.healthTextRight, cfg.health, scale)
 	layoutTexts(st.power, st.powerTextLeft, st.powerTextCenter, st.powerTextRight, cfg.power, scale)
-	if st.statusText then
+	if st.statusText or st.groupText then
 		local scfg = cfg.status or {}
 		local us = scfg.unitStatus or {}
-		local anchor = us.anchor or "CENTER"
-		local off = us.offset or {}
-		st.statusText:ClearAllPoints()
-		st.statusText:SetPoint(anchor, st.health, anchor, roundToPixel(off.x or 0, scale), roundToPixel(off.y or 0, scale))
+		if st.statusText then
+			local anchor = us.anchor or "CENTER"
+			local off = us.offset or {}
+			st.statusText:ClearAllPoints()
+			st.statusText:SetPoint(anchor, st.health, anchor, roundToPixel(off.x or 0, scale), roundToPixel(off.y or 0, scale))
+		end
+		if st.groupText then
+			local anchor = us.groupAnchor or "TOP"
+			local off = us.groupOffset or {}
+			st.groupText:ClearAllPoints()
+			st.groupText:SetPoint(anchor, st.health, anchor, roundToPixel(off.x or 0, scale), roundToPixel(off.y or 0, scale))
+		end
 	end
 
 	local healthTexKey = getEffectiveBarTexture(cfg, hc)
@@ -3202,25 +3254,47 @@ end
 function GF:UpdateStatusText(self)
 	local st = getState(self)
 	local unit = getUnit(self)
-	if not (st and st.statusText) then return end
-	local cfg = self._eqolCfg or getCfg(self._eqolGroupKind or "party")
+	if not st then return end
+	local hasStatusText = st.statusText ~= nil
+	local hasGroupText = st.groupText ~= nil
+	if not (hasStatusText or hasGroupText) then return end
+	local kind = self._eqolGroupKind or "party"
+	local cfg = self._eqolCfg or getCfg(kind)
 	local scfg = cfg and cfg.status or {}
 	local us = scfg.unitStatus or {}
 	if st._wantsStatusText == false or us.enabled == false then
-		st.statusText:SetText("")
-		st.statusText:Hide()
+		if st.statusText then
+			st.statusText:SetText("")
+			st.statusText:Hide()
+		end
+		if st.groupText then
+			st.groupText:SetText("")
+			st.groupText:Hide()
+		end
 		return
 	end
 	local inEditMode = isEditModeActive()
 	if inEditMode and GF and GF._editModeSampleStatusText == false then
-		st.statusText:SetText("")
-		st.statusText:Hide()
+		if st.statusText then
+			st.statusText:SetText("")
+			st.statusText:Hide()
+		end
+		if st.groupText then
+			st.groupText:SetText("")
+			st.groupText:Hide()
+		end
 		return
 	end
 	local allowSample = inEditMode and self._eqolPreview
 	if UnitExists and unit and not UnitExists(unit) and not allowSample then
-		st.statusText:SetText("")
-		st.statusText:Hide()
+		if st.statusText then
+			st.statusText:SetText("")
+			st.statusText:Hide()
+		end
+		if st.groupText then
+			st.groupText:SetText("")
+			st.groupText:Hide()
+		end
 		return
 	end
 	local statusTag
@@ -3255,26 +3329,47 @@ function GF:UpdateStatusText(self)
 			statusTag = DEFAULT_DND_MESSAGE or "DND"
 		end
 	end
-	if not statusTag and us.showGroup == true then
-		local subgroup
-		if unit and UnitInRaid and GetRaidRosterInfo then
-			local idx = UnitInRaid(unit)
-			if idx then
-				local _, _, raidSubgroup = GetRaidRosterInfo(idx)
-				if not (issecretvalue and issecretvalue(raidSubgroup)) then subgroup = raidSubgroup end
+	local groupTag
+	if us.showGroup == true then
+		local subgroup = getUnitSubgroup(unit)
+		if not subgroup and allowSample then subgroup = st._previewGroup or 1 end
+		if subgroup then groupTag = formatGroupNumber(subgroup, us.groupFormat or "GROUP") end
+	end
+	if hasStatusText then
+		if statusTag then
+			st.statusText:SetText(statusTag)
+			local col = us.color or GFH.COLOR_WHITE
+			st.statusText:SetTextColor(col[1] or 1, col[2] or 1, col[3] or 1, col[4] or 1)
+			st.statusText:Show()
+		else
+			st.statusText:SetText("")
+			st.statusText:Hide()
+		end
+	end
+	if hasGroupText then
+		local showGroupTag = false
+		if groupTag then
+			local groupBy = tostring(cfg and cfg.groupBy or "GROUP"):upper()
+			if groupBy == "GROUP" and kind == "raid" then
+				if allowSample then
+					showGroupTag = st._previewGroupFirst == true
+				else
+					if GF and GF.UpdateGroupFirstFlags then GF:UpdateGroupFirstFlags(kind) end
+					showGroupTag = st._groupFirst == true
+				end
+			else
+				showGroupTag = true
 			end
 		end
-		if not subgroup and allowSample then subgroup = st._previewGroup or 1 end
-		if subgroup then statusTag = formatGroupNumber(subgroup, us.groupFormat or "GROUP") end
-	end
-	if statusTag then
-		st.statusText:SetText(statusTag)
-		local col = us.color or GFH.COLOR_WHITE
-		st.statusText:SetTextColor(col[1] or 1, col[2] or 1, col[3] or 1, col[4] or 1)
-		st.statusText:Show()
-	else
-		st.statusText:SetText("")
-		st.statusText:Hide()
+		if showGroupTag and groupTag then
+			st.groupText:SetText(groupTag)
+			local col = us.color or GFH.COLOR_WHITE
+			st.groupText:SetTextColor(col[1] or 1, col[2] or 1, col[3] or 1, col[4] or 1)
+			st.groupText:Show()
+		else
+			st.groupText:SetText("")
+			st.groupText:Hide()
+		end
 	end
 end
 
@@ -4426,6 +4521,11 @@ function GF:UpdatePreviewLayout(kind)
 	local samples = (GFH.BuildPreviewSampleList and GFH.BuildPreviewSampleList(kind, cfg, PREVIEW_SAMPLES[kind], sampleLimit, 2, 3)) or (PREVIEW_SAMPLES[kind] or {})
 	GF._previewSampleCount = GF._previewSampleCount or {}
 	GF._previewSampleCount[kind] = #samples
+	local previewGroupFirst = {}
+	for i, sample in ipairs(samples) do
+		local group = tonumber(sample.group) or 1
+		if previewGroupFirst[group] == nil then previewGroupFirst[group] = i end
+	end
 
 	local w = floor(clampNumber(tonumber(cfg.width) or 100, 40, 600, 100) + 0.5)
 	local h = floor(clampNumber(tonumber(cfg.height) or 24, 10, 200, 24) + 0.5)
@@ -4473,6 +4573,8 @@ function GF:UpdatePreviewLayout(kind)
 					st._previewClass = sample.class
 					st._previewName = sample.name or sample.class or "Unit"
 					st._previewGroup = sample.group
+					local group = tonumber(sample.group) or 1
+					st._previewGroupFirst = previewGroupFirst[group] == i
 					st._previewIndex = i
 				end
 				btn._eqolGroupKind = kind
@@ -4663,6 +4765,70 @@ local function forEachChild(header, fn)
 	end
 end
 
+local function normalizeSortMethod(value)
+	local v = tostring(value or "INDEX"):upper()
+	if v == "NAME" then return "NAME" end
+	return "INDEX"
+end
+
+local function normalizeSortDir(value)
+	local v = tostring(value or "ASC"):upper()
+	if v == "DESC" then return "DESC" end
+	return "ASC"
+end
+
+local function isBetterSortKey(key, currentKey, sortDir)
+	if currentKey == nil then return true end
+	if sortDir == "DESC" then return key > currentKey end
+	return key < currentKey
+end
+
+function GF:UpdateGroupFirstFlags(kind)
+	if kind ~= "raid" then return end
+	local header = GF.headers and GF.headers[kind]
+	if not header then return end
+	local cfg = getCfg(kind)
+	if not (cfg and cfg.groupBy == "GROUP") then
+		forEachChild(header, function(child)
+			local st = getState(child)
+			if st then st._groupFirst = nil end
+		end)
+		return
+	end
+	local sortMethod = normalizeSortMethod(cfg.sortMethod)
+	local sortDir = normalizeSortDir(cfg.sortDir)
+	local best = {}
+	forEachChild(header, function(child)
+		local unit = getUnit(child)
+		if unit and UnitExists and UnitExists(unit) then
+			local subgroup = getUnitSubgroup(unit)
+			if subgroup then
+				local key
+				if sortMethod == "NAME" then
+					local name = UnitName and UnitName(unit) or ""
+					if issecretvalue and issecretvalue(name) then name = "" end
+					key = tostring(name)
+				else
+					local idx = UnitInRaid and UnitInRaid(unit)
+					key = tonumber(idx) or 0
+				end
+				local entry = best[subgroup]
+				if not entry or isBetterSortKey(key, entry.key, sortDir) then
+					best[subgroup] = { key = key, btn = child }
+				end
+			end
+		end
+	end)
+	forEachChild(header, function(child)
+		local st = getState(child)
+		if st then st._groupFirst = false end
+	end)
+	for _, entry in pairs(best) do
+		local st = getState(entry.btn)
+		if st then st._groupFirst = true end
+	end
+end
+
 local function refreshAllAuras()
 	for _, header in pairs(GF.headers or {}) do
 		forEachChild(header, function(child)
@@ -4740,7 +4906,8 @@ end
 
 function GF:RefreshStatusText()
 	if not isFeatureEnabled() then return end
-	for _, header in pairs(GF.headers or {}) do
+	for kind, header in pairs(GF.headers or {}) do
+		if kind == "raid" then GF:UpdateGroupFirstFlags(kind) end
 		forEachChild(header, function(child)
 			if child then GF:UpdateStatusText(child) end
 		end)
