@@ -47,6 +47,7 @@
 - ChatIM: Disabling instant messenger restores whispers in normal chat
 - Vendor: Disable destroy-queue Add button when the feature is off
 - MythicPlus: ConsolePort left-click on World Map teleports now triggers the cast correctly
+- Visibility: Skyriding stance check no longer triggers for non-druids (e.g., paladin auras)
 
 ---
 
