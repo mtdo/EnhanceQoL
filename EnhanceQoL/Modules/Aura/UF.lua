@@ -424,6 +424,30 @@ local defaults = {
 				texture = "SOLID",
 			},
 		},
+		privateAuras = {
+			enabled = false,
+			countdownFrame = true,
+			countdownNumbers = false,
+			showDispelType = false,
+			icon = {
+				amount = 2,
+				size = 24,
+				point = "LEFT",
+				offset = 3,
+				borderScale = nil,
+			},
+			parent = {
+				point = "BOTTOM",
+				offsetX = 0,
+				offsetY = -4,
+			},
+			duration = {
+				enable = false,
+				point = "BOTTOM",
+				offsetX = 0,
+				offsetY = -1,
+			},
+		},
 	},
 	target = {
 		enabled = false,
@@ -465,6 +489,30 @@ local defaults = {
 			cooldownFontSize = 0,
 			cooldownFontSizeBuff = nil,
 			cooldownFontSizeDebuff = nil,
+		},
+		privateAuras = {
+			enabled = false,
+			countdownFrame = true,
+			countdownNumbers = false,
+			showDispelType = false,
+			icon = {
+				amount = 2,
+				size = 24,
+				point = "LEFT",
+				offset = 3,
+				borderScale = nil,
+			},
+			parent = {
+				point = "BOTTOM",
+				offsetX = 0,
+				offsetY = -4,
+			},
+			duration = {
+				enable = false,
+				point = "BOTTOM",
+				offsetX = 0,
+				offsetY = -1,
+			},
 		},
 		cast = {
 			enabled = true,
@@ -4548,6 +4596,11 @@ local function ensureFrames(unit)
 	st.powerTextLayer:SetAllPoints(st.power)
 	st.statusTextLayer = st.statusTextLayer or CreateFrame("Frame", nil, st.status)
 	st.statusTextLayer:SetAllPoints(st.status)
+	if not st.privateAuras then
+		st.privateAuras = CreateFrame("Frame", nil, st.frame)
+		st.privateAuras:EnableMouse(false)
+	end
+	if st.privateAuras.GetParent and st.privateAuras:GetParent() ~= st.frame then st.privateAuras:SetParent(st.frame) end
 
 	st.healthTextLeft = st.healthTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	st.healthTextCenter = st.healthTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -4828,6 +4881,10 @@ local function applyConfig(unit)
 		if not isBossUnit(unit) then applyVisibilityRules(unit) end
 		if unit == UNIT.TARGET and UFHelper and UFHelper.RangeFadeReset then UFHelper.RangeFadeReset() end
 		if unit == UNIT.PLAYER and addon.functions and addon.functions.ApplyCastBarVisibility then addon.functions.ApplyCastBarVisibility() end
+		if st and st.privateAuras and UFHelper and UFHelper.RemovePrivateAuras then
+			UFHelper.RemovePrivateAuras(st.privateAuras)
+			if st.privateAuras.Hide then st.privateAuras:Hide() end
+		end
 		return
 	end
 	ensureFrames(unit)
@@ -4855,6 +4912,11 @@ local function applyConfig(unit)
 	checkRaidTargetIcon(unit, st)
 	UFHelper.updatePvPIndicator(st, unit, cfg, defaultsFor(unit), false)
 	UFHelper.updateRoleIndicator(st, unit, cfg, defaultsFor(unit), false)
+	if st.privateAuras and UFHelper and UFHelper.ApplyPrivateAuras then
+		local pcfg = cfg.privateAuras or (def and def.privateAuras)
+		local inEditMode = addon.EditModeLib and addon.EditModeLib.IsInEditMode and addon.EditModeLib:IsInEditMode()
+		UFHelper.ApplyPrivateAuras(st.privateAuras, unit, pcfg, st.frame, st.statusTextLayer or st.frame, inEditMode == true)
+	end
 	if unit == UNIT.PLAYER then
 		updateCombatIndicator(cfg)
 		updateRestingIndicator(cfg)
@@ -5642,12 +5704,31 @@ local function onEvent(self, event, unit, ...)
 			st.barGroup:Show()
 			st.status:Show()
 			setCastInfoFromUnit(unitToken)
+			if st.privateAuras and UFHelper and UFHelper.RemovePrivateAuras and UFHelper.ApplyPrivateAuras then
+				UFHelper.RemovePrivateAuras(st.privateAuras)
+				if st.privateAuras.Hide then st.privateAuras:Hide() end
+				local pcfg = targetCfg.privateAuras or (defaultsFor(unitToken) and defaultsFor(unitToken).privateAuras)
+				local function applyPrivate()
+					if not states[unitToken] or states[unitToken] ~= st then return end
+					if not UnitExists(unitToken) then return end
+					UFHelper.ApplyPrivateAuras(st.privateAuras, unitToken, pcfg, st.frame, st.statusTextLayer or st.frame, addon.EditModeLib and addon.EditModeLib:IsInEditMode())
+				end
+				if After then
+					After(0, applyPrivate)
+				else
+					applyPrivate()
+				end
+			end
 		else
 			AuraUtil.resetTargetAuras()
 			AuraUtil.updateTargetAuraIcons()
 			st.barGroup:Hide()
 			st.status:Hide()
 			stopCast(unitToken)
+			if st.privateAuras and UFHelper and UFHelper.RemovePrivateAuras then
+				UFHelper.RemovePrivateAuras(st.privateAuras)
+				if st.privateAuras.Hide then st.privateAuras:Hide() end
+			end
 		end
 		checkRaidTargetIcon(unitToken, st)
 		updatePortrait(targetCfg, unitToken)

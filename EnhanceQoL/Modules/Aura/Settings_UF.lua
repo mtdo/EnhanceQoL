@@ -19,6 +19,14 @@ local UF = addon.Aura and addon.Aura.UF
 local UFHelper = addon.Aura and addon.Aura.UFHelper
 if not (UF and settingType) then return end
 
+local clampNumber = UFHelper and UFHelper.ClampNumber or function(value, minValue, maxValue, fallback)
+	local v = tonumber(value)
+	if v == nil then return fallback end
+	if minValue ~= nil and v < minValue then v = minValue end
+	if maxValue ~= nil and v > maxValue then v = maxValue end
+	return v
+end
+
 local MIN_WIDTH = 50
 local OFFSET_RANGE = 400
 local defaultStrata = (_G.PlayerFrame and _G.PlayerFrame.GetFrameStrata and _G.PlayerFrame:GetFrameStrata()) or "MEDIUM"
@@ -112,6 +120,23 @@ local anchorOptions = {
 	{ value = "LEFT", label = "LEFT" },
 	{ value = "CENTER", label = "CENTER" },
 	{ value = "RIGHT", label = "RIGHT" },
+}
+local anchorOptions9 = {
+	{ value = "TOPLEFT", label = "TOPLEFT" },
+	{ value = "TOP", label = "TOP" },
+	{ value = "TOPRIGHT", label = "TOPRIGHT" },
+	{ value = "LEFT", label = "LEFT" },
+	{ value = "CENTER", label = "CENTER" },
+	{ value = "RIGHT", label = "RIGHT" },
+	{ value = "BOTTOMLEFT", label = "BOTTOMLEFT" },
+	{ value = "BOTTOM", label = "BOTTOM" },
+	{ value = "BOTTOMRIGHT", label = "BOTTOMRIGHT" },
+}
+local privateAuraPointOptions = {
+	{ value = "LEFT", label = L["Left"] or "Left" },
+	{ value = "RIGHT", label = L["Right"] or "Right" },
+	{ value = "TOP", label = L["Top"] or "Top" },
+	{ value = "BOTTOM", label = L["Bottom"] or "Bottom" },
 }
 
 local classResourceClasses = {
@@ -4260,6 +4285,213 @@ local function buildUnitSettings(unit)
 			true
 		)
 		list[#list].isEnabled = isSeparateDebuffEnabled
+	end
+
+	if unit ~= "target" then
+		list[#list + 1] = { name = L["UFPrivateAuras"] or "Private Auras", kind = settingType.Collapsible, id = "privateAuras", defaultCollapsed = true }
+		local paDef = def.privateAuras or {
+			enabled = false,
+			countdownFrame = true,
+			countdownNumbers = false,
+			showDispelType = false,
+			icon = { amount = 2, size = 24, point = "LEFT", offset = 3 },
+			parent = { point = "BOTTOM", offsetX = 0, offsetY = -4 },
+			duration = { enable = false, point = "BOTTOM", offsetX = 0, offsetY = -1 },
+		}
+		local function isPrivateAurasEnabled() return getValue(unit, { "privateAuras", "enabled" }, paDef.enabled == true) == true end
+		local function isPrivateCountdownEnabled() return isPrivateAurasEnabled() and (getValue(unit, { "privateAuras", "countdownFrame" }, paDef.countdownFrame ~= false) ~= false) end
+		local function isPrivateDurationEnabled()
+			return isPrivateAurasEnabled()
+				and (getValue(unit, { "privateAuras", "duration", "enable" }, (paDef.duration and paDef.duration.enable) == true) == true)
+		end
+
+		list[#list + 1] = checkbox(L["UFPrivateAurasEnable"] or "Enable private auras", isPrivateAurasEnabled, function(val)
+			setValue(unit, { "privateAuras", "enabled" }, val and true or false)
+			refresh()
+		end, paDef.enabled == true, "privateAuras")
+
+		list[#list + 1] = slider(
+			L["UFPrivateAurasAmount"] or "Private aura amount",
+			1,
+			10,
+			1,
+			function() return getValue(unit, { "privateAuras", "icon", "amount" }, (paDef.icon and paDef.icon.amount) or 2) end,
+			function(val)
+				setValue(unit, { "privateAuras", "icon", "amount" }, clampNumber(val or 1, 1, 10, 2))
+				refresh()
+			end,
+			(paDef.icon and paDef.icon.amount) or 2,
+			"privateAuras",
+			true
+		)
+		list[#list].isEnabled = isPrivateAurasEnabled
+
+		list[#list + 1] = slider(
+			L["UFPrivateAurasSize"] or "Private aura size",
+			8,
+			60,
+			1,
+			function() return getValue(unit, { "privateAuras", "icon", "size" }, (paDef.icon and paDef.icon.size) or 24) end,
+			function(val)
+				setValue(unit, { "privateAuras", "icon", "size" }, clampNumber(val or 24, 8, 60, 24))
+				refresh()
+			end,
+			(paDef.icon and paDef.icon.size) or 24,
+			"privateAuras",
+			true
+		)
+		list[#list].isEnabled = isPrivateAurasEnabled
+
+		list[#list + 1] = radioDropdown(
+			L["UFPrivateAurasPoint"] or "Icon direction",
+			privateAuraPointOptions,
+			function() return getValue(unit, { "privateAuras", "icon", "point" }, (paDef.icon and paDef.icon.point) or "LEFT") end,
+			function(val)
+				setValue(unit, { "privateAuras", "icon", "point" }, val or "LEFT")
+				refresh()
+			end,
+			(paDef.icon and paDef.icon.point) or "LEFT",
+			"privateAuras"
+		)
+		list[#list].isEnabled = isPrivateAurasEnabled
+
+		list[#list + 1] = slider(
+			L["UFPrivateAurasOffset"] or "Icon spacing",
+			0,
+			20,
+			1,
+			function() return getValue(unit, { "privateAuras", "icon", "offset" }, (paDef.icon and paDef.icon.offset) or 2) end,
+			function(val)
+				setValue(unit, { "privateAuras", "icon", "offset" }, clampNumber(val or 0, 0, 20, 2))
+				refresh()
+			end,
+			(paDef.icon and paDef.icon.offset) or 2,
+			"privateAuras",
+			true
+		)
+		list[#list].isEnabled = isPrivateAurasEnabled
+
+		list[#list + 1] = radioDropdown(
+			L["UFPrivateAurasParentPoint"] or "Anchor point",
+			anchorOptions9,
+			function() return getValue(unit, { "privateAuras", "parent", "point" }, (paDef.parent and paDef.parent.point) or "BOTTOM") end,
+			function(val)
+				setValue(unit, { "privateAuras", "parent", "point" }, val or "BOTTOM")
+				refresh()
+			end,
+			(paDef.parent and paDef.parent.point) or "BOTTOM",
+			"privateAuras"
+		)
+		list[#list].isEnabled = isPrivateAurasEnabled
+
+		list[#list + 1] = slider(
+			L["UFPrivateAurasParentOffsetX"] or "Anchor offset X",
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
+			1,
+			function() return getValue(unit, { "privateAuras", "parent", "offsetX" }, (paDef.parent and paDef.parent.offsetX) or 0) end,
+			function(val)
+				setValue(unit, { "privateAuras", "parent", "offsetX" }, val or 0)
+				refresh()
+			end,
+			(paDef.parent and paDef.parent.offsetX) or 0,
+			"privateAuras",
+			true
+		)
+		list[#list].isEnabled = isPrivateAurasEnabled
+
+		list[#list + 1] = slider(
+			L["UFPrivateAurasParentOffsetY"] or "Anchor offset Y",
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
+			1,
+			function() return getValue(unit, { "privateAuras", "parent", "offsetY" }, (paDef.parent and paDef.parent.offsetY) or 0) end,
+			function(val)
+				setValue(unit, { "privateAuras", "parent", "offsetY" }, val or 0)
+				refresh()
+			end,
+			(paDef.parent and paDef.parent.offsetY) or 0,
+			"privateAuras",
+			true
+		)
+		list[#list].isEnabled = isPrivateAurasEnabled
+
+		list[#list + 1] = checkbox(L["UFPrivateAurasCountdownFrame"] or "Show countdown frame", function()
+			return getValue(unit, { "privateAuras", "countdownFrame" }, paDef.countdownFrame ~= false) ~= false
+		end, function(val)
+			setValue(unit, { "privateAuras", "countdownFrame" }, val and true or false)
+			refresh()
+		end, paDef.countdownFrame ~= false, "privateAuras")
+		list[#list].isEnabled = isPrivateAurasEnabled
+
+		list[#list + 1] = checkbox(L["UFPrivateAurasCountdownNumbers"] or "Show countdown numbers", function()
+			return getValue(unit, { "privateAuras", "countdownNumbers" }, paDef.countdownNumbers ~= false) ~= false
+		end, function(val)
+			setValue(unit, { "privateAuras", "countdownNumbers" }, val and true or false)
+			refresh()
+		end, paDef.countdownNumbers ~= false, "privateAuras")
+		list[#list].isEnabled = isPrivateCountdownEnabled
+
+		list[#list + 1] = checkbox(L["UFPrivateAurasShowDispelType"] or "Show dispel type", function()
+			return getValue(unit, { "privateAuras", "showDispelType" }, paDef.showDispelType == true) == true
+		end, function(val)
+			setValue(unit, { "privateAuras", "showDispelType" }, val and true or false)
+			refresh()
+		end, paDef.showDispelType == true, "privateAuras")
+		list[#list].isEnabled = isPrivateAurasEnabled
+
+		list[#list + 1] = checkbox(L["UFPrivateAurasDurationEnable"] or "Show duration", function()
+			return getValue(unit, { "privateAuras", "duration", "enable" }, (paDef.duration and paDef.duration.enable) == true) == true
+		end, function(val)
+			setValue(unit, { "privateAuras", "duration", "enable" }, val and true or false)
+			refresh()
+		end, (paDef.duration and paDef.duration.enable) == true, "privateAuras")
+		list[#list].isEnabled = isPrivateAurasEnabled
+
+		list[#list + 1] = radioDropdown(
+			L["UFPrivateAurasDurationPoint"] or "Duration anchor",
+			anchorOptions9,
+			function() return getValue(unit, { "privateAuras", "duration", "point" }, (paDef.duration and paDef.duration.point) or "BOTTOM") end,
+			function(val)
+				setValue(unit, { "privateAuras", "duration", "point" }, val or "BOTTOM")
+				refresh()
+			end,
+			(paDef.duration and paDef.duration.point) or "BOTTOM",
+			"privateAuras"
+		)
+		list[#list].isEnabled = isPrivateDurationEnabled
+
+		list[#list + 1] = slider(
+			L["UFPrivateAurasDurationOffsetX"] or "Duration offset X",
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
+			1,
+			function() return getValue(unit, { "privateAuras", "duration", "offsetX" }, (paDef.duration and paDef.duration.offsetX) or 0) end,
+			function(val)
+				setValue(unit, { "privateAuras", "duration", "offsetX" }, val or 0)
+				refresh()
+			end,
+			(paDef.duration and paDef.duration.offsetX) or 0,
+			"privateAuras",
+			true
+		)
+		list[#list].isEnabled = isPrivateDurationEnabled
+
+		list[#list + 1] = slider(
+			L["UFPrivateAurasDurationOffsetY"] or "Duration offset Y",
+			-OFFSET_RANGE,
+			OFFSET_RANGE,
+			1,
+			function() return getValue(unit, { "privateAuras", "duration", "offsetY" }, (paDef.duration and paDef.duration.offsetY) or 0) end,
+			function(val)
+				setValue(unit, { "privateAuras", "duration", "offsetY" }, val or 0)
+				refresh()
+			end,
+			(paDef.duration and paDef.duration.offsetY) or 0,
+			"privateAuras",
+			true
+		)
+		list[#list].isEnabled = isPrivateDurationEnabled
 	end
 
 	return list
