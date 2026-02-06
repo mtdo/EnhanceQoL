@@ -368,6 +368,13 @@ local defaults = {
 			anchor = "BOTTOM", -- or "TOP"
 			offset = { x = 0, y = -4 },
 			backdrop = { enabled = true, color = { 0, 0, 0, 0.6 } },
+			border = {
+				enabled = false,
+				color = { 0, 0, 0, 0.8 },
+				texture = "DEFAULT",
+				edgeSize = 1,
+				offset = 1,
+			},
 			showName = true,
 			nameMaxChars = 0,
 			showCastTarget = false,
@@ -382,7 +389,9 @@ local defaults = {
 			iconOffset = { x = -4, y = 0 },
 			texture = "DEFAULT",
 			color = { 0.9, 0.7, 0.2, 1 },
+			useClassColor = false,
 			notInterruptibleColor = DEFAULT_NOT_INTERRUPTIBLE_COLOR,
+			showInterruptFeedback = true,
 		},
 		resting = {
 			enabled = true,
@@ -523,6 +532,13 @@ local defaults = {
 			anchor = "BOTTOM", -- or "TOP"
 			offset = { x = 11, y = -4 },
 			backdrop = { enabled = true, color = { 0, 0, 0, 0.6 } },
+			border = {
+				enabled = false,
+				color = { 0, 0, 0, 0.8 },
+				texture = "DEFAULT",
+				edgeSize = 1,
+				offset = 1,
+			},
 			showName = true,
 			nameMaxChars = 0,
 			showCastTarget = false,
@@ -537,7 +553,9 @@ local defaults = {
 			iconOffset = { x = -4, y = 0 },
 			texture = "DEFAULT",
 			color = { 0.9, 0.7, 0.2, 1 },
+			useClassColor = false,
 			notInterruptibleColor = DEFAULT_NOT_INTERRUPTIBLE_COLOR,
+			showInterruptFeedback = true,
 		},
 		portrait = {
 			enabled = false,
@@ -2739,6 +2757,53 @@ local function applyBarBackdrop(bar, cfg)
 	bar:SetBackdropColor(col[1] or 0, col[2] or 0, col[3] or 0, col[4] or 0.6)
 end
 
+local function ensureCastBorderFrame(st)
+	if not st or not st.castBar then return nil end
+	local border = st.castBorder
+	if not border then
+		border = CreateFrame("Frame", nil, st.castBar, "BackdropTemplate")
+		border:EnableMouse(false)
+		st.castBorder = border
+	end
+	border:SetFrameStrata(st.castBar:GetFrameStrata())
+	local baseLevel = st.castBar:GetFrameLevel() or 0
+	border:SetFrameLevel(baseLevel + 3)
+	return border
+end
+
+local function applyCastBorder(st, ccfg, defc)
+	if not st or not st.castBar then return end
+	local borderCfg = (ccfg and ccfg.border) or (defc and defc.border) or {}
+	if borderCfg.enabled == true then
+		local border = ensureCastBorderFrame(st)
+		if not border then return end
+		local size = tonumber(borderCfg.edgeSize) or 1
+		if size < 1 then size = 1 end
+		local offset = borderCfg.offset
+		if offset == nil then offset = size end
+		offset = math.max(0, tonumber(offset) or 0)
+		border:ClearAllPoints()
+		border:SetPoint("TOPLEFT", st.castBar, "TOPLEFT", -offset, offset)
+		border:SetPoint("BOTTOMRIGHT", st.castBar, "BOTTOMRIGHT", offset, -offset)
+		border:SetBackdrop({
+			bgFile = "Interface\\Buttons\\WHITE8x8",
+			edgeFile = UFHelper.resolveBorderTexture(borderCfg.texture),
+			edgeSize = size,
+			insets = { left = size, right = size, top = size, bottom = size },
+		})
+		border:SetBackdropColor(0, 0, 0, 0)
+		local color = borderCfg.color or { 0, 0, 0, 0.8 }
+		border:SetBackdropBorderColor(color[1] or 0, color[2] or 0, color[3] or 0, color[4] or 1)
+		border:Show()
+	else
+		local border = st.castBorder
+		if border then
+			border:SetBackdrop(nil)
+			border:Hide()
+		end
+	end
+end
+
 local function applyOverlayHeight(bar, anchor, height, maxHeight)
 	if not bar or not anchor then return end
 	bar:ClearAllPoints()
@@ -2874,6 +2939,7 @@ local function applyCastLayout(cfg, unit)
 			bg:Show()
 		end
 	end
+	applyCastBorder(st, ccfg, defc)
 	-- Limit cast name width so long names don't overlap duration text
 	if st.castName then
 		local iconSize = (ccfg.iconSize or defc.iconSize or height) + 4
@@ -2899,12 +2965,39 @@ local function applyCastLayout(cfg, unit)
 	if st.castEmpower and st.castEmpower.stagePercents then UFHelper.layoutEmpowerStages(st) end
 end
 
+local function getClassColor(class)
+	if not class then return nil end
+	if addon.db and addon.db.ufUseCustomClassColors then
+		local overrides = addon.db.ufClassColors
+		local custom = overrides and overrides[class]
+		if custom then
+			if custom.r then return custom.r, custom.g, custom.b, custom.a or 1 end
+			if custom[1] then return custom[1], custom[2], custom[3], custom[4] or 1 end
+		end
+	end
+	local fallback = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[class]) or (RAID_CLASS_COLORS and RAID_CLASS_COLORS[class])
+	if fallback then return fallback.r or fallback[1], fallback.g or fallback[2], fallback.b or fallback[3], fallback.a or fallback[4] or 1 end
+	return nil
+end
+
 local function configureCastStatic(unit, ccfg, defc)
 	local st = states[unit]
 	if not st or not st.castBar or not st.castInfo then return end
 	ccfg = ccfg or st.castCfg or {}
 	defc = defc or (defaultsFor(unit) and defaultsFor(unit).cast) or {}
 	local clr = ccfg.color or defc.color or { 0.9, 0.7, 0.2, 1 }
+	local useClassColor = ccfg.useClassColor
+	if useClassColor == nil then useClassColor = defc.useClassColor end
+	if useClassColor == true then
+		local class
+		if UnitIsPlayer and UnitIsPlayer(unit) then
+			class = select(2, UnitClass(unit))
+		elseif unit == UNIT.PET then
+			class = select(2, UnitClass(UNIT.PLAYER))
+		end
+		local cr, cg, cb, ca = getClassColor(class)
+		if cr then clr = { cr, cg, cb, ca or 1 } end
+	end
 	if st.castInfo.notInterruptible then
 		clr = ccfg.notInterruptibleColor or defc.notInterruptibleColor or clr
 		st.castBar:SetStatusBarDesaturated(true)
@@ -3102,6 +3195,13 @@ function UF.ShowCastInterrupt(unit, event)
 	local defc = (defaultsFor(unit) and defaultsFor(unit).cast) or {}
 	if ccfg.enabled == false then return end
 	if not st.castBar:IsShown() and not st.castInfo then return end
+	local showInterruptFeedback = ccfg.showInterruptFeedback
+	if showInterruptFeedback == nil then showInterruptFeedback = defc.showInterruptFeedback end
+	if showInterruptFeedback == false then
+		stopCast(unit)
+		if shouldShowSampleCast(unit) then setSampleCast(unit) end
+		return
+	end
 
 	UF.ClearCastInterruptState(st)
 	UFHelper.clearEmpowerStages(st)
@@ -3448,21 +3548,6 @@ local function getNPCOverrideColor(unit)
 	return nil
 end
 
-local function getClassColor(class)
-	if not class then return nil end
-	if addon.db and addon.db.ufUseCustomClassColors then
-		local overrides = addon.db.ufClassColors
-		local custom = overrides and overrides[class]
-		if custom then
-			if custom.r then return custom.r, custom.g, custom.b, custom.a or 1 end
-			if custom[1] then return custom[1], custom[2], custom[3], custom[4] or 1 end
-		end
-	end
-	local fallback = (CUSTOM_CLASS_COLORS and CUSTOM_CLASS_COLORS[class]) or (RAID_CLASS_COLORS and RAID_CLASS_COLORS[class])
-	if fallback then return fallback.r or fallback[1], fallback.g or fallback[2], fallback.b or fallback[3], fallback.a or fallback[4] or 1 end
-	return nil
-end
-
 local function getNPCHealthColor(unit)
 	if not (UFHelper and UFHelper.getNPCColor) then return nil end
 	local key = getNPCSelectionKey(unit)
@@ -3626,21 +3711,27 @@ local function updateHealth(cfg, unit)
 		if leftMode == "NONE" then
 			st.healthTextLeft:SetText("")
 		else
-			st.healthTextLeft:SetText(UFHelper.formatText(leftMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, nil, roundPercent))
+			st.healthTextLeft:SetText(
+				UFHelper.formatText(leftMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, nil, roundPercent)
+			)
 		end
 	end
 	if st.healthTextCenter then
 		if centerMode == "NONE" then
 			st.healthTextCenter:SetText("")
 		else
-			st.healthTextCenter:SetText(UFHelper.formatText(centerMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, nil, roundPercent))
+			st.healthTextCenter:SetText(
+				UFHelper.formatText(centerMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, nil, roundPercent)
+			)
 		end
 	end
 	if st.healthTextRight then
 		if rightMode == "NONE" then
 			st.healthTextRight:SetText("")
 		else
-			st.healthTextRight:SetText(UFHelper.formatText(rightMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, nil, roundPercent))
+			st.healthTextRight:SetText(
+				UFHelper.formatText(rightMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, nil, roundPercent)
+			)
 		end
 	end
 end
@@ -5085,21 +5176,27 @@ local function applyBossEditSample(idx, cfg)
 		if leftMode == "NONE" then
 			st.healthTextLeft:SetText("")
 		else
-			st.healthTextLeft:SetText(UFHelper.formatText(leftMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, nil, roundPercent))
+			st.healthTextLeft:SetText(
+				UFHelper.formatText(leftMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, nil, roundPercent)
+			)
 		end
 	end
 	if st.healthTextCenter then
 		if centerMode == "NONE" then
 			st.healthTextCenter:SetText("")
 		else
-			st.healthTextCenter:SetText(UFHelper.formatText(centerMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, nil, roundPercent))
+			st.healthTextCenter:SetText(
+				UFHelper.formatText(centerMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, nil, roundPercent)
+			)
 		end
 	end
 	if st.healthTextRight then
 		if rightMode == "NONE" then
 			st.healthTextRight:SetText("")
 		else
-			st.healthTextRight:SetText(UFHelper.formatText(rightMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, nil, roundPercent))
+			st.healthTextRight:SetText(
+				UFHelper.formatText(rightMode, cur, maxv, hc.useShortNumbers ~= false, percentVal, delimiter, delimiter2, delimiter3, hidePercentSymbol, levelText, nil, roundPercent)
+			)
 		end
 	end
 
@@ -5131,7 +5228,9 @@ local function applyBossEditSample(idx, cfg)
 				if pLeftMode == "NONE" then
 					st.powerTextLeft:SetText("")
 				else
-					st.powerTextLeft:SetText(UFHelper.formatText(pLeftMode, pCur, pMax, pcfg.useShortNumbers ~= false, pPercent, pDelimiter, pDelimiter2, pDelimiter3, pHidePercentSymbol, pLevelText, nil, pRoundPercent))
+					st.powerTextLeft:SetText(
+						UFHelper.formatText(pLeftMode, pCur, pMax, pcfg.useShortNumbers ~= false, pPercent, pDelimiter, pDelimiter2, pDelimiter3, pHidePercentSymbol, pLevelText, nil, pRoundPercent)
+					)
 				end
 			end
 			if st.powerTextCenter then
