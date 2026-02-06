@@ -26,6 +26,14 @@ local maxBossFrames = MAX_BOSS_FRAMES or 5
 local UF_PROFILE_SHARE_KIND = "EQOL_UF_PROFILE"
 local smoothFill = Enum.StatusBarInterpolation.ExponentialEaseOut
 
+local function getSmoothInterpolation(cfg, def)
+	if not smoothFill then return nil end
+	local flag = cfg and cfg.smoothFill
+	if flag == nil and def then flag = def.smoothFill end
+	if flag == true then return smoothFill end
+	return nil
+end
+
 local throttleHook
 local function DisableBossFrames()
 	BossTargetFrameContainer:SetAlpha(0)
@@ -212,6 +220,7 @@ local defaults = {
 		enabled = false,
 		showTooltip = false,
 		tooltipUseEditMode = false,
+		smoothFill = false,
 		width = 220,
 		healthHeight = 24,
 		powerHeight = 16,
@@ -624,39 +633,6 @@ local bossLayoutDirty
 local bossHidePending
 local bossShowPending
 local bossInitPending
-
-local debuffinfo = {
-	[1] = DEBUFF_TYPE_MAGIC_COLOR,
-	[2] = DEBUFF_TYPE_CURSE_COLOR,
-	[3] = DEBUFF_TYPE_DISEASE_COLOR,
-	[4] = DEBUFF_TYPE_POISON_COLOR,
-	[5] = DEBUFF_TYPE_BLEED_COLOR,
-	[0] = DEBUFF_TYPE_NONE_COLOR,
-}
-local dispelIndexByName = {
-	Magic = 1,
-	Curse = 2,
-	Disease = 3,
-	Poison = 4,
-	Bleed = 5,
-	None = 0,
-}
-local function getDebuffColorFromName(name)
-	local idx = dispelIndexByName[name] or 0
-	local col = debuffinfo[idx] or debuffinfo[0]
-	if not col then return nil end
-	if col.GetRGBA then return col:GetRGBA() end
-	if col.GetRGB then return col:GetRGB() end
-	if col.r then return col.r, col.g, col.b, col.a end
-	return col[1], col[2], col[3], col[4]
-end
-local colorcurve = C_CurveUtil and C_CurveUtil.CreateColorCurve() or nil
-if colorcurve and Enum.LuaCurveType and Enum.LuaCurveType.Step then
-	colorcurve:SetType(Enum.LuaCurveType.Step)
-	for dispeltype, v in pairs(debuffinfo) do
-		colorcurve:AddPoint(dispeltype, v)
-	end
-end
 
 local function defaultsFor(unit)
 	if isBossUnit(unit) then return defaults.boss or defaults.target or defaults.player or {} end
@@ -1819,8 +1795,8 @@ function AuraUtil.applyAuraToButton(btn, aura, ac, isDebuff, unitToken)
 		if isDebuff then
 			local r, g, b = 1, 0.25, 0.25
 			local usedApiColor
-			if not aura.isSample and aura.auraInstanceID and aura.auraInstanceID > 0 and C_UnitAuras and C_UnitAuras.GetAuraDispelTypeColor and colorcurve then
-				local color = C_UnitAuras.GetAuraDispelTypeColor(unitToken, aura.auraInstanceID, colorcurve)
+			if not aura.isSample and aura.auraInstanceID and aura.auraInstanceID > 0 and C_UnitAuras and C_UnitAuras.GetAuraDispelTypeColor and UFHelper and UFHelper.debuffColorCurve then
+				local color = C_UnitAuras.GetAuraDispelTypeColor(unitToken, aura.auraInstanceID, UFHelper.debuffColorCurve)
 				if color then
 					usedApiColor = true
 					if color.GetRGBA then
@@ -1831,7 +1807,10 @@ function AuraUtil.applyAuraToButton(btn, aura, ac, isDebuff, unitToken)
 				end
 			end
 			if not usedApiColor then
-				local fr, fg, fb = getDebuffColorFromName(aura.dispelName or "None")
+				local fr, fg, fb
+				if UFHelper and UFHelper.getDebuffColorFromName then
+					fr, fg, fb = UFHelper.getDebuffColorFromName(aura.dispelName or "None")
+				end
 				if fr then
 					r, g, b = fr, fg, fb
 				end
@@ -3509,53 +3488,6 @@ local function getPowerPercent(unit, powerEnum, cur, maxv)
 	return nil
 end
 
-local npcColorUnits = {
-	target = true,
-	targettarget = true,
-	focus = true,
-	boss = true,
-}
-for i = 1, maxBossFrames do
-	npcColorUnits["boss" .. i] = true
-end
-
-local function shouldUseNPCColors(unit) return npcColorUnits[unit] == true end
-
-local selectionKeyByType = {
-	[0] = "enemy",
-	[1] = "enemy",
-	[2] = "neutral",
-	[3] = "friendly",
-}
-
-local function getNPCSelectionKey(unit)
-	if not shouldUseNPCColors(unit) then return nil end
-	if UnitIsPlayer and UnitIsPlayer(unit) then return nil end
-	local t = UnitSelectionType and UnitSelectionType(unit)
-	return selectionKeyByType[t]
-end
-
-local function getNPCOverrideColor(unit)
-	local overrides = addon.db and addon.db.ufNPCColorOverrides
-	if not overrides then return nil end
-
-	local key = getNPCSelectionKey(unit)
-	if not key then return nil end
-	local override = overrides[key]
-	if override then
-		if override.r then return override.r, override.g, override.b, override.a or 1 end
-		if override[1] then return override[1], override[2], override[3], override[4] or 1 end
-	end
-	return nil
-end
-
-local function getNPCHealthColor(unit)
-	if not (UFHelper and UFHelper.getNPCColor) then return nil end
-	local key = getNPCSelectionKey(unit)
-	if not key then return nil end
-	return UFHelper.getNPCColor(key)
-end
-
 local function ensureBossBarsVisible(unit, st)
 	if not isBossUnit(unit) then return end
 	if not UnitExists or not UnitExists(unit) then return end
@@ -3573,6 +3505,7 @@ local function updateHealth(cfg, unit)
 	local allowAbsorb = not (info and info.disableAbsorb)
 	local def = defaultsFor(unit) or {}
 	local defH = def.health or {}
+	local interpolation = getSmoothInterpolation(cfg, def)
 	local cur = UnitHealth(unit)
 	local maxv = UnitHealthMax(unit)
 	if issecretvalue and issecretvalue(maxv) then
@@ -3580,7 +3513,7 @@ local function updateHealth(cfg, unit)
 	else
 		st.health:SetMinMaxValues(0, maxv > 0 and maxv or 1)
 	end
-	st.health:SetValue(cur or 0, smoothFill)
+	st.health:SetValue(cur or 0, interpolation)
 	local hc = cfg.health or {}
 	local percentVal
 	if addon.variables and addon.variables.isMidnight then
@@ -3593,7 +3526,10 @@ local function updateHealth(cfg, unit)
 	local isPlayerUnit = UnitIsPlayer and UnitIsPlayer(unit)
 	if useCustom then
 		if not isPlayerUnit then
-			local nr, ng, nb, na = getNPCOverrideColor(unit)
+			local nr, ng, nb, na
+			if UFHelper and UFHelper.getNPCOverrideColor then
+				nr, ng, nb, na = UFHelper.getNPCOverrideColor(unit)
+			end
 			if nr then
 				hr, hg, hb, ha = nr, ng, nb, na
 			elseif hc.color then
@@ -3615,7 +3551,10 @@ local function updateHealth(cfg, unit)
 		end
 	end
 	if not hr and not useCustom then
-		local nr, ng, nb, na = getNPCHealthColor(unit)
+		local nr, ng, nb, na
+		if UFHelper and UFHelper.getNPCHealthColor then
+			nr, ng, nb, na = UFHelper.getNPCHealthColor(unit)
+		end
 		if nr then
 			hr, hg, hb, ha = nr, ng, nb, na
 		end
@@ -3642,7 +3581,7 @@ local function updateHealth(cfg, unit)
 		st.absorb:SetMinMaxValues(0, maxForValue or 1)
 		local hasVisibleAbsorb = abs and (not issecretvalue or not issecretvalue(abs)) and abs > 0
 		if shouldShowSampleAbsorb(unit) and not hasVisibleAbsorb and (not issecretvalue or not issecretvalue(maxForValue)) then abs = (maxForValue or 1) * 0.6 end
-		st.absorb:SetValue(abs or 0, smoothFill)
+		st.absorb:SetValue(abs or 0, interpolation)
 		local reverseAbsorb = hc.absorbReverseFill
 		if reverseAbsorb == nil then reverseAbsorb = defH.absorbReverseFill == true end
 		if reverseAbsorb and st.absorb2 then
@@ -3650,9 +3589,9 @@ local function updateHealth(cfg, unit)
 			if maxHealth == nil then maxHealth = maxForValue end
 			st.absorb2:SetMinMaxValues(0, maxHealth or 1)
 			if UFHelper and UFHelper.getClampedAbsorbAmount then
-				st.absorb2:SetValue(UFHelper.getClampedAbsorbAmount(unit), smoothFill)
+				st.absorb2:SetValue(UFHelper.getClampedAbsorbAmount(unit), interpolation)
 			else
-				st.absorb2:SetValue(UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(unit) or 0, smoothFill)
+				st.absorb2:SetValue(UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(unit) or 0, interpolation)
 			end
 		end
 		if reverseAbsorb and st.absorb2 then
@@ -3693,7 +3632,7 @@ local function updateHealth(cfg, unit)
 		if not issecretvalue or (not issecretvalue(cur) and not issecretvalue(healAbs)) then
 			if (cur or 0) < (healAbs or 0) then healAbs = cur or 0 end
 		end
-		st.healAbsorb:SetValue(healAbs or 0, smoothFill)
+		st.healAbsorb:SetValue(healAbs or 0, interpolation)
 		local har, hag, hab, haa = UFHelper.getHealAbsorbColor(hc, defH)
 		st.healAbsorb:SetStatusBarColor(har or 1, hag or 0.3, hab or 0.3, haa or 0.7)
 	end
@@ -3746,6 +3685,7 @@ local function updatePower(cfg, unit)
 	if not bar then return end
 	local def = defaultsFor(unit) or {}
 	local defP = def.power or {}
+	local interpolation = getSmoothInterpolation(cfg, def)
 	local pcfg = cfg.power or {}
 	local powerDetached = pcfg.detached == true
 	local hidePercentSymbol = pcfg.hidePercentSymbol == true
@@ -3758,7 +3698,7 @@ local function updatePower(cfg, unit)
 	if UFHelper.textModeUsesLevel(leftMode) or UFHelper.textModeUsesLevel(centerMode) or UFHelper.textModeUsesLevel(rightMode) then levelText = UFHelper.getUnitLevelText(unit, nil, hideClassText) end
 	if pcfg.enabled == false then
 		bar:Hide()
-		bar:SetValue(0, smoothFill)
+		bar:SetValue(0, interpolation)
 		if st.powerTextLeft then st.powerTextLeft:SetText("") end
 		if st.powerTextCenter then st.powerTextCenter:SetText("") end
 		if st.powerTextRight then st.powerTextRight:SetText("") end
@@ -3774,7 +3714,7 @@ local function updatePower(cfg, unit)
 	else
 		bar:SetMinMaxValues(0, maxv > 0 and maxv or 1)
 	end
-	bar:SetValue(cur or 0, smoothFill)
+	bar:SetValue(cur or 0, interpolation)
 	local percentVal
 	if addon.variables and addon.variables.isMidnight then
 		percentVal = getPowerPercent(unit, powerEnum, cur, maxv)
@@ -4755,6 +4695,7 @@ local function applyBars(cfg, unit)
 	local def = defaultsFor(unit) or {}
 	local defH = def.health or {}
 	local defP = def.power or {}
+	local interpolation = getSmoothInterpolation(cfg, def)
 	local pcfg = cfg.power or {}
 	local powerEnabled = pcfg.enabled ~= false
 	local healthHeight = cfg.healthHeight or def.healthHeight or (st.health.GetHeight and st.health:GetHeight()) or 0
@@ -4817,13 +4758,13 @@ local function applyBars(cfg, unit)
 			end
 			setFrameLevelAbove(st.absorb2, st.health, 1)
 			st.absorb2:SetMinMaxValues(0, 1)
-			st.absorb2:SetValue(0, smoothFill)
+			st.absorb2:SetValue(0, interpolation)
 			st.absorb2:Hide()
 		end
 		local borderFrame = st.barGroup and st.barGroup._ufBorder
 		setFrameLevelAbove(st.absorb, st.health, 1)
 		st.absorb:SetMinMaxValues(0, 1)
-		st.absorb:SetValue(0, smoothFill)
+		st.absorb:SetValue(0, interpolation)
 		if st.overAbsorbGlow then
 			st.overAbsorbGlow:ClearAllPoints()
 			local glowAnchor = st.absorb or st.health
@@ -4848,7 +4789,7 @@ local function applyBars(cfg, unit)
 		local anchorBar = st.absorb or st.health
 		setFrameLevelAbove(st.healAbsorb, anchorBar, 1)
 		st.healAbsorb:SetMinMaxValues(0, 1)
-		st.healAbsorb:SetValue(0, smoothFill)
+		st.healAbsorb:SetValue(0, interpolation)
 		-- no heal absorb glow
 	end
 	if st.castBar and (unit == UNIT.PLAYER or unit == UNIT.TARGET or unit == UNIT.FOCUS or isBossUnit(unit)) then
@@ -4903,7 +4844,7 @@ local function updateNameAndLevel(cfg, unit, levelOverride)
 				if cr then
 					nr, ng, nb, na = cr, cg, cb, ca
 				end
-			elseif shouldUseNPCColors(unit) then
+			elseif UFHelper and UFHelper.getNPCSelectionKey and UFHelper.getNPCSelectionKey(unit) then
 				local fallback = NORMAL_FONT_COLOR
 				nr = (fallback and (fallback.r or fallback[1])) or 1
 				ng = (fallback and (fallback.g or fallback[2])) or 0.82
@@ -5153,12 +5094,13 @@ local function applyBossEditSample(idx, cfg)
 	local pcfg = cfg.power or defP or {}
 	local cdef = cfg.cast or def.cast or {}
 	local hideClassText = shouldHideClassificationText(cfg, unit)
+	local interpolation = getSmoothInterpolation(cfg, def)
 
 	local cur = UnitHealth("player") or 1
 	local maxv = UnitHealthMax("player") or cur or 1
 	local percentVal = getHealthPercent("player", cur, maxv)
 	st.health:SetMinMaxValues(0, maxv)
-	st.health:SetValue(cur, smoothFill)
+	st.health:SetValue(cur, interpolation)
 	local color = hc.color or (def.health and def.health.color) or { 0, 0.8, 0, 1 }
 	st.health:SetStatusBarColor(color[1] or 0, color[2] or 0.8, color[3] or 0, color[4] or 1)
 	local leftMode = hc.textLeft or "PERCENT"
@@ -5209,7 +5151,7 @@ local function applyBossEditSample(idx, cfg)
 			local pMax = UnitPowerMax("player", enumId or 0) or 0
 			local pPercent = getPowerPercent("player", enumId or 0, pCur, pMax)
 			st.power:SetMinMaxValues(0, pMax > 0 and pMax or 1)
-			st.power:SetValue(pCur, smoothFill)
+			st.power:SetValue(pCur, interpolation)
 			local pr, pg, pb, pa = UFHelper.getPowerColor(token)
 			st.power:SetStatusBarColor(pr or 0.1, pg or 0.45, pb or 1, pa or 1)
 			if st.power.SetStatusBarDesaturated then st.power:SetStatusBarDesaturated(UFHelper.isPowerDesaturated(token)) end
@@ -5254,7 +5196,7 @@ local function applyBossEditSample(idx, cfg)
 			end
 			st.power:Show()
 		else
-			st.power:SetValue(0, smoothFill)
+			st.power:SetValue(0, interpolation)
 			if st.powerTextLeft then st.powerTextLeft:SetText("") end
 			if st.powerTextCenter then st.powerTextCenter:SetText("") end
 			if st.powerTextRight then st.powerTextRight:SetText("") end
@@ -5742,7 +5684,8 @@ local function onEvent(self, event, unit, ...)
 		end
 	elseif event == "PLAYER_DEAD" then
 		local playerCfg = getCfg(UNIT.PLAYER)
-		if states.player and states.player.health then states.player.health:SetValue(0, smoothFill) end
+		local interpolation = getSmoothInterpolation(playerCfg, defaultsFor(UNIT.PLAYER))
+		if states.player and states.player.health then states.player.health:SetValue(0, interpolation) end
 		updateHealth(playerCfg, UNIT.PLAYER)
 	elseif event == "PLAYER_ALIVE" then
 		local playerCfg = getCfg(UNIT.PLAYER)

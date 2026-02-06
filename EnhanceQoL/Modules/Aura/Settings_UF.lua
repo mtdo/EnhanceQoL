@@ -836,6 +836,11 @@ local function buildUnitSettings(unit)
 		end)
 	end, def.frameLevel or defaultLevel, "frame", true)
 
+	list[#list + 1] = checkbox(L["Smooth fill"] or "Smooth fill", function() return getValue(unit, { "smoothFill" }, def.smoothFill == true) == true end, function(val)
+		setValue(unit, { "smoothFill" }, val and true or false)
+		refreshSelf()
+	end, def.smoothFill == true, "frame")
+
 	list[#list + 1] = checkboxColor({
 		name = L["UFShowBorder"] or "Show border",
 		parentId = "frame",

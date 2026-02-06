@@ -9,6 +9,7 @@
 - Unit Frames: Castbar border options (texture/color/size/offset)
 - Unit Frames: Option to disable interrupt feedback on castbars
 - Unit Frames: Castbar can use class color instead of custom cast color
+- Unit Frames: Per-frame smooth fill option for health/power/absorb bars (default off)
 - Group Frames (Party/Raid): **BETA** (performance test) for feedback on missing features or breakage. Aura filters require 12.0.1; on 12.0.0 you will see more auras (e.g., Externals filtering won’t work yet).
 - Cooldown Panels: Optional radial layout with radius/rotation controls (layout fields auto-hide on switch)
 - Cooldown Panels: Cursor anchor mode with Edit Mode preview and live cursor follow

@@ -54,6 +54,45 @@ local npcColorDefaults = {
 	friendly = { 0.2, 1, 0.2, 1 },
 }
 
+local debuffinfo = {
+	[1] = DEBUFF_TYPE_MAGIC_COLOR,
+	[2] = DEBUFF_TYPE_CURSE_COLOR,
+	[3] = DEBUFF_TYPE_DISEASE_COLOR,
+	[4] = DEBUFF_TYPE_POISON_COLOR,
+	[5] = DEBUFF_TYPE_BLEED_COLOR,
+	[0] = DEBUFF_TYPE_NONE_COLOR,
+}
+local dispelIndexByName = {
+	Magic = 1,
+	Curse = 2,
+	Disease = 3,
+	Poison = 4,
+	Bleed = 5,
+	None = 0,
+}
+
+local function getDebuffColorFromName(name)
+	local idx = dispelIndexByName[name] or 0
+	local col = debuffinfo[idx] or debuffinfo[0]
+	if not col then return nil end
+	if col.GetRGBA then return col:GetRGBA() end
+	if col.GetRGB then return col:GetRGB() end
+	if col.r then return col.r, col.g, col.b, col.a end
+	return col[1], col[2], col[3], col[4]
+end
+
+H.getDebuffColorFromName = getDebuffColorFromName
+
+local debuffColorCurve = C_CurveUtil and C_CurveUtil.CreateColorCurve() or nil
+if debuffColorCurve and Enum.LuaCurveType and Enum.LuaCurveType.Step then
+	debuffColorCurve:SetType(Enum.LuaCurveType.Step)
+	for dispeltype, v in pairs(debuffinfo) do
+		debuffColorCurve:AddPoint(dispeltype, v)
+	end
+end
+
+H.debuffColorCurve = debuffColorCurve
+
 local absorbFullCurve = C_CurveUtil and C_CurveUtil.CreateCurve() or nil
 if absorbFullCurve and Enum and Enum.LuaCurveType and Enum.LuaCurveType.Step then
 	absorbFullCurve:SetType(Enum.LuaCurveType.Step)
@@ -70,6 +109,50 @@ end
 
 H.absorbFullCurve = absorbFullCurve
 H.absorbNotFullCurve = absorbNotFullCurve
+
+local npcColorUnits = {
+	target = true,
+	targettarget = true,
+	focus = true,
+	boss = true,
+}
+for i = 1, (MAX_BOSS_FRAMES or 5) do
+	npcColorUnits["boss" .. i] = true
+end
+
+local selectionKeyByType = {
+	[0] = "enemy",
+	[1] = "enemy",
+	[2] = "neutral",
+	[3] = "friendly",
+}
+
+function H.getNPCSelectionKey(unit)
+	if not npcColorUnits[unit] then return nil end
+	if UnitIsPlayer and UnitIsPlayer(unit) then return nil end
+	local t = UnitSelectionType and UnitSelectionType(unit)
+	return selectionKeyByType[t]
+end
+
+function H.getNPCOverrideColor(unit)
+	local overrides = addon.db and addon.db.ufNPCColorOverrides
+	if not overrides then return nil end
+
+	local key = H.getNPCSelectionKey(unit)
+	if not key then return nil end
+	local override = overrides[key]
+	if override then
+		if override.r then return override.r, override.g, override.b, override.a or 1 end
+		if override[1] then return override[1], override[2], override[3], override[4] or 1 end
+	end
+	return nil
+end
+
+function H.getNPCHealthColor(unit)
+	local key = H.getNPCSelectionKey(unit)
+	if not key then return nil end
+	return H.getNPCColor(key)
+end
 
 local nameWidthCache = {}
 local DROP_SHADOW_FLAG = "DROPSHADOW"
