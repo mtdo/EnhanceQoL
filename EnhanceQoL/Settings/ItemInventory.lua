@@ -162,13 +162,8 @@ local function getTooltipInfoFromLink(link)
 	return enchantText
 end
 
-local itemCount = 0
-local ilvlSum = 0
-
 local function removeInspectElements()
 	if nil == InspectPaperDollFrame then return end
-	itemCount = 0
-	ilvlSum = 0
 	if InspectPaperDollFrame.ilvl then InspectPaperDollFrame.ilvl:SetText("") end
 	local itemSlotsInspectList = {
 		[1] = InspectHeadSlot,
@@ -264,7 +259,12 @@ local function onInspect(arg1)
 		pdElement.ilvl:SetPoint("TOPRIGHT", pdElement.ilvlBackground, "TOPRIGHT", -1, -1) -- Position des Textes im Zentrum des Hintergrunds
 		pdElement.ilvl:SetFont(addon.variables.defaultFont, 16, "OUTLINE") -- Setzt die Schriftart, -größe und -stil (OUTLINE)
 
-		pdElement.ilvl:SetFormattedText("")
+		if C_PaperDollInfo and C_PaperDollInfo.GetInspectItemLevel then
+			local ilvl = C_PaperDollInfo.GetInspectItemLevel(unit)
+			if ilvl then pdElement.ilvl:SetFormattedText(string.format("%.1f", ilvl)) end
+		else
+			pdElement.ilvl:SetFormattedText("")
+		end
 		pdElement.ilvl:SetTextColor(1, 1, 1, 1)
 
 		local textWidth = pdElement.ilvl:GetStringWidth()
@@ -365,13 +365,6 @@ local function onInspect(arg1)
 						end
 
 						if InspectOpt("ilvl") then
-							local double = false
-							if key == 16 then
-								local offhandLink = GetInventoryItemLink(unit, 17)
-								local _, _, _, itemEquipLoc = C_Item.GetItemInfoInstant(itemLink)
-								if not offhandLink and twoHandLocs[itemEquipLoc] then double = true end
-							end
-							itemCount = itemCount + (double and 2 or 1)
 							if not element.ilvlBackground then
 								element.ilvlBackground = element:CreateTexture(nil, "BACKGROUND")
 								element.ilvlBackground:SetColorTexture(0, 0, 0, 0.8) -- Schwarzer Hintergrund mit 80% Transparenz
@@ -383,9 +376,17 @@ local function onInspect(arg1)
 							element.ilvlBackground:SetSize(30, 16) -- Größe des Hintergrunds (muss ggf. angepasst werden)
 
 							local color = eItem:GetItemQualityColor()
-							local itemLevelText = eItem:GetCurrentItemLevel()
 
-							ilvlSum = ilvlSum + itemLevelText * (double and 2 or 1)
+							local itemLevelText
+
+							local ttData = C_TooltipInfo.GetInventoryItem(unit, key, true)
+							if ttData and ttData.lines then
+								for i, v in pairs(ttData.lines) do
+									if v.type == 41 then itemLevelText = v.itemLevel end
+								end
+							end
+							if not itemLevelText then itemLevelText = eItem:GetCurrentItemLevel() end
+
 							element.ilvl:SetFormattedText(itemLevelText)
 							element.ilvl:SetTextColor(color.r, color.g, color.b, 1)
 
@@ -458,7 +459,13 @@ local function onInspect(arg1)
 			end
 		end
 	end
-	if InspectOpt("ilvl") and ilvlSum > 0 then pdElement.ilvl:SetText("" .. (math.floor((ilvlSum / 16) * 100 + 0.5) / 100)) end
+
+	if C_PaperDollInfo and C_PaperDollInfo.GetInspectItemLevel then
+		local ilvl = C_PaperDollInfo.GetInspectItemLevel(unit)
+		if ilvl then pdElement.ilvl:SetFormattedText(string.format("%.1f", ilvl)) end
+	else
+		pdElement.ilvl:SetFormattedText("")
+	end
 end
 
 addon.functions.onInspect = onInspect
