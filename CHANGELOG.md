@@ -6,6 +6,7 @@
 
 - Unit Frames: Aura icons can use custom border textures (boss frames included)
 - Mount Keybinding: Random mount can shift into Ghost Wolf for shamans while moving (requires Ghost Wolf known).
+- MythicPlus: Added a keybind for random Hearthstone usage (picks from available Hearthstone items/toys).
 - Unit Frames: Option to round percent values for health/power text
 - Unit Frames: Castbar border options (texture/color/size/offset)
 - Unit Frames: Option to disable interrupt feedback on castbars
