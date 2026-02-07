@@ -6168,6 +6168,7 @@ function GF:DisableFeature()
 		return
 	end
 	GF._pendingDisable = nil
+	GF:CancelPostEnterWorldRefreshTicker()
 	unregisterFeatureEvents(GF._eventFrame)
 
 	if EditMode and EditMode.UnregisterFrame and type(EDITMODE_IDS) == "table" then
@@ -15594,43 +15595,39 @@ unregisterFeatureEvents = function(frame)
 	end
 end
 
-local postEnterWorldTicker
-
-local function cancelPostEnterWorldTicker()
-	if postEnterWorldTicker and postEnterWorldTicker.Cancel then
-		postEnterWorldTicker:Cancel()
-	end
-	postEnterWorldTicker = nil
+function GF:CancelPostEnterWorldRefreshTicker()
+	local ticker = self._postEnterWorldTicker
+	if ticker and ticker.Cancel then ticker:Cancel() end
+	self._postEnterWorldTicker = nil
+	self._postEnterWorldRefreshPasses = nil
 end
 
-local function runPostEnterWorldRefreshPass()
+function GF:RunPostEnterWorldRefreshPass()
 	if not isFeatureEnabled() then return end
-	GF:EnsureHeaders()
-	GF.Refresh()
-	GF:RefreshRoleIcons()
-	GF:RefreshGroupIcons()
-	GF:RefreshStatusText()
-	GF:RefreshGroupIndicators()
-	GF:RefreshCustomSortNameList()
+	self:EnsureHeaders()
+	self.Refresh()
+	self:RefreshRoleIcons()
+	self:RefreshGroupIcons()
+	self:RefreshStatusText()
+	self:RefreshGroupIndicators()
+	self:RefreshCustomSortNameList()
 end
 
-local function schedulePostEnterWorldRefresh()
-	cancelPostEnterWorldTicker()
+function GF:SchedulePostEnterWorldRefresh()
+	self:CancelPostEnterWorldRefreshTicker()
 	if not (C_Timer and C_Timer.NewTicker) then
-		runPostEnterWorldRefreshPass()
+		self:RunPostEnterWorldRefreshPass()
 		return
 	end
-	local passes = 0
-	postEnterWorldTicker = C_Timer.NewTicker(0.25, function()
-		passes = passes + 1
+	self._postEnterWorldRefreshPasses = 0
+	self._postEnterWorldTicker = C_Timer.NewTicker(0.25, function()
+		GF._postEnterWorldRefreshPasses = (GF._postEnterWorldRefreshPasses or 0) + 1
 		if not isFeatureEnabled() then
-			cancelPostEnterWorldTicker()
+			GF:CancelPostEnterWorldRefreshTicker()
 			return
 		end
-		if not (InCombatLockdown and InCombatLockdown()) then
-			runPostEnterWorldRefreshPass()
-		end
-		if passes >= 8 then cancelPostEnterWorldTicker() end
+		if not (InCombatLockdown and InCombatLockdown()) then GF:RunPostEnterWorldRefreshPass() end
+		if (GF._postEnterWorldRefreshPasses or 0) >= 8 then GF:CancelPostEnterWorldRefreshTicker() end
 	end)
 end
 
@@ -15648,8 +15645,8 @@ do
 				GF:EnsureEditMode()
 			end
 		elseif event == "PLAYER_ENTERING_WORLD" then
-			runPostEnterWorldRefreshPass()
-			schedulePostEnterWorldRefresh()
+			GF:RunPostEnterWorldRefreshPass()
+			GF:SchedulePostEnterWorldRefresh()
 		elseif event == "PLAYER_REGEN_ENABLED" then
 			if GF._pendingDisable then
 				GF._pendingDisable = nil
