@@ -1,5 +1,24 @@
 # Changelog
 
+## [7.11.0] - 2026-02-10
+
+### ✨ Added
+
+- Data Panels: Panel-wide stream text scale option in Edit Mode.
+- Data Panels: Panel-wide class text color option for stream payload text.
+- Data Panels: Equipment Sets stream now has right-click options for text size and class/custom text color.
+
+### 🔄 Changed
+
+- Data Panels: Stream options windows now show the active stream name in the header instead of only "Options".
+- Data Panels: Equipment Sets stream icon size now follows the configured text size.
+
+### 🐛 Fixed
+
+- Action Tracker: Removed some DK and Priest fake spells
+
+---
+
 ## [7.10.0] - 2026-02-07
 
 ### ✨ Added
