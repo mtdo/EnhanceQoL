@@ -23,7 +23,6 @@ local EditMode = addon.EditMode
 local SettingType = EditMode and EditMode.lib and EditMode.lib.SettingType
 local DispelOverlayOrientation = EnumUtil and EnumUtil.MakeEnum("VerticalTopToBottom", "VerticalBottomToTop", "HorizontalLeftToRight")
 
-local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 local PowerBarColor = PowerBarColor
 local LSM = LibStub and LibStub("LibSharedMedia-3.0")
 local LCG = LibStub and LibStub("LibCustomGlow-1.0", true)
@@ -48,6 +47,8 @@ local auraGrowthXOptions = GFH.auraGrowthXOptions
 local auraGrowthYOptions = GFH.auraGrowthYOptions
 local ensureAuraConfig = GFH.EnsureAuraConfig
 local syncAurasEnabled = GFH.SyncAurasEnabled
+local L = LibStub("AceLocale-3.0"):GetLocale("EnhanceQoL_Aura")
+
 local function textureOptions() return GFH.TextureOptions(LSM) end
 local function fontOptions() return GFH.FontOptions(LSM) end
 local function borderOptions()
@@ -5237,8 +5238,7 @@ function GF:UpdatePreviewLayout(kind)
 				if GFH.ResolveGroupGrowthDirection then
 					groupGrowth = GFH.ResolveGroupGrowthDirection(cfg and cfg.groupGrowth, growth, defaultGroupGrowth)
 				else
-					groupGrowth = (GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(cfg and cfg.groupGrowth, nil))
-						or ((growth == "RIGHT" or growth == "LEFT") and "DOWN" or "RIGHT")
+					groupGrowth = (GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(cfg and cfg.groupGrowth, nil)) or ((growth == "RIGHT" or growth == "LEFT") and "DOWN" or "RIGHT")
 				end
 				startPoint = (GFH.GetGroupGrowthStartPoint and GFH.GetGroupGrowthStartPoint(groupGrowth)) or getGrowthStartPoint(groupGrowth)
 			end
@@ -5957,8 +5957,7 @@ local function applyRaidGroupHeaders(cfg, layout, groupSpecs, forceShow, forceHi
 				if GFH.ResolveGroupGrowthDirection then
 					groupGrowth = GFH.ResolveGroupGrowthDirection(layout.groupGrowth, unitGrowth, defaultGroupGrowth)
 				else
-					groupGrowth = (GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(layout.groupGrowth, nil))
-						or ((unitGrowth == "RIGHT" or unitGrowth == "LEFT") and "DOWN" or "RIGHT")
+					groupGrowth = (GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(layout.groupGrowth, nil)) or ((unitGrowth == "RIGHT" or unitGrowth == "LEFT") and "DOWN" or "RIGHT")
 				end
 				local groupStartPoint = (GFH.GetGroupGrowthStartPoint and GFH.GetGroupGrowthStartPoint(groupGrowth)) or getGrowthStartPoint(groupGrowth)
 				if i == 1 then
@@ -6073,8 +6072,7 @@ function GF:ApplyHeaderAttributes(kind)
 		if GFH.ResolveGroupGrowthDirection then
 			cfg.groupGrowth = GFH.ResolveGroupGrowthDirection(cfg.groupGrowth, growth, defaultGroupGrowth)
 		else
-			cfg.groupGrowth = (GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(cfg.groupGrowth, nil))
-				or ((growth == "RIGHT" or growth == "LEFT") and "DOWN" or "RIGHT")
+			cfg.groupGrowth = (GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(cfg.groupGrowth, nil)) or ((growth == "RIGHT" or growth == "LEFT") and "DOWN" or "RIGHT")
 		end
 	elseif isSplitRoleKind(kind) then
 		header:SetAttribute("showParty", false)
@@ -6911,8 +6909,7 @@ local function buildEditModeSettings(kind, editModeId)
 				local growth = (GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(cfg and cfg.growth, "DOWN")) or "DOWN"
 				local defaultGroupGrowth = DEFAULTS and DEFAULTS.raid and DEFAULTS.raid.groupGrowth
 				if GFH.ResolveGroupGrowthDirection then return GFH.ResolveGroupGrowthDirection(cfg and cfg.groupGrowth, growth, defaultGroupGrowth) end
-				return (GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(cfg and cfg.groupGrowth, nil))
-					or ((growth == "RIGHT" or growth == "LEFT") and "DOWN" or "RIGHT")
+				return (GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(cfg and cfg.groupGrowth, nil)) or ((growth == "RIGHT" or growth == "LEFT") and "DOWN" or "RIGHT")
 			end,
 			set = function(_, value)
 				if not raidKind then return end
@@ -6923,8 +6920,7 @@ local function buildEditModeSettings(kind, editModeId)
 				if GFH.ResolveGroupGrowthDirection then
 					cfg.groupGrowth = GFH.ResolveGroupGrowthDirection(value, growth, defaultGroupGrowth)
 				else
-					cfg.groupGrowth = (GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(value, nil))
-						or ((growth == "RIGHT" or growth == "LEFT") and "DOWN" or "RIGHT")
+					cfg.groupGrowth = (GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(value, nil)) or ((growth == "RIGHT" or growth == "LEFT") and "DOWN" or "RIGHT")
 				end
 				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "groupGrowth", cfg.groupGrowth, nil, true) end
 				GF:ApplyHeaderAttributes(kind)
@@ -6969,8 +6965,7 @@ local function buildEditModeSettings(kind, editModeId)
 						if GFH.ResolveGroupGrowthDirection then
 							current = GFH.ResolveGroupGrowthDirection(cfg and cfg.groupGrowth, growth, defaultGroupGrowth)
 						else
-							current = (GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(cfg and cfg.groupGrowth, nil))
-								or ((growth == "RIGHT" or growth == "LEFT") and "DOWN" or "RIGHT")
+							current = (GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(cfg and cfg.groupGrowth, nil)) or ((growth == "RIGHT" or growth == "LEFT") and "DOWN" or "RIGHT")
 						end
 						return current == option.value
 					end, function()
@@ -14608,15 +14603,17 @@ local function applyEditModeData(kind, data)
 		refreshAuras = true
 	end
 	if data.spacing ~= nil then cfg.spacing = clampNumber(data.spacing, 0, 40, cfg.spacing or 0) end
-	if data.growth then cfg.growth = (GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(data.growth, (GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(cfg.growth, "DOWN")) or "DOWN")) or "DOWN" end
+	if data.growth then
+		cfg.growth = (GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(data.growth, (GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(cfg.growth, "DOWN")) or "DOWN"))
+			or "DOWN"
+	end
 	if kind == "raid" and data.groupGrowth then
 		local growth = (GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(cfg.growth, "DOWN")) or "DOWN"
 		local defaultGroupGrowth = DEFAULTS and DEFAULTS.raid and DEFAULTS.raid.groupGrowth
 		if GFH.ResolveGroupGrowthDirection then
 			cfg.groupGrowth = GFH.ResolveGroupGrowthDirection(data.groupGrowth, growth, defaultGroupGrowth)
 		else
-			cfg.groupGrowth = (GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(data.groupGrowth, nil))
-				or ((growth == "RIGHT" or growth == "LEFT") and "DOWN" or "RIGHT")
+			cfg.groupGrowth = (GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(data.groupGrowth, nil)) or ((growth == "RIGHT" or growth == "LEFT") and "DOWN" or "RIGHT")
 		end
 	end
 	if data.barTexture ~= nil then
@@ -15438,12 +15435,14 @@ function GF:EnsureEditMode()
 				powerHeight = cfg.powerHeight or (DEFAULTS[kind] and DEFAULTS[kind].powerHeight) or 6,
 				spacing = cfg.spacing or (DEFAULTS[kind] and DEFAULTS[kind].spacing) or 0,
 				growth = cfg.growth or (DEFAULTS[kind] and DEFAULTS[kind].growth) or "DOWN",
-				groupGrowth = (kind == "raid")
-						and (
-							(GFH.ResolveGroupGrowthDirection and GFH.ResolveGroupGrowthDirection(cfg.groupGrowth, (GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(cfg.growth, "DOWN")) or "DOWN", DEFAULTS and DEFAULTS.raid and DEFAULTS.raid.groupGrowth))
-							or ((GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(cfg.groupGrowth, nil)) or ((((GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(cfg.growth, "DOWN")) or "DOWN") == "RIGHT" or ((GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(cfg.growth, "DOWN")) or "DOWN") == "LEFT") and "DOWN" or "RIGHT"))
-						)
-					or nil,
+				groupGrowth = (kind == "raid") and ((GFH.ResolveGroupGrowthDirection and GFH.ResolveGroupGrowthDirection(
+					cfg.groupGrowth,
+					(GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(cfg.growth, "DOWN")) or "DOWN",
+					DEFAULTS and DEFAULTS.raid and DEFAULTS.raid.groupGrowth
+				)) or ((GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(cfg.groupGrowth, nil)) or ((((GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(
+					cfg.growth,
+					"DOWN"
+				)) or "DOWN") == "RIGHT" or ((GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(cfg.growth, "DOWN")) or "DOWN") == "LEFT") and "DOWN" or "RIGHT"))) or nil,
 				barTexture = cfg.barTexture or BAR_TEX_INHERIT,
 				borderEnabled = (cfg.border and cfg.border.enabled) ~= false,
 				borderColor = (cfg.border and cfg.border.color) or (DEFAULTS[kind] and DEFAULTS[kind].border and DEFAULTS[kind].border.color) or { 0, 0, 0, 0.8 },
