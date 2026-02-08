@@ -12,10 +12,11 @@
 
 - Data Panels: Stream options windows now show the active stream name in the header instead of only "Options".
 - Data Panels: Equipment Sets stream icon size now follows the configured text size.
+- Mounts: Added tooltip hints for class/race-specific mount options (Mage/Priest/Dracthyr) when shown globally in settings.
 
 ### 🐛 Fixed
 
-- Action Tracker: Removed some DK and Priest fake spells
+- Action Tracker: Removed some DK, Evoker and Priest fake spells
 
 ---
 

@@ -1303,6 +1303,7 @@ local function createCastbarCategory()
 	addon.functions.SettingsCreateHeadline(category, L["CastBars2"], {
 		parentSection = expandable,
 	})
+	--@debug@
 	addon.functions.SettingsCreateCheckbox(category, {
 		var = "useCustomPlayerCastbar",
 		text = L["useCustomPlayerCastbar"] or "Enable castbar",
@@ -1316,6 +1317,7 @@ local function createCastbarCategory()
 		default = false,
 		parentSection = expandable,
 	})
+	--@end-debug@
 	addon.functions.SettingsCreateCheckbox(category, {
 		var = "ShowTargetCastbar",
 		text = L["ShowTargetCastbar"],
