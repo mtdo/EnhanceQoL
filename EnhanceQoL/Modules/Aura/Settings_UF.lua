@@ -388,6 +388,59 @@ local function refresh(unit)
 	end
 end
 
+local refreshBatchDepth = 0
+local refreshBatchAll = false
+local refreshBatchUnits = {}
+
+local function clearRefreshBatchState()
+	refreshBatchAll = false
+	for unit in pairs(refreshBatchUnits) do
+		refreshBatchUnits[unit] = nil
+	end
+end
+
+local function requestRefresh(unit)
+	if refreshBatchDepth > 0 then
+		if unit == nil then
+			clearRefreshBatchState()
+			refreshBatchAll = true
+		elseif not refreshBatchAll then
+			refreshBatchUnits[unit] = true
+		end
+		return
+	end
+	refresh(unit)
+end
+
+local function flushRefreshBatch()
+	if refreshBatchAll then
+		clearRefreshBatchState()
+		refresh()
+		return
+	end
+	local pendingCount = 0
+	local pendingUnit
+	for unit in pairs(refreshBatchUnits) do
+		pendingCount = pendingCount + 1
+		pendingUnit = unit
+		if pendingCount > 1 then break end
+	end
+	clearRefreshBatchState()
+	if pendingCount == 1 then
+		refresh(pendingUnit)
+	elseif pendingCount > 1 then
+		refresh()
+	end
+end
+
+local function beginRefreshBatch() refreshBatchDepth = refreshBatchDepth + 1 end
+
+local function endRefreshBatch()
+	if refreshBatchDepth <= 0 then return end
+	refreshBatchDepth = refreshBatchDepth - 1
+	if refreshBatchDepth == 0 then flushRefreshBatch() end
+end
+
 local function refreshSettingsUI()
 	local lib = addon.EditModeLib
 	if lib and lib.internal and lib.internal.RefreshSettings then lib.internal:RefreshSettings() end
@@ -5487,7 +5540,6 @@ local function registerUnitFrame(unit, info)
 			UF.EnsureFrames(unit)
 		end
 	end
-	refresh()
 	local frame = _G[info.frameName]
 	if not frame then return end
 	local layout = calcLayout(unit, frame)
@@ -5502,16 +5554,24 @@ local function registerUnitFrame(unit, info)
 		layoutDefaults = layout,
 		settingsMaxHeight = DEFAULT_SETTINGS_MAX_HEIGHT,
 		onApply = function(_, _, data)
+			if not data.point then return end
 			local cfg = ensureConfig(unit)
 			cfg.anchor = cfg.anchor or {}
-			if data.point then
-				cfg.anchor.point = data.point
-				cfg.anchor.relativePoint = data.relativePoint or data.point
-				cfg.anchor.x = data.x or 0
-				cfg.anchor.y = data.y or 0
-				cfg.anchor.relativeTo = cfg.anchor.relativeTo or "UIParent"
-			end
-			refresh()
+			local oldPoint = cfg.anchor.point
+			local oldRelativePoint = cfg.anchor.relativePoint
+			local oldX = cfg.anchor.x or 0
+			local oldY = cfg.anchor.y or 0
+			local newPoint = data.point
+			local newRelativePoint = data.relativePoint or data.point
+			local newX = data.x or 0
+			local newY = data.y or 0
+			cfg.anchor.relativeTo = cfg.anchor.relativeTo or "UIParent"
+			if oldPoint == newPoint and oldRelativePoint == newRelativePoint and oldX == newX and oldY == newY then return end
+			cfg.anchor.point = newPoint
+			cfg.anchor.relativePoint = newRelativePoint
+			cfg.anchor.x = newX
+			cfg.anchor.y = newY
+			requestRefresh(unit)
 		end,
 		onEnter = function(activeFrame) syncEditModeSelectionStrata(activeFrame) end,
 		isEnabled = function() return ensureConfig(unit).enabled == true end,
@@ -5534,9 +5594,15 @@ local function registerEditModeFrames()
 		focus = { frameName = "EQOLUFFocusFrame", frameId = frameIds.focus, title = L["UFFocusFrame"] or FOCUS },
 		boss = { frameName = "EQOLUFBossContainer", frameId = frameIds.boss, title = (L["UFBossFrame"] or "Boss Frames") },
 	}
-	for unit, info in pairs(frames) do
-		registerUnitFrame(unit, info)
-	end
+	beginRefreshBatch()
+	local ok, err = pcall(function()
+		for unit, info in pairs(frames) do
+			registerUnitFrame(unit, info)
+		end
+		requestRefresh()
+	end)
+	endRefreshBatch()
+	if not ok then error(err) end
 	if addon.EditModeLib and addon.EditModeLib.internal and addon.EditModeLib.internal.RefreshSettingValues then addon.EditModeLib.internal:RefreshSettingValues() end
 end
 

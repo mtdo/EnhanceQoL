@@ -298,6 +298,50 @@ end
 
 function H.GetGroupGrowthStartPoint(growth) return H.GetGrowthStartPoint(growth) end
 
+function H.GetCurrentRaidUnitCount()
+	if not (IsInRaid and IsInRaid()) then return 0 end
+	if not GetNumGroupMembers then return 0 end
+	local count = tonumber(GetNumGroupMembers()) or 0
+	if count < 0 then count = 0 end
+	return count
+end
+
+local function getLineExtent(unitSize, spacing, count)
+	unitSize = tonumber(unitSize) or 0
+	spacing = tonumber(spacing) or 0
+	count = math.max(1, floor((tonumber(count) or 1) + 0.5))
+	return unitSize * count + spacing * math.max(0, count - 1)
+end
+
+local function getDynamicViewportScale(viewportExtent, contentExtent)
+	viewportExtent = tonumber(viewportExtent) or 0
+	contentExtent = tonumber(contentExtent) or 0
+	if viewportExtent <= 0 or contentExtent <= 0 or contentExtent <= viewportExtent then return 1 end
+	local ratio = viewportExtent / contentExtent
+	if ratio < 0 then ratio = 0 end
+	return ratio
+end
+
+function H.GetRaidViewportScaleForColumns(growth, unitWidth, unitHeight, spacing, columnSpacing, viewportColumns, runtimeColumns)
+	viewportColumns = math.max(1, floor((tonumber(viewportColumns) or 1) + 0.5))
+	runtimeColumns = math.max(1, floor((tonumber(runtimeColumns) or 1) + 0.5))
+	if runtimeColumns <= viewportColumns then return 1 end
+	if growth == "RIGHT" or growth == "LEFT" then
+		return getDynamicViewportScale(getLineExtent(unitHeight, columnSpacing, viewportColumns), getLineExtent(unitHeight, columnSpacing, runtimeColumns))
+	end
+	return getDynamicViewportScale(getLineExtent(unitWidth, columnSpacing, viewportColumns), getLineExtent(unitWidth, columnSpacing, runtimeColumns))
+end
+
+function H.GetRaidViewportScaleForGroups(groupGrowth, perGroupWidth, perGroupHeight, groupSpacing, viewportGroups, runtimeGroups)
+	viewportGroups = math.max(1, floor((tonumber(viewportGroups) or 1) + 0.5))
+	runtimeGroups = math.max(1, floor((tonumber(runtimeGroups) or 1) + 0.5))
+	if runtimeGroups <= viewportGroups then return 1 end
+	if groupGrowth == "LEFT" or groupGrowth == "RIGHT" then
+		return getDynamicViewportScale(getLineExtent(perGroupWidth, groupSpacing, viewportGroups), getLineExtent(perGroupWidth, groupSpacing, runtimeGroups))
+	end
+	return getDynamicViewportScale(getLineExtent(perGroupHeight, groupSpacing, viewportGroups), getLineExtent(perGroupHeight, groupSpacing, runtimeGroups))
+end
+
 function H.SetPointFromCfg(frame, cfg)
 	if not frame or not cfg then return end
 	frame:ClearAllPoints()

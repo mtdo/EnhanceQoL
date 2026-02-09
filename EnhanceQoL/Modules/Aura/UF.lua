@@ -2744,29 +2744,90 @@ local function ensureBorderFrame(frame)
 	return border
 end
 
+local BAR_BACKDROP_STYLE = {
+	bgFile = "Interface\\Buttons\\WHITE8x8",
+	edgeFile = nil,
+	tile = false,
+}
+
+local function unpackColor(color, defaultR, defaultG, defaultB, defaultA)
+	if type(color) ~= "table" then return defaultR, defaultG, defaultB, defaultA end
+	return color[1] or color.r or defaultR, color[2] or color.g or defaultG, color[3] or color.b or defaultB, color[4] or color.a or defaultA
+end
+
 local function setBackdrop(frame, borderCfg)
 	if not frame then return end
+	if frame.SetBackdrop and not frame._ufBackdropCleared then
+		frame:SetBackdrop(nil)
+		frame._ufBackdropCleared = true
+	end
 	if borderCfg and borderCfg.enabled then
-		if frame.SetBackdrop then frame:SetBackdrop(nil) end
 		local borderFrame = ensureBorderFrame(frame)
 		if not borderFrame then return end
-		local color = borderCfg.color or { 0, 0, 0, 0.8 }
+		local colorR, colorG, colorB, colorA = unpackColor(borderCfg.color, 0, 0, 0, 0.8)
+		local edgeSize = tonumber(borderCfg.edgeSize) or 1
 		local insetVal = borderCfg.inset
-		if insetVal == nil then insetVal = borderCfg.edgeSize or 1 end
-		borderFrame:SetBackdrop({
-			bgFile = "Interface\\Buttons\\WHITE8x8",
-			edgeFile = UFHelper.resolveBorderTexture(borderCfg.texture),
-			edgeSize = borderCfg.edgeSize or 1,
-			insets = { left = insetVal, right = insetVal, top = insetVal, bottom = insetVal },
-		})
-		borderFrame:SetBackdropColor(0, 0, 0, 0)
-		borderFrame:SetBackdropBorderColor(color[1] or 0, color[2] or 0, color[3] or 0, color[4] or 1)
+		if insetVal == nil then insetVal = edgeSize end
+		insetVal = tonumber(insetVal) or edgeSize
+		local edgeFile = UFHelper.resolveBorderTexture(borderCfg.texture)
+		local cache = borderFrame._ufBorderCache
+		local styleChanged = not cache
+			or cache.enabled ~= true
+			or cache.edgeFile ~= edgeFile
+			or cache.edgeSize ~= edgeSize
+			or cache.insetVal ~= insetVal
+			or cache.colorR ~= colorR
+			or cache.colorG ~= colorG
+			or cache.colorB ~= colorB
+			or cache.colorA ~= colorA
+		if styleChanged then
+			local style = borderFrame._ufBorderStyle
+			if not style then
+				style = {
+					bgFile = "Interface\\Buttons\\WHITE8x8",
+					edgeFile = edgeFile,
+					edgeSize = edgeSize,
+					insets = { left = insetVal, right = insetVal, top = insetVal, bottom = insetVal },
+				}
+				borderFrame._ufBorderStyle = style
+			else
+				style.edgeFile = edgeFile
+				style.edgeSize = edgeSize
+				local insets = style.insets
+				if not insets then
+					insets = {}
+					style.insets = insets
+				end
+				insets.left = insetVal
+				insets.right = insetVal
+				insets.top = insetVal
+				insets.bottom = insetVal
+			end
+			borderFrame:SetBackdrop(style)
+			borderFrame:SetBackdropColor(0, 0, 0, 0)
+			borderFrame:SetBackdropBorderColor(colorR, colorG, colorB, colorA)
+			cache = cache or {}
+			cache.enabled = true
+			cache.edgeFile = edgeFile
+			cache.edgeSize = edgeSize
+			cache.insetVal = insetVal
+			cache.colorR = colorR
+			cache.colorG = colorG
+			cache.colorB = colorB
+			cache.colorA = colorA
+			borderFrame._ufBorderCache = cache
+		end
 		borderFrame:Show()
 	else
-		if frame.SetBackdrop then frame:SetBackdrop(nil) end
 		local borderFrame = frame._ufBorder
 		if borderFrame then
-			borderFrame:SetBackdrop(nil)
+			local cache = borderFrame._ufBorderCache
+			if not cache or cache.enabled ~= false then
+				borderFrame:SetBackdrop(nil)
+				cache = cache or {}
+				cache.enabled = false
+				borderFrame._ufBorderCache = cache
+			end
 			borderFrame:Hide()
 		end
 	end
@@ -2776,17 +2837,27 @@ local function applyBarBackdrop(bar, cfg)
 	if not bar then return end
 	cfg = cfg or {}
 	local bd = cfg.backdrop or {}
+	local cache = bar._ufBackdropCache
 	if bd.enabled == false then
+		if cache and cache.enabled == false then return end
 		bar:SetBackdrop(nil)
+		cache = cache or {}
+		cache.enabled = false
+		bar._ufBackdropCache = cache
 		return
 	end
-	local col = bd.color or { 0, 0, 0, 0.6 }
-	bar:SetBackdrop({
-		bgFile = "Interface\\Buttons\\WHITE8x8",
-		edgeFile = nil,
-		tile = false,
-	})
-	bar:SetBackdropColor(col[1] or 0, col[2] or 0, col[3] or 0, col[4] or 0.6)
+	local colorR, colorG, colorB, colorA = unpackColor(bd.color, 0, 0, 0, 0.6)
+	local styleChanged = not cache or cache.enabled ~= true or cache.colorR ~= colorR or cache.colorG ~= colorG or cache.colorB ~= colorB or cache.colorA ~= colorA
+	if not styleChanged then return end
+	bar:SetBackdrop(BAR_BACKDROP_STYLE)
+	bar:SetBackdropColor(colorR, colorG, colorB, colorA)
+	cache = cache or {}
+	cache.enabled = true
+	cache.colorR = colorR
+	cache.colorG = colorG
+	cache.colorB = colorB
+	cache.colorA = colorA
+	bar._ufBackdropCache = cache
 end
 
 local function ensureCastBorderFrame(st)

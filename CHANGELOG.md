@@ -10,6 +10,15 @@
 - Cooldown Panels: Added per-panel `Hide in vehicles` display option.
 - Aura: Added per-module `Hide in pet battles` options for Unit Frames, Cooldown Panels, Resource Bars, and GCD Bar.
 
+### ⚡ Performance
+
+- Unit Frames: `setBackdrop`/`applyBarBackdrop` now run with style-diff caching, so unchanged backdrop styles are skipped instead of being reapplied every refresh.
+- Unit Frames: Edit Mode registration now batches refresh requests and skips no-op anchor `onApply` refreshes, reducing load-time spikes during UF frame/settings registration.
+
+### 🐛 Fixed
+
+- Tooltip: Fixed a rare error when hovering unit tooltips.
+
 ---
 
 ## [7.11.4] - 2026-02-09
