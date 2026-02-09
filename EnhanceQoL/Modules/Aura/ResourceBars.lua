@@ -1260,6 +1260,8 @@ local function resolveTexture(cfg)
 	return sel
 end
 
+local function shouldEnableBarMouse(cfg) return not (cfg and cfg.clickThrough == true) end
+
 local function isEQOLFrameName(name)
 	if name == "EQOLHealthBar" then return true end
 	return type(name) == "string" and name:match("^EQOL.+Bar$")
@@ -3829,7 +3831,7 @@ local function createPowerBar(type, anchor)
 
 	-- Dragging disabled outside Edit Mode; positioning handled via Edit Mode
 	bar:SetMovable(false)
-	bar:EnableMouse(false)
+	bar:EnableMouse(shouldEnableBarMouse(settings))
 	bar:Show()
 	if type == "RUNES" then ResourceBars.ForceRuneRecolor() end
 	updatePowerBar(type)
@@ -4681,10 +4683,10 @@ function ResourceBars.Refresh()
 			bar:SetPoint(a.point or "TOPLEFT", rel, a.relativePoint or a.point or "TOPLEFT", a.x or 0, a.y or 0)
 			-- Update movability based on anchor target (only movable when relative to UIParent)
 			local isUI = (a.relativeFrame or "UIParent") == "UIParent"
-			bar:SetMovable(isUI)
-			bar:EnableMouse(isUI)
-
 			local cfg = getBarSettings(pType)
+			bar:SetMovable(isUI)
+			bar:EnableMouse(shouldEnableBarMouse(cfg))
+
 			bar._cfg = cfg
 			local defaultStyle = (pType == "MANA" or pType == "STAGGER") and "PERCENT" or "CURMAX"
 			bar._style = (cfg and cfg.textStyle) or defaultStyle
@@ -4975,7 +4977,8 @@ function ResourceBars.ReanchorAll()
 			bar:SetPoint(a.point or "TOPLEFT", rel, a.relativePoint or a.point or "TOPLEFT", a.x or 0, a.y or 0)
 			local isUI = (a.relativeFrame or "UIParent") == "UIParent"
 			bar:SetMovable(isUI)
-			bar:EnableMouse(isUI)
+			local cfg = getBarSettings(pType)
+			bar:EnableMouse(shouldEnableBarMouse(cfg))
 		end
 	end
 

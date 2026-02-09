@@ -1861,7 +1861,7 @@ local function buildDropdown()
 					rootDescription:CreateRadio(value.text, dropdownGet, dropdownSet, {
 						get = data.get,
 						set = data.set,
-						value = value.text,
+						value = value.value or value.text,
 					})
 				end
 			end)
@@ -2426,7 +2426,7 @@ local function buildDropdownColor()
 			end
 			if data.values then
 				for _, value in next, data.values do
-					rootDescription:CreateRadio(value.text, function() return getCurrent() == value.text end, makeSetter(value.text))
+					rootDescription:CreateRadio(value.text, function() return getCurrent() == value.text end, makeSetter(value.value or value.text))
 				end
 			end
 		end

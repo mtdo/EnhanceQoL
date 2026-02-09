@@ -45,6 +45,11 @@ local strataOptions = {
 	{ value = "TOOLTIP", label = "TOOLTIP" },
 }
 
+local strataOptionsWithDefault = { { value = "", label = DEFAULT or "Default" } }
+for _, option in ipairs(strataOptions) do
+	strataOptionsWithDefault[#strataOptionsWithDefault + 1] = option
+end
+
 local STRATA_INDEX = {}
 for index, option in ipairs(strataOptions) do
 	local value = type(option) == "table" and option.value
@@ -2649,6 +2654,31 @@ local function buildUnitSettings(unit)
 		castHeight.isEnabled = isCastEnabled
 		list[#list + 1] = castHeight
 
+		local castStrata = radioDropdown(
+			L["UFCastStrata"] or "Castbar strata",
+			strataOptionsWithDefault,
+			function() return getValue(unit, { "cast", "strata" }, castDef.strata or "") end,
+			function(val)
+				setValue(unit, { "cast", "strata" }, (val and val ~= "") and val or nil)
+				refresh()
+			end,
+			castDef.strata or "",
+			"cast"
+		)
+		castStrata.isEnabled = isCastEnabled
+		list[#list + 1] = castStrata
+
+		local castFrameLevelOffset = slider(L["UFCastFrameLevelOffset"] or "Castbar frame level offset", -20, 50, 1, function()
+			local fallback = castDef.frameLevelOffset
+			if fallback == nil then fallback = 1 end
+			return getValue(unit, { "cast", "frameLevelOffset" }, fallback)
+		end, function(val)
+			setValue(unit, { "cast", "frameLevelOffset" }, val)
+			refresh()
+		end, (castDef.frameLevelOffset == nil) and 1 or castDef.frameLevelOffset, "cast", true)
+		castFrameLevelOffset.isEnabled = isCastEnabled
+		list[#list + 1] = castFrameLevelOffset
+
 		local anchorOpts = {
 			{ value = "TOP", label = L["Top"] or "Top" },
 			{ value = "BOTTOM", label = L["Bottom"] or "Bottom" },
@@ -3273,6 +3303,37 @@ local function buildUnitSettings(unit)
 	)
 	levelAnchorSetting.isEnabled = isLevelEnabled
 	list[#list + 1] = levelAnchorSetting
+
+	local levelStrataSetting = radioDropdown(
+		L["UFLevelStrata"] or "Level text strata",
+		strataOptionsWithDefault,
+		function() return getValue(unit, { "status", "levelStrata" }, statusDef.levelStrata or "") end,
+		function(val)
+			setValue(unit, { "status", "levelStrata" }, (val and val ~= "") and val or nil)
+			refresh()
+		end,
+		statusDef.levelStrata or "",
+		"status"
+	)
+	levelStrataSetting.isEnabled = isLevelEnabled
+	list[#list + 1] = levelStrataSetting
+
+	local levelFrameLevelOffsetSetting = slider(
+		L["UFLevelFrameLevelOffset"] or "Level text frame level offset",
+		-20,
+		50,
+		1,
+		function() return getValue(unit, { "status", "levelFrameLevelOffset" }, statusDef.levelFrameLevelOffset or 5) end,
+		function(val)
+			setValue(unit, { "status", "levelFrameLevelOffset" }, val or 5)
+			refresh()
+		end,
+		statusDef.levelFrameLevelOffset or 5,
+		"status",
+		true
+	)
+	levelFrameLevelOffsetSetting.isEnabled = isLevelEnabled
+	list[#list + 1] = levelFrameLevelOffsetSetting
 
 	local levelFontSizeSetting = slider(
 		L["Level font size"] or "Level font size",

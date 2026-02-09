@@ -515,6 +515,24 @@ local function registerEditModeBars()
 						queueRefresh()
 					end,
 				},
+				{
+					name = L["Click-through"] or "Click-through",
+					kind = settingType.Checkbox,
+					field = "clickThrough",
+					default = cfg and cfg.clickThrough == true,
+					parentId = "frame",
+					get = function()
+						local c = curSpecCfg()
+						return c and c.clickThrough == true
+					end,
+					set = function(_, value)
+						local c = curSpecCfg()
+						if not c then return end
+						c.clickThrough = value and true or false
+						queueRefresh()
+					end,
+					isShown = function() return barType ~= "HEALTH" end,
+				},
 			}
 			if barType == "MAELSTROM_WEAPON" then
 				settingsList[#settingsList + 1] = {

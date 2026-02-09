@@ -315,6 +315,8 @@ local defaults = {
 			nameColorMode = "CLASS", -- CLASS or CUSTOM
 			nameColor = { 0.8, 0.8, 1, 1 },
 			levelColor = { 1, 0.85, 0, 1 },
+			levelStrata = nil,
+			levelFrameLevelOffset = 5,
 			nameOffset = { x = 0, y = 0 },
 			levelOffset = { x = 0, y = 0 },
 			levelEnabled = true,
@@ -377,6 +379,8 @@ local defaults = {
 			standalone = false,
 			width = 220,
 			height = 16,
+			strata = nil,
+			frameLevelOffset = nil,
 			anchor = "BOTTOM", -- or "TOP"
 			offset = { x = 0, y = -4 },
 			backdrop = { enabled = true, color = { 0, 0, 0, 0.6 } },
@@ -542,6 +546,8 @@ local defaults = {
 			enabled = true,
 			width = 200,
 			height = 16,
+			strata = nil,
+			frameLevelOffset = nil,
 			anchor = "BOTTOM", -- or "TOP"
 			offset = { x = 11, y = -4 },
 			backdrop = { enabled = true, color = { 0, 0, 0, 0.6 } },
@@ -2969,6 +2975,8 @@ local function stopCast(unit)
 	end
 end
 
+local normalizeStrataToken
+
 local function applyCastLayout(cfg, unit)
 	local st = states[unit]
 	if not st or not st.castBar then return end
@@ -2983,6 +2991,14 @@ local function applyCastLayout(cfg, unit)
 	local off = ccfg.offset or defc.offset or { x = 0, y = -4 }
 	local centerOffset = (st and st._portraitCenterOffset) or 0
 	local anchorFrame = st.barGroup or st.frame
+	local castStrata = normalizeStrataToken(ccfg.strata) or normalizeStrataToken(defc.strata) or ((st.frame and st.frame.GetFrameStrata and st.frame:GetFrameStrata()) or "MEDIUM")
+	local castLevelOffset = tonumber(ccfg.frameLevelOffset)
+	if castLevelOffset == nil then castLevelOffset = tonumber(defc.frameLevelOffset) end
+	if castLevelOffset == nil then castLevelOffset = 1 end
+	local baseFrameLevel = (st.frame and st.frame.GetFrameLevel and st.frame:GetFrameLevel()) or 0
+	local castFrameLevel = math.max(0, baseFrameLevel + castLevelOffset)
+	if st.castBar.GetFrameStrata and st.castBar.SetFrameStrata and st.castBar:GetFrameStrata() ~= castStrata then st.castBar:SetFrameStrata(castStrata) end
+	if st.castBar.GetFrameLevel and st.castBar.SetFrameLevel and st.castBar:GetFrameLevel() ~= castFrameLevel then st.castBar:SetFrameLevel(castFrameLevel) end
 	st.castBar:ClearAllPoints()
 	if anchor == "TOP" then
 		st.castBar:SetPoint("BOTTOM", anchorFrame, "TOP", (off.x or 0) + centerOffset, off.y or 0)
@@ -3899,7 +3915,9 @@ end
 local function setFrameLevelAbove(child, parent, offset)
 	if not child or not parent then return end
 	child:SetFrameStrata(parent:GetFrameStrata())
-	child:SetFrameLevel((parent:GetFrameLevel() or 0) + (offset or 1))
+	local level = (parent:GetFrameLevel() or 0) + (offset or 1)
+	if level < 0 then level = 0 end
+	child:SetFrameLevel(level)
 end
 
 local function getHealthTextAnchor(st)
@@ -3925,12 +3943,28 @@ for i = 1, #STRATA_ORDER do
 	STRATA_INDEX[STRATA_ORDER[i]] = i
 end
 
+normalizeStrataToken = function(value)
+	if type(value) ~= "string" or value == "" then return nil end
+	local token = string.upper(value)
+	if STRATA_INDEX[token] then return token end
+	return nil
+end
+
 local function syncTextFrameLevels(st)
 	if not st then return end
+	local scfg = (st.cfg and st.cfg.status) or {}
 	local healthAnchor = getHealthTextAnchor(st) or st.health
 	setFrameLevelAbove(st.healthTextLayer, healthAnchor, 5)
 	setFrameLevelAbove(st.powerTextLayer, st.power, 5)
 	setFrameLevelAbove(st.statusTextLayer, st.status, 5)
+	local levelLayer = st.levelTextLayer or st.statusTextLayer
+	local levelOffset = tonumber(scfg.levelFrameLevelOffset)
+	if levelOffset == nil then levelOffset = 5 end
+	setFrameLevelAbove(levelLayer, st.status, levelOffset)
+	if levelLayer and levelLayer.SetFrameStrata and st.status and st.status.GetFrameStrata then
+		local levelStrata = normalizeStrataToken(scfg.levelStrata)
+		levelLayer:SetFrameStrata(levelStrata or st.status:GetFrameStrata())
+	end
 	if st.restLoop and st.statusTextLayer then setFrameLevelAbove(st.restLoop, st.statusTextLayer, 3) end
 	if st.castTextLayer then setFrameLevelAbove(st.castTextLayer, st.castBar, 5) end
 	if st.castIconLayer then setFrameLevelAbove(st.castIconLayer, st.castBar, 4) end
@@ -4755,6 +4789,8 @@ local function ensureFrames(unit)
 	st.powerTextLayer:SetAllPoints(st.power)
 	st.statusTextLayer = st.statusTextLayer or CreateFrame("Frame", nil, st.status)
 	st.statusTextLayer:SetAllPoints(st.status)
+	st.levelTextLayer = st.levelTextLayer or CreateFrame("Frame", nil, st.status)
+	st.levelTextLayer:SetAllPoints(st.status)
 	if not st.privateAuras then
 		st.privateAuras = CreateFrame("Frame", nil, st.frame)
 		st.privateAuras:EnableMouse(false)
@@ -4768,7 +4804,7 @@ local function ensureFrames(unit)
 	st.powerTextCenter = st.powerTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	st.powerTextRight = st.powerTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	st.nameText = st.statusTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-	st.levelText = st.statusTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	st.levelText = st.levelTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	st.unitStatusText = st.statusTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	st.unitGroupText = st.statusTextLayer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 	st.raidIcon = st.statusTextLayer:CreateTexture(nil, "OVERLAY", nil, 7)
