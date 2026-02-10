@@ -1862,10 +1862,68 @@ function GF:EnsureDB() return ensureDB() end
 GF.headers = GF.headers or {}
 GF.anchors = GF.anchors or {}
 GF._pendingRefresh = GF._pendingRefresh or false
+GF._pendingHeaderKinds = GF._pendingHeaderKinds or {}
 GF._pendingDisable = GF._pendingDisable or false
 
 local registerFeatureEvents
 local unregisterFeatureEvents
+
+function GF:MarkPendingHeaderRefresh(kind)
+	GF._pendingRefresh = true
+	GF._pendingHeaderKinds = GF._pendingHeaderKinds or {}
+	if kind then GF._pendingHeaderKinds[kind] = true end
+end
+
+function GF:SetHeaderAttributeIfChanged(header, key, value)
+	if not (header and header.SetAttribute) then return false end
+	local cache = header._eqolAttrCache
+	if not cache then
+		cache = {}
+		header._eqolAttrCache = cache
+	end
+	local normalized = value
+	if normalized == nil then
+		GF._eqolAttrNilToken = GF._eqolAttrNilToken or {}
+		normalized = GF._eqolAttrNilToken
+	end
+	if cache[key] == normalized then return false end
+	header:SetAttribute(key, value)
+	cache[key] = normalized
+	return true
+end
+
+function GF:ApplyPendingHeaderKinds()
+	local pending = GF._pendingHeaderKinds
+	if not pending then return false end
+	GF._pendingHeaderKinds = {}
+	local applied = false
+
+	if pending.party then
+		GF:ApplyHeaderAttributes("party")
+		applied = true
+	end
+	if pending.raid then
+		GF:ApplyHeaderAttributes("raid")
+		applied = true
+	end
+	if pending.mt then
+		GF:ApplyHeaderAttributes("mt")
+		applied = true
+	end
+	if pending.ma then
+		GF:ApplyHeaderAttributes("ma")
+		applied = true
+	end
+
+	for kind in pairs(pending) do
+		if kind ~= "party" and kind ~= "raid" and kind ~= "mt" and kind ~= "ma" then
+			GF:ApplyHeaderAttributes(kind)
+			applied = true
+		end
+	end
+
+	return applied
+end
 
 local function getUnit(self) return (self and (self.unit or (self.GetAttribute and self:GetAttribute("unit")))) end
 
@@ -6075,15 +6133,15 @@ function GF:RefreshCustomSortNameList()
 	local header = GF.headers and GF.headers.raid
 	if not header then return end
 	if InCombatLockdown and InCombatLockdown() then
-		GF._pendingRefresh = true
+		GF:MarkPendingHeaderRefresh("raid")
 		return
 	end
 	local sortMethod = resolveSortMethod(cfg)
 	if sortMethod ~= "NAMELIST" then
-		header:SetAttribute("nameList", nil)
+		GF:SetHeaderAttributeIfChanged(header, "nameList", nil)
 		if GF._raidGroupHeaders then
 			for _, gh in ipairs(GF._raidGroupHeaders) do
-				if gh then gh:SetAttribute("nameList", nil) end
+				if gh then GF:SetHeaderAttributeIfChanged(gh, "nameList", nil) end
 			end
 		end
 		return
@@ -6099,15 +6157,15 @@ function GF:RefreshCustomSortNameList()
 					local spec = specs[i]
 					local nameList = spec and spec.nameList
 					if not nameList or nameList == "" then nameList = EMPTY_NAMELIST_TOKEN end
-					gh:SetAttribute("nameList", nameList)
+					GF:SetHeaderAttributeIfChanged(gh, "nameList", nameList)
 				end
 			end
 		end
-		header:SetAttribute("nameList", nil)
+		GF:SetHeaderAttributeIfChanged(header, "nameList", nil)
 	else
 		local nameList = GFH.BuildCustomSortNameList(cfg)
 		if nameList == "" then nameList = nil end
-		header:SetAttribute("nameList", nameList)
+		GF:SetHeaderAttributeIfChanged(header, "nameList", nameList)
 	end
 end
 
@@ -6138,44 +6196,47 @@ local function applyRaidGroupHeaders(cfg, layout, groupSpecs, forceShow, forceHi
 			header._eqolSpecialHide = not active
 
 			if active then
+				local function setAttr(key, value)
+					GF:SetHeaderAttributeIfChanged(header, key, value)
+				end
 				local specSortMethod = tostring(spec.sortMethod or "INDEX"):upper()
-				header:SetAttribute("showParty", false)
-				header:SetAttribute("showRaid", true)
-				header:SetAttribute("showPlayer", true)
-				header:SetAttribute("showSolo", false)
-				header:SetAttribute("groupBy", nil)
-				header:SetAttribute("sortDir", cfg.sortDir or "ASC")
-				header:SetAttribute("unitsPerColumn", layout.unitsPerColumn)
-				header:SetAttribute("maxColumns", 1)
-				header:SetAttribute("minWidth", layout.minWidth)
-				header:SetAttribute("minHeight", layout.minHeight)
+				setAttr("showParty", false)
+				setAttr("showRaid", true)
+				setAttr("showPlayer", true)
+				setAttr("showSolo", false)
+				setAttr("groupBy", nil)
+				setAttr("sortDir", cfg.sortDir or "ASC")
+				setAttr("unitsPerColumn", layout.unitsPerColumn)
+				setAttr("maxColumns", 1)
+				setAttr("minWidth", layout.minWidth)
+				setAttr("minHeight", layout.minHeight)
 
 				if specSortMethod == "NAMELIST" then
 					local nameList = spec.nameList
 					if not nameList or nameList == "" then nameList = EMPTY_NAMELIST_TOKEN end
-					header:SetAttribute("groupFilter", nil)
-					header:SetAttribute("roleFilter", nil)
-					header:SetAttribute("strictFiltering", false)
-					header:SetAttribute("sortMethod", "NAMELIST")
-					header:SetAttribute("nameList", nameList)
+					setAttr("groupFilter", nil)
+					setAttr("roleFilter", nil)
+					setAttr("strictFiltering", false)
+					setAttr("sortMethod", "NAMELIST")
+					setAttr("nameList", nameList)
 				else
 					local roleFilter = cfg.roleFilter
 					if roleFilter == "" then roleFilter = nil end
 					if specSortMethod ~= "NAME" and specSortMethod ~= "INDEX" then specSortMethod = "INDEX" end
-					header:SetAttribute("groupFilter", tostring(spec.group or i))
-					header:SetAttribute("roleFilter", roleFilter)
-					header:SetAttribute("strictFiltering", cfg.strictFiltering == true)
-					header:SetAttribute("sortMethod", specSortMethod)
-					header:SetAttribute("nameList", nil)
+					setAttr("groupFilter", tostring(spec.group or i))
+					setAttr("roleFilter", roleFilter)
+					setAttr("strictFiltering", cfg.strictFiltering == true)
+					setAttr("sortMethod", specSortMethod)
+					setAttr("nameList", nil)
 				end
 
-				header:SetAttribute("point", layout.point)
-				header:SetAttribute("xOffset", layout.xOffset)
-				header:SetAttribute("yOffset", layout.yOffset)
-				header:SetAttribute("columnSpacing", layout.columnSpacing)
-				header:SetAttribute("columnAnchorPoint", layout.columnAnchorPoint)
-				header:SetAttribute("template", "EQOLUFGroupUnitButtonTemplate")
-				header:SetAttribute("initialConfigFunction", layout.initConfigFunction)
+				setAttr("point", layout.point)
+				setAttr("xOffset", layout.xOffset)
+				setAttr("yOffset", layout.yOffset)
+				setAttr("columnSpacing", layout.columnSpacing)
+				setAttr("columnAnchorPoint", layout.columnAnchorPoint)
+				setAttr("template", "EQOLUFGroupUnitButtonTemplate")
+				setAttr("initialConfigFunction", layout.initConfigFunction)
 
 				header:ClearAllPoints()
 				local unitGrowth = (GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(layout.growth, "DOWN")) or "DOWN"
@@ -6233,7 +6294,7 @@ function GF:ApplyHeaderAttributes(kind)
 	if not header then return end
 	if not isFeatureEnabled() then return end
 	if InCombatLockdown and InCombatLockdown() then
-		GF._pendingRefresh = true
+		GF:MarkPendingHeaderRefresh(kind)
 		return
 	end
 
@@ -6253,53 +6314,56 @@ function GF:ApplyHeaderAttributes(kind)
 	local rawGroupBy
 	local db = DB or ensureDB()
 	local raidFramesEnabled = db and db.raid and db.raid.enabled == true
+	local function setAttr(key, value)
+		GF:SetHeaderAttributeIfChanged(header, key, value)
+	end
 
 	if kind == "party" then
-		header:SetAttribute("showParty", true)
-		header:SetAttribute("showRaid", false)
-		header:SetAttribute("showPlayer", cfg.showPlayer and true or false)
-		header:SetAttribute("showSolo", cfg.showSolo and true or false)
-		header:SetAttribute("sortMethod", "INDEX")
-		header:SetAttribute("sortDir", "ASC")
-		header:SetAttribute("maxColumns", 1)
-		header:SetAttribute("unitsPerColumn", 5)
+		setAttr("showParty", true)
+		setAttr("showRaid", false)
+		setAttr("showPlayer", cfg.showPlayer and true or false)
+		setAttr("showSolo", cfg.showSolo and true or false)
+		setAttr("sortMethod", "INDEX")
+		setAttr("sortDir", "ASC")
+		setAttr("maxColumns", 1)
+		setAttr("unitsPerColumn", 5)
 	elseif kind == "raid" then
-		header:SetAttribute("showParty", false)
-		header:SetAttribute("showRaid", true)
-		header:SetAttribute("showPlayer", true)
-		header:SetAttribute("showSolo", false)
+		setAttr("showParty", false)
+		setAttr("showRaid", true)
+		setAttr("showPlayer", true)
+		setAttr("showSolo", false)
 		local groupingOrder = cfg.groupingOrder
 		if groupingOrder == "" then groupingOrder = nil end
 		rawGroupBy = cfg.groupBy
 		local normalizedGroupBy = resolveGroupByValue(cfg, DEFAULTS.raid) or "GROUP"
 		if rawGroupBy and tostring(rawGroupBy):upper() == "CLASS" then groupingOrder = nil end
-		header:SetAttribute("groupingOrder", groupingOrder or GFH.GROUP_ORDER)
+		setAttr("groupingOrder", groupingOrder or GFH.GROUP_ORDER)
 		local groupFilter = cfg.groupFilter
 		if groupFilter == "" then groupFilter = nil end
 		if rawGroupBy and tostring(rawGroupBy):upper() == "CLASS" then groupFilter = nil end
-		header:SetAttribute("groupFilter", groupFilter)
+		setAttr("groupFilter", groupFilter)
 		local roleFilter = cfg.roleFilter
 		if roleFilter == "" then roleFilter = nil end
-		header:SetAttribute("roleFilter", roleFilter)
-		header:SetAttribute("strictFiltering", cfg.strictFiltering == true)
+		setAttr("roleFilter", roleFilter)
+		setAttr("strictFiltering", cfg.strictFiltering == true)
 		sortMethod = resolveSortMethod(cfg)
 		local customSort = GFH and GFH.EnsureCustomSortConfig and GFH.EnsureCustomSortConfig(cfg)
 		useGroupedCustomSort = (sortMethod == "NAMELIST") and (customSort and customSort.enabled == true)
-		header:SetAttribute("sortMethod", sortMethod)
-		header:SetAttribute("sortDir", cfg.sortDir or "ASC")
+		setAttr("sortMethod", sortMethod)
+		setAttr("sortDir", cfg.sortDir or "ASC")
 		if sortMethod == "NAMELIST" then
 			local nameList = GFH.BuildCustomSortNameList(cfg)
 			if nameList == "" then nameList = nil end
-			header:SetAttribute("nameList", nameList)
+			setAttr("nameList", nameList)
 		else
-			header:SetAttribute("nameList", nil)
+			setAttr("nameList", nil)
 		end
-		header:SetAttribute("groupBy", normalizedGroupBy)
+		setAttr("groupBy", normalizedGroupBy)
 		raidUnitsPerColumn = clampNumber(tonumber(cfg.unitsPerColumn) or 5, 1, 10, 5)
 		raidMaxColumns = clampNumber(tonumber(cfg.maxColumns) or 8, 1, 10, 8)
-		header:SetAttribute("unitsPerColumn", raidUnitsPerColumn)
+		setAttr("unitsPerColumn", raidUnitsPerColumn)
 		raidRuntimeMaxColumns = raidMaxColumns
-		header:SetAttribute("maxColumns", raidRuntimeMaxColumns)
+		setAttr("maxColumns", raidRuntimeMaxColumns)
 		useGroupHeaders = GF:IsRaidGroupedLayout(cfg) and (sortMethod ~= "NAMELIST" or useGroupedCustomSort)
 		local defaultGroupGrowth = DEFAULTS and DEFAULTS.raid and DEFAULTS.raid.groupGrowth
 		if GFH.ResolveGroupGrowthDirection then
@@ -6308,29 +6372,29 @@ function GF:ApplyHeaderAttributes(kind)
 			cfg.groupGrowth = (GFH.NormalizeGrowthDirection and GFH.NormalizeGrowthDirection(cfg.groupGrowth, nil)) or ((growth == "RIGHT" or growth == "LEFT") and "DOWN" or "RIGHT")
 		end
 	elseif isSplitRoleKind(kind) then
-		header:SetAttribute("showParty", false)
-		header:SetAttribute("showRaid", true)
-		header:SetAttribute("showPlayer", true)
-		header:SetAttribute("showSolo", false)
-		header:SetAttribute("groupingOrder", nil)
-		header:SetAttribute("groupFilter", nil)
-		header:SetAttribute("groupBy", nil)
-		header:SetAttribute("nameList", nil)
-		header:SetAttribute("roleFilter", getSplitRoleFilter(kind))
-		header:SetAttribute("strictFiltering", true)
-		header:SetAttribute("sortMethod", "NAME")
-		header:SetAttribute("sortDir", "ASC")
+		setAttr("showParty", false)
+		setAttr("showRaid", true)
+		setAttr("showPlayer", true)
+		setAttr("showSolo", false)
+		setAttr("groupingOrder", nil)
+		setAttr("groupFilter", nil)
+		setAttr("groupBy", nil)
+		setAttr("nameList", nil)
+		setAttr("roleFilter", getSplitRoleFilter(kind))
+		setAttr("strictFiltering", true)
+		setAttr("sortMethod", "NAME")
+		setAttr("sortDir", "ASC")
 		raidUnitsPerColumn = clampNumber(tonumber(cfg.unitsPerColumn) or ((DEFAULTS[kind] and DEFAULTS[kind].unitsPerColumn) or 2), 1, 10, 2)
 		raidMaxColumns = clampNumber(tonumber(cfg.maxColumns) or ((DEFAULTS[kind] and DEFAULTS[kind].maxColumns) or 1), 1, 10, 1)
-		header:SetAttribute("unitsPerColumn", raidUnitsPerColumn)
-		header:SetAttribute("maxColumns", raidMaxColumns)
+		setAttr("unitsPerColumn", raidUnitsPerColumn)
+		setAttr("maxColumns", raidMaxColumns)
 	end
 
 	if header._eqolForceShow then
-		header:SetAttribute("showParty", true)
-		header:SetAttribute("showRaid", true)
-		header:SetAttribute("showPlayer", true)
-		header:SetAttribute("showSolo", true)
+		setAttr("showParty", true)
+		setAttr("showRaid", true)
+		setAttr("showPlayer", true)
+		setAttr("showSolo", true)
 	end
 
 	local layoutPoint, layoutXOffset, layoutYOffset, layoutColumnSpacing, layoutColumnAnchorPoint
@@ -6340,37 +6404,37 @@ function GF:ApplyHeaderAttributes(kind)
 		layoutPoint = point
 		layoutXOffset = roundToPixel(xOff, scale)
 		layoutYOffset = 0
-		header:SetAttribute("point", layoutPoint)
-		header:SetAttribute("xOffset", layoutXOffset)
-		header:SetAttribute("yOffset", layoutYOffset)
+		setAttr("point", layoutPoint)
+		setAttr("xOffset", layoutXOffset)
+		setAttr("yOffset", layoutYOffset)
 		if kind == "party" then
 			layoutColumnSpacing = spacing
-			header:SetAttribute("columnSpacing", layoutColumnSpacing)
+			setAttr("columnSpacing", layoutColumnSpacing)
 		else
 			local columnSpacing = clampNumber(tonumber(cfg.columnSpacing) or spacing, 0, 40, spacing)
 			layoutColumnSpacing = roundToPixel(columnSpacing, scale)
-			header:SetAttribute("columnSpacing", layoutColumnSpacing)
+			setAttr("columnSpacing", layoutColumnSpacing)
 		end
 
 		layoutColumnAnchorPoint = "TOP"
-		header:SetAttribute("columnAnchorPoint", layoutColumnAnchorPoint)
+		setAttr("columnAnchorPoint", layoutColumnAnchorPoint)
 	else
 		local yOff = (growth == "UP") and spacing or -spacing
 		local point = (growth == "UP") and "BOTTOM" or "TOP"
 		layoutPoint = point
 		layoutXOffset = 0
 		layoutYOffset = roundToPixel(yOff, scale)
-		header:SetAttribute("point", layoutPoint)
-		header:SetAttribute("xOffset", layoutXOffset)
-		header:SetAttribute("yOffset", layoutYOffset)
+		setAttr("point", layoutPoint)
+		setAttr("xOffset", layoutXOffset)
+		setAttr("yOffset", layoutYOffset)
 		local columnSpacing = clampNumber(tonumber(cfg.columnSpacing) or spacing, 0, 40, spacing)
 		layoutColumnSpacing = roundToPixel(columnSpacing, scale)
-		header:SetAttribute("columnSpacing", layoutColumnSpacing)
+		setAttr("columnSpacing", layoutColumnSpacing)
 		layoutColumnAnchorPoint = "LEFT"
-		header:SetAttribute("columnAnchorPoint", layoutColumnAnchorPoint)
+		setAttr("columnAnchorPoint", layoutColumnAnchorPoint)
 	end
 
-	header:SetAttribute("template", "EQOLUFGroupUnitButtonTemplate")
+	setAttr("template", "EQOLUFGroupUnitButtonTemplate")
 
 	-- Pixel-perfect size: snap width/height to (even) screen pixels to avoid half-pixel centers -> text jitter.
 	local w = clampNumber(tonumber(cfg.width) or 100, 40, 600, 100)
@@ -6391,7 +6455,7 @@ function GF:ApplyHeaderAttributes(kind)
 			raidViewportScale = (
 				GFH.GetRaidViewportScaleForColumns and GFH.GetRaidViewportScaleForColumns(growth, w, h, spacing, layoutColumnSpacing or spacing, raidMaxColumns or 1, raidRuntimeMaxColumns)
 			) or 1
-			header:SetAttribute("maxColumns", raidRuntimeMaxColumns)
+			setAttr("maxColumns", raidRuntimeMaxColumns)
 			if raidViewportScale < 1 then
 				if growth == "RIGHT" or growth == "LEFT" then
 					renderW = w / raidViewportScale
@@ -6404,8 +6468,8 @@ function GF:ApplyHeaderAttributes(kind)
 				renderH = roundToEvenPixel(renderH, scale)
 				renderXOffset = roundToPixel(renderXOffset, scale)
 				renderYOffset = roundToPixel(renderYOffset, scale)
-				header:SetAttribute("xOffset", renderXOffset)
-				header:SetAttribute("yOffset", renderYOffset)
+				setAttr("xOffset", renderXOffset)
+				setAttr("yOffset", renderYOffset)
 			end
 		end
 	end
@@ -6425,7 +6489,7 @@ function GF:ApplyHeaderAttributes(kind)
 		wStr,
 		hStr
 	)
-	header:SetAttribute("initialConfigFunction", initConfigFunction)
+	setAttr("initialConfigFunction", initConfigFunction)
 
 	local function syncHeaderChildren()
 		forEachChild(header, function(child) syncHeaderChild(child, kind, cfg, renderW, renderH) end)
@@ -16399,7 +16463,8 @@ do
 				GF:DisableBlizzardFrames()
 			elseif GF._pendingRefresh then
 				GF._pendingRefresh = false
-				GF.Refresh()
+				local applied = GF:ApplyPendingHeaderKinds()
+				if not applied then GF.Refresh() end
 			end
 		elseif not isFeatureEnabled() then
 			return
