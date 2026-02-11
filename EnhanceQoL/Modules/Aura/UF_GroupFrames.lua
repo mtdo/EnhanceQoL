@@ -2871,14 +2871,17 @@ function GF:UpdateGroupIcons(self)
 	if self._eqolGroupKind == "party" or acfg.enabled == false then
 		st.assistIcon:Hide()
 	else
-		local showAssist = unit and UnitIsGroupAssistant and UnitIsGroupAssistant(unit)
-		if not showAssist then
-			local raidRole = getUnitRaidRole(unit)
-			showAssist = raidRole == "MAINASSIST"
-		end
+		local raidRole = getUnitRaidRole(unit)
+		local isMainAssist = raidRole == "MAINASSIST"
+		local isAssistant = unit and UnitIsGroupAssistant and UnitIsGroupAssistant(unit)
+		local showAssist = isMainAssist or isAssistant
 		if not showAssist and isEditModeActive() then showAssist = true end
 		if showAssist then
-			st.assistIcon:SetAtlas("RaidFrame-Icon-MainAssist", false)
+			if isMainAssist or isEditModeActive() then
+				st.assistIcon:SetAtlas("RaidFrame-Icon-MainAssist", false)
+			else
+				st.assistIcon:SetTexture("Interface\\GroupFrame\\UI-Group-AssistantIcon")
+			end
 			st.assistIcon:Show()
 		else
 			st.assistIcon:Hide()
