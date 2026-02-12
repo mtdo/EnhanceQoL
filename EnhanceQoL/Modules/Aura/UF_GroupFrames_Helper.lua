@@ -84,6 +84,58 @@ H.GROUP_NUMBER_FORMAT_OPTIONS = {
 	{ value = "HASH", label = "#1", text = "#1" },
 }
 
+H.STATUS_ICON_CONST = {
+	ready = "Interface\\RaidFrame\\ReadyCheck-Ready",
+	notReady = "Interface\\RaidFrame\\ReadyCheck-NotReady",
+	waiting = "Interface\\RaidFrame\\ReadyCheck-Waiting",
+	resurrect = "Interface\\RaidFrame\\Raid-Icon-Rez",
+	summonPending = "Interface\\RaidFrame\\Raid-Icon-SummonPending",
+	summonAccepted = "Interface\\RaidFrame\\Raid-Icon-SummonAccepted",
+	summonDeclined = "Interface\\RaidFrame\\Raid-Icon-SummonDeclined",
+	phase = "Interface\\TargetingFrame\\UI-PhasingIcon",
+	summonStatusNone = Enum and Enum.SummonStatus and Enum.SummonStatus.None or 0,
+	summonStatusPending = Enum and Enum.SummonStatus and Enum.SummonStatus.Pending or 1,
+	summonStatusAccepted = Enum and Enum.SummonStatus and Enum.SummonStatus.Accepted or 2,
+	summonStatusDeclined = Enum and Enum.SummonStatus and Enum.SummonStatus.Declined or 3,
+}
+
+H.STATUS_ICON_EDITMODE_META = {
+	{ key = "readyCheckIcon", name = "Ready check icon", defaultPoint = "CENTER", defaultSize = 16 },
+	{ key = "summonIcon", name = "Summon icon", defaultPoint = "CENTER", defaultSize = 16 },
+	{ key = "resurrectIcon", name = "Resurrect icon", defaultPoint = "CENTER", defaultSize = 16 },
+	{ key = "phaseIcon", name = "Phasing icon", defaultPoint = "TOPLEFT", defaultSize = 14 },
+}
+
+function H.GetStatusIconCfg(kind, cfg, defaults, key)
+	local status = cfg and cfg.status
+	local iconCfg = status and status[key]
+	if iconCfg then return iconCfg end
+	local def = defaults and defaults[kind]
+	local defStatus = def and def.status
+	local defIconCfg = defStatus and defStatus[key]
+	return defIconCfg or {}
+end
+
+function H.CancelReadyCheckIconTimer(state)
+	local timer = state and state._readyCheckHideTimer
+	if timer and timer.Cancel then timer:Cancel() end
+	if state then state._readyCheckHideTimer = nil end
+end
+
+function H.ScheduleReadyCheckIconHide(state, icon, delay)
+	if not (state and icon and C_Timer and C_Timer.NewTimer) then return end
+	H.CancelReadyCheckIconTimer(state)
+	local wait = tonumber(delay) or 6
+	if wait <= 0 then
+		icon:Hide()
+		return
+	end
+	state._readyCheckHideTimer = C_Timer.NewTimer(wait, function()
+		if state and state.readyCheckIcon then state.readyCheckIcon:Hide() end
+		if state then state._readyCheckHideTimer = nil end
+	end)
+end
+
 function H.FormatGroupNumber(subgroup, format)
 	local num = tonumber(subgroup)
 	if not num then return nil end
@@ -857,6 +909,12 @@ function H.GetUnitSpecIdCached(unit)
 	return nil
 end
 
+local function IsInspectUIBusy()
+	if InspectFrame and InspectFrame.IsShown and InspectFrame:IsShown() then return true end
+	if PlayerSpellsFrame and PlayerSpellsFrame.IsInspecting and PlayerSpellsFrame:IsInspecting() then return true end
+	return false
+end
+
 function H.QueueInspect(unit)
 	if not (UnitExists and UnitExists(unit)) then return end
 	if UnitIsPlayer and not UnitIsPlayer(unit) then return end
@@ -891,7 +949,7 @@ function H.ProcessInspectQueue()
 		if C_Timer and C_Timer.After then C_Timer.After(0.1, function() H.ProcessInspectQueue() end) end
 		return
 	end
-	if InspectFrame and InspectFrame.IsShown and InspectFrame:IsShown() then
+	if IsInspectUIBusy() then
 		if C_Timer and C_Timer.After then C_Timer.After(2, function() H.ProcessInspectQueue() end) end
 		return
 	end
@@ -930,7 +988,7 @@ function H.OnInspectReady(guid)
 	H.inspectInProgress = false
 	H.inspectGuid = nil
 	H.inspectUnit = nil
-	if ClearInspectPlayer then ClearInspectPlayer() end
+	if ClearInspectPlayer and not IsInspectUIBusy() then ClearInspectPlayer() end
 	if C_Timer and C_Timer.After then C_Timer.After(0.5, function() H.ProcessInspectQueue() end) end
 	return updated
 end

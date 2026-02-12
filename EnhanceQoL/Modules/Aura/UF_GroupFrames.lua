@@ -340,6 +340,11 @@ local function syncTextFrameLevels(st)
 	if not st then return end
 	setFrameLevelAbove(st.healthTextLayer, st.health, 5)
 	setFrameLevelAbove(st.powerTextLayer, st.power, 5)
+	if st.statusIconLayer then
+		local parent = st.healthTextLayer or st.health or st.barGroup or st.frame
+		setFrameLevelAbove(st.statusIconLayer, parent, 6)
+		if st.barGroup and st.statusIconLayer.SetAllPoints then st.statusIconLayer:SetAllPoints(st.barGroup) end
+	end
 end
 
 local function hookTextFrameLevels(st)
@@ -1151,6 +1156,42 @@ local DEFAULTS = {
 				x = 18,
 				y = -2,
 			},
+			readyCheckIcon = {
+				enabled = true,
+				sample = false,
+				size = 16,
+				point = "CENTER",
+				relativePoint = "CENTER",
+				x = 0,
+				y = 0,
+			},
+			summonIcon = {
+				enabled = true,
+				sample = false,
+				size = 16,
+				point = "CENTER",
+				relativePoint = "CENTER",
+				x = 0,
+				y = 0,
+			},
+			resurrectIcon = {
+				enabled = true,
+				sample = false,
+				size = 16,
+				point = "CENTER",
+				relativePoint = "CENTER",
+				x = 0,
+				y = 0,
+			},
+			phaseIcon = {
+				enabled = false,
+				sample = false,
+				size = 14,
+				point = "TOPLEFT",
+				relativePoint = "TOPLEFT",
+				x = 0,
+				y = 0,
+			},
 			unitStatus = {
 				enabled = true,
 				font = nil,
@@ -1508,6 +1549,42 @@ local DEFAULTS = {
 				relativePoint = "TOPLEFT",
 				x = 14,
 				y = -1,
+			},
+			readyCheckIcon = {
+				enabled = true,
+				sample = false,
+				size = 16,
+				point = "CENTER",
+				relativePoint = "CENTER",
+				x = 0,
+				y = 0,
+			},
+			summonIcon = {
+				enabled = true,
+				sample = false,
+				size = 16,
+				point = "CENTER",
+				relativePoint = "CENTER",
+				x = 0,
+				y = 0,
+			},
+			resurrectIcon = {
+				enabled = true,
+				sample = false,
+				size = 16,
+				point = "CENTER",
+				relativePoint = "CENTER",
+				x = 0,
+				y = 0,
+			},
+			phaseIcon = {
+				enabled = false,
+				sample = false,
+				size = 14,
+				point = "TOPLEFT",
+				relativePoint = "TOPLEFT",
+				x = 0,
+				y = 0,
 			},
 			unitStatus = {
 				enabled = true,
@@ -2199,6 +2276,12 @@ function GF:BuildButton(self)
 		st.powerTextLayer = CreateFrame("Frame", nil, st.power)
 		st.powerTextLayer:SetAllPoints(st.power)
 	end
+	if not st.statusIconLayer then
+		st.statusIconLayer = CreateFrame("Frame", nil, st.barGroup)
+		st.statusIconLayer:SetAllPoints(st.barGroup)
+		st.statusIconLayer:EnableMouse(false)
+	end
+	if st.statusIconLayer.GetParent and st.statusIconLayer:GetParent() ~= st.barGroup then st.statusIconLayer:SetParent(st.barGroup) end
 	if st.dispelTint then
 		if st.dispelTint.GetParent and st.dispelTint:GetParent() ~= st.healthTextLayer then st.dispelTint:SetParent(st.healthTextLayer) end
 		if st.dispelTint.SetFrameLevel and st.healthTextLayer then
@@ -2227,7 +2310,7 @@ function GF:BuildButton(self)
 	local privateAuraParent = st.health or st.barGroup or self
 	if st.privateAuras.GetParent and privateAuraParent and st.privateAuras:GetParent() ~= privateAuraParent then st.privateAuras:SetParent(privateAuraParent) end
 
-	local indicatorLayer = st.healthTextLayer
+	local indicatorLayer = st.statusIconLayer or st.healthTextLayer
 	if not st.leaderIcon then st.leaderIcon = indicatorLayer:CreateTexture(nil, "OVERLAY", nil, 7) end
 	if not st.assistIcon then st.assistIcon = indicatorLayer:CreateTexture(nil, "OVERLAY", nil, 7) end
 	if not st.raidIcon then
@@ -2236,12 +2319,43 @@ function GF:BuildButton(self)
 		st.raidIcon:SetSize(18, 18)
 		st.raidIcon:Hide()
 	end
+	if not st.readyCheckIcon then
+		st.readyCheckIcon = indicatorLayer:CreateTexture(nil, "OVERLAY", nil, 7)
+		st.readyCheckIcon:SetTexture(GFH.STATUS_ICON_CONST.waiting)
+		st.readyCheckIcon:SetSize(16, 16)
+		st.readyCheckIcon:Hide()
+	end
+	if not st.summonIcon then
+		st.summonIcon = indicatorLayer:CreateTexture(nil, "OVERLAY", nil, 7)
+		st.summonIcon:SetSize(16, 16)
+		st.summonIcon:Hide()
+	end
+	if not st.resurrectIcon then
+		st.resurrectIcon = indicatorLayer:CreateTexture(nil, "OVERLAY", nil, 7)
+		st.resurrectIcon:SetTexture(GFH.STATUS_ICON_CONST.resurrect)
+		st.resurrectIcon:SetSize(16, 16)
+		st.resurrectIcon:Hide()
+	end
+	if not st.phaseIcon then
+		st.phaseIcon = indicatorLayer:CreateTexture(nil, "OVERLAY", nil, 7)
+		st.phaseIcon:SetTexture(GFH.STATUS_ICON_CONST.phase)
+		st.phaseIcon:SetSize(14, 14)
+		st.phaseIcon:Hide()
+	end
 	if st.leaderIcon.GetParent and st.leaderIcon:GetParent() ~= indicatorLayer then st.leaderIcon:SetParent(indicatorLayer) end
 	if st.assistIcon.GetParent and st.assistIcon:GetParent() ~= indicatorLayer then st.assistIcon:SetParent(indicatorLayer) end
 	if st.raidIcon.GetParent and st.raidIcon:GetParent() ~= indicatorLayer then st.raidIcon:SetParent(indicatorLayer) end
+	if st.readyCheckIcon.GetParent and st.readyCheckIcon:GetParent() ~= indicatorLayer then st.readyCheckIcon:SetParent(indicatorLayer) end
+	if st.summonIcon.GetParent and st.summonIcon:GetParent() ~= indicatorLayer then st.summonIcon:SetParent(indicatorLayer) end
+	if st.resurrectIcon.GetParent and st.resurrectIcon:GetParent() ~= indicatorLayer then st.resurrectIcon:SetParent(indicatorLayer) end
+	if st.phaseIcon.GetParent and st.phaseIcon:GetParent() ~= indicatorLayer then st.phaseIcon:SetParent(indicatorLayer) end
 	if st.leaderIcon.SetDrawLayer then st.leaderIcon:SetDrawLayer("OVERLAY", 7) end
 	if st.assistIcon.SetDrawLayer then st.assistIcon:SetDrawLayer("OVERLAY", 7) end
 	if st.raidIcon.SetDrawLayer then st.raidIcon:SetDrawLayer("OVERLAY", 7) end
+	if st.readyCheckIcon.SetDrawLayer then st.readyCheckIcon:SetDrawLayer("OVERLAY", 7) end
+	if st.summonIcon.SetDrawLayer then st.summonIcon:SetDrawLayer("OVERLAY", 7) end
+	if st.resurrectIcon.SetDrawLayer then st.resurrectIcon:SetDrawLayer("OVERLAY", 7) end
+	if st.phaseIcon.SetDrawLayer then st.phaseIcon:SetDrawLayer("OVERLAY", 7) end
 
 	if UFHelper and UFHelper.applyFont then
 		UFHelper.applyFont(st.healthTextLeft, hc.font, hc.fontSize or 12, hc.fontOutline)
@@ -2418,7 +2532,7 @@ function GF:LayoutButton(self)
 	local roleEnabled = rc.enabled ~= false
 	if roleEnabled and type(rc.showRoles) == "table" and not GFH.SelectionHasAny(rc.showRoles) then roleEnabled = false end
 	if roleEnabled then
-		local indicatorLayer = st.healthTextLayer or st.health
+		local indicatorLayer = st.statusIconLayer or st.healthTextLayer or st.health
 		if not st.roleIcon then st.roleIcon = indicatorLayer:CreateTexture(nil, "OVERLAY", nil, 7) end
 		if st.roleIcon.GetParent and st.roleIcon:GetParent() ~= indicatorLayer then st.roleIcon:SetParent(indicatorLayer) end
 		if st.roleIcon.SetDrawLayer then st.roleIcon:SetDrawLayer("OVERLAY", 7) end
@@ -2541,7 +2655,7 @@ function GF:LayoutButton(self)
 
 	if st.raidIcon then
 		local ric = sc.raidIcon or {}
-		local indicatorLayer = st.healthTextLayer or st.health
+		local indicatorLayer = st.statusIconLayer or st.healthTextLayer or st.health
 		if st.raidIcon.GetParent and st.raidIcon:GetParent() ~= indicatorLayer then st.raidIcon:SetParent(indicatorLayer) end
 		if st.raidIcon.SetDrawLayer then st.raidIcon:SetDrawLayer("OVERLAY", 7) end
 		if ric.enabled ~= false then
@@ -2566,7 +2680,7 @@ function GF:LayoutButton(self)
 
 	if st.leaderIcon then
 		local lc = sc.leaderIcon or {}
-		local indicatorLayer = st.healthTextLayer or st.health
+		local indicatorLayer = st.statusIconLayer or st.healthTextLayer or st.health
 		if st.leaderIcon.GetParent and st.leaderIcon:GetParent() ~= indicatorLayer then st.leaderIcon:SetParent(indicatorLayer) end
 		if st.leaderIcon.SetDrawLayer then st.leaderIcon:SetDrawLayer("OVERLAY", 7) end
 		if lc.enabled ~= false then
@@ -2581,7 +2695,7 @@ function GF:LayoutButton(self)
 
 	if st.assistIcon then
 		local acfg = sc.assistIcon or {}
-		local indicatorLayer = st.healthTextLayer or st.health
+		local indicatorLayer = st.statusIconLayer or st.healthTextLayer or st.health
 		if st.assistIcon.GetParent and st.assistIcon:GetParent() ~= indicatorLayer then st.assistIcon:SetParent(indicatorLayer) end
 		if st.assistIcon.SetDrawLayer then st.assistIcon:SetDrawLayer("OVERLAY", 7) end
 		if acfg.enabled ~= false then
@@ -2591,6 +2705,66 @@ function GF:LayoutButton(self)
 			st.assistIcon:SetSize(size, size)
 		else
 			st.assistIcon:Hide()
+		end
+	end
+
+	if st.readyCheckIcon then
+		local rcfg = GF:GetStatusIconCfg(self, "readyCheckIcon")
+		local indicatorLayer = st.statusIconLayer or st.healthTextLayer or st.health
+		if st.readyCheckIcon.GetParent and st.readyCheckIcon:GetParent() ~= indicatorLayer then st.readyCheckIcon:SetParent(indicatorLayer) end
+		if st.readyCheckIcon.SetDrawLayer then st.readyCheckIcon:SetDrawLayer("OVERLAY", 7) end
+		if rcfg.enabled ~= false then
+			local size = rcfg.size or 16
+			st.readyCheckIcon:ClearAllPoints()
+			st.readyCheckIcon:SetPoint(rcfg.point or "CENTER", st.barGroup, rcfg.relativePoint or rcfg.point or "CENTER", roundToPixel(rcfg.x or 0, scale), roundToPixel(rcfg.y or 0, scale))
+			st.readyCheckIcon:SetSize(size, size)
+		else
+			st.readyCheckIcon:Hide()
+		end
+	end
+
+	if st.summonIcon then
+		local scfg = GF:GetStatusIconCfg(self, "summonIcon")
+		local indicatorLayer = st.statusIconLayer or st.healthTextLayer or st.health
+		if st.summonIcon.GetParent and st.summonIcon:GetParent() ~= indicatorLayer then st.summonIcon:SetParent(indicatorLayer) end
+		if st.summonIcon.SetDrawLayer then st.summonIcon:SetDrawLayer("OVERLAY", 7) end
+		if scfg.enabled ~= false then
+			local size = scfg.size or 16
+			st.summonIcon:ClearAllPoints()
+			st.summonIcon:SetPoint(scfg.point or "CENTER", st.barGroup, scfg.relativePoint or scfg.point or "CENTER", roundToPixel(scfg.x or 0, scale), roundToPixel(scfg.y or 0, scale))
+			st.summonIcon:SetSize(size, size)
+		else
+			st.summonIcon:Hide()
+		end
+	end
+
+	if st.resurrectIcon then
+		local rcfg = GF:GetStatusIconCfg(self, "resurrectIcon")
+		local indicatorLayer = st.statusIconLayer or st.healthTextLayer or st.health
+		if st.resurrectIcon.GetParent and st.resurrectIcon:GetParent() ~= indicatorLayer then st.resurrectIcon:SetParent(indicatorLayer) end
+		if st.resurrectIcon.SetDrawLayer then st.resurrectIcon:SetDrawLayer("OVERLAY", 7) end
+		if rcfg.enabled ~= false then
+			local size = rcfg.size or 16
+			st.resurrectIcon:ClearAllPoints()
+			st.resurrectIcon:SetPoint(rcfg.point or "CENTER", st.barGroup, rcfg.relativePoint or rcfg.point or "CENTER", roundToPixel(rcfg.x or 0, scale), roundToPixel(rcfg.y or 0, scale))
+			st.resurrectIcon:SetSize(size, size)
+		else
+			st.resurrectIcon:Hide()
+		end
+	end
+
+	if st.phaseIcon then
+		local pcfg = GF:GetStatusIconCfg(self, "phaseIcon")
+		local indicatorLayer = st.statusIconLayer or st.healthTextLayer or st.health
+		if st.phaseIcon.GetParent and st.phaseIcon:GetParent() ~= indicatorLayer then st.phaseIcon:SetParent(indicatorLayer) end
+		if st.phaseIcon.SetDrawLayer then st.phaseIcon:SetDrawLayer("OVERLAY", 7) end
+		if pcfg.enabled ~= false then
+			local size = pcfg.size or 14
+			st.phaseIcon:ClearAllPoints()
+			st.phaseIcon:SetPoint(pcfg.point or "TOPLEFT", st.barGroup, pcfg.relativePoint or pcfg.point or "TOPLEFT", roundToPixel(pcfg.x or 0, scale), roundToPixel(pcfg.y or 0, scale))
+			st.phaseIcon:SetSize(size, size)
+		else
+			st.phaseIcon:Hide()
 		end
 	end
 
@@ -2787,6 +2961,12 @@ local function resolveRoleAtlas(roleKey, style)
 	return nil
 end
 
+function GF:GetStatusIconCfg(self, key)
+	local kind = (self and self._eqolGroupKind) or "party"
+	local cfg = (self and self._eqolCfg) or getCfg(kind)
+	return GFH.GetStatusIconCfg(kind, cfg, DEFAULTS, key)
+end
+
 function GF:UpdateRoleIcon(self)
 	local unit = getUnit(self)
 	local st = getState(self)
@@ -2797,7 +2977,7 @@ function GF:UpdateRoleIcon(self)
 		if st.roleIcon then st.roleIcon:Hide() end
 		return
 	end
-	local indicatorLayer = st.healthTextLayer or st.health or st.barGroup or st.frame
+	local indicatorLayer = st.statusIconLayer or st.healthTextLayer or st.health or st.barGroup or st.frame
 	if not st.roleIcon then st.roleIcon = indicatorLayer:CreateTexture(nil, "OVERLAY", nil, 7) end
 	if st.roleIcon.GetParent and st.roleIcon:GetParent() ~= indicatorLayer then st.roleIcon:SetParent(indicatorLayer) end
 	if st.roleIcon.SetDrawLayer then st.roleIcon:SetDrawLayer("OVERLAY", 7) end
@@ -2905,6 +3085,168 @@ function GF:UpdateGroupIcons(self)
 			st.assistIcon:Hide()
 		end
 	end
+end
+
+function GF:UpdateReadyCheckIcon(self, event)
+	local unit = getUnit(self)
+	local st = getState(self)
+	if not (unit and st and st.readyCheckIcon) then return end
+
+	local rcfg = GF:GetStatusIconCfg(self, "readyCheckIcon")
+	if rcfg.enabled == false then
+		GFH.CancelReadyCheckIconTimer(st)
+		st._lastReadyCheckStatus = nil
+		st.readyCheckIcon:Hide()
+		return
+	end
+
+	if isEditModeActive() and st._preview then
+		GFH.CancelReadyCheckIconTimer(st)
+		st.readyCheckIcon:SetTexture(GFH.STATUS_ICON_CONST.waiting)
+		st.readyCheckIcon:Show()
+		return
+	end
+
+	local sampleActive = rcfg.sample == true and isEditModeActive()
+	local status = GetReadyCheckStatus and GetReadyCheckStatus(unit) or nil
+	if status == "ready" then
+		GFH.CancelReadyCheckIconTimer(st)
+		st.readyCheckIcon:SetTexture(GFH.STATUS_ICON_CONST.ready)
+		st.readyCheckIcon:Show()
+	elseif status == "notready" then
+		GFH.CancelReadyCheckIconTimer(st)
+		st.readyCheckIcon:SetTexture(GFH.STATUS_ICON_CONST.notReady)
+		st.readyCheckIcon:Show()
+	elseif status == "waiting" then
+		GFH.CancelReadyCheckIconTimer(st)
+		st.readyCheckIcon:SetTexture(GFH.STATUS_ICON_CONST.waiting)
+		st.readyCheckIcon:Show()
+	elseif sampleActive then
+		GFH.CancelReadyCheckIconTimer(st)
+		st.readyCheckIcon:SetTexture(GFH.STATUS_ICON_CONST.waiting)
+		st.readyCheckIcon:Show()
+	elseif event ~= "READY_CHECK_FINISHED" then
+		GFH.CancelReadyCheckIconTimer(st)
+		st.readyCheckIcon:Hide()
+	end
+
+	if event == "READY_CHECK_FINISHED" and st.readyCheckIcon:IsShown() and not sampleActive then GFH.ScheduleReadyCheckIconHide(st, st.readyCheckIcon, 6) end
+	st._lastReadyCheckStatus = status
+end
+
+function GF:UpdateSummonIcon(self)
+	local st = getState(self)
+	if not (st and st.summonIcon) then return end
+
+	local function setSummonVisual(texturePath)
+		if st._lastSummonAtlas ~= texturePath then
+			st._lastSummonAtlas = texturePath
+			st.summonIcon:SetTexture(texturePath)
+			if st.summonIcon.SetTexCoord then st.summonIcon:SetTexCoord(0, 1, 0, 1) end
+		end
+	end
+
+	local scfg = GF:GetStatusIconCfg(self, "summonIcon")
+	if scfg.enabled == false then
+		st._summonActiveReal = false
+		st.summonIcon:Hide()
+		return
+	end
+
+	local sampleActive = scfg.sample == true and isEditModeActive()
+	if sampleActive then
+		st._summonActiveReal = false
+		setSummonVisual(GFH.STATUS_ICON_CONST.summonPending)
+		st.summonIcon:Show()
+		return
+	end
+
+	local unit = getUnit(self)
+	if not unit then
+		st._lastSummonAtlas = nil
+		st._summonActiveReal = false
+		st.summonIcon:Hide()
+		return
+	end
+	local summonStatus = (C_IncomingSummon and C_IncomingSummon.IncomingSummonStatus) and C_IncomingSummon.IncomingSummonStatus(unit) or GFH.STATUS_ICON_CONST.summonStatusNone
+	local texture
+	if summonStatus == GFH.STATUS_ICON_CONST.summonStatusPending then
+		texture = GFH.STATUS_ICON_CONST.summonPending
+	elseif summonStatus == GFH.STATUS_ICON_CONST.summonStatusAccepted then
+		texture = GFH.STATUS_ICON_CONST.summonAccepted
+	elseif summonStatus == GFH.STATUS_ICON_CONST.summonStatusDeclined then
+		texture = GFH.STATUS_ICON_CONST.summonDeclined
+	end
+
+	if texture then
+		st._summonActiveReal = true
+		setSummonVisual(texture)
+		st.summonIcon:Show()
+	else
+		st._lastSummonAtlas = nil
+		st._summonActiveReal = false
+		st.summonIcon:Hide()
+	end
+end
+
+function GF:UpdateResurrectIcon(self)
+	local unit = getUnit(self)
+	local st = getState(self)
+	if not (unit and st and st.resurrectIcon) then return end
+
+	local rcfg = GF:GetStatusIconCfg(self, "resurrectIcon")
+	if rcfg.enabled == false then
+		st.resurrectIcon:Hide()
+		return
+	end
+
+	if st._summonActiveReal then
+		st.resurrectIcon:Hide()
+		return
+	end
+
+	local showResurrect = UnitHasIncomingResurrection and UnitHasIncomingResurrection(unit)
+	if not showResurrect and isEditModeActive() and st._preview then showResurrect = true end
+	if not showResurrect and rcfg.sample == true and isEditModeActive() then showResurrect = true end
+
+	if showResurrect then
+		st.resurrectIcon:SetTexture(GFH.STATUS_ICON_CONST.resurrect)
+		st.resurrectIcon:Show()
+	else
+		st.resurrectIcon:Hide()
+	end
+end
+
+function GF:UpdatePhaseIcon(self)
+	local unit = getUnit(self)
+	local st = getState(self)
+	if not (unit and st and st.phaseIcon) then return end
+
+	local pcfg = GF:GetStatusIconCfg(self, "phaseIcon")
+	if pcfg.enabled == false then
+		st._phaseReason = nil
+		st.phaseIcon:Hide()
+		return
+	end
+
+	local reason = (UnitIsPlayer and UnitIsPlayer(unit) and UnitIsConnected and UnitIsConnected(unit) and UnitPhaseReason) and UnitPhaseReason(unit) or nil
+	if not reason and isEditModeActive() and st._preview then reason = 1 end
+	if not reason and pcfg.sample == true and isEditModeActive() then reason = 1 end
+	st._phaseReason = reason
+
+	if reason then
+		st.phaseIcon:SetTexture(GFH.STATUS_ICON_CONST.phase)
+		st.phaseIcon:Show()
+	else
+		st.phaseIcon:Hide()
+	end
+end
+
+function GF:UpdateStatusIcons(self, event)
+	GF:UpdateReadyCheckIcon(self, event)
+	GF:UpdateSummonIcon(self)
+	GF:UpdateResurrectIcon(self)
+	GF:UpdatePhaseIcon(self)
 end
 
 function GF:UpdateHighlightState(self)
@@ -5000,6 +5342,7 @@ function GF:UpdateAll(self)
 	GF:UpdateRoleIcon(self)
 	GF:UpdateRaidIcon(self)
 	GF:UpdateGroupIcons(self)
+	GF:UpdateStatusIcons(self)
 	GF:UpdateAuras(self)
 	GF:UpdateRange(self)
 	GF:UpdateHighlightState(self)
@@ -5082,6 +5425,7 @@ function GF:UnitButton_ClearUnit(self)
 	end
 	local st = self._eqolUFState
 	if st then
+		GFH.CancelReadyCheckIconTimer(st)
 		st._guid = nil
 		st._unitToken = nil
 		st._class = nil
@@ -5093,6 +5437,9 @@ function GF:UnitButton_ClearUnit(self)
 		st._auraCache = nil
 		st._auraCacheByKey = nil
 		st._auraQueryMax = nil
+		st._lastSummonAtlas = nil
+		st._summonActiveReal = false
+		st._phaseReason = nil
 		clearDispelAuraState(st)
 	end
 	if st and st.privateAuras and UFHelper then
@@ -5150,6 +5497,9 @@ function GF:UnitButton_RegisterUnitEvents(self, unit)
 
 	if self._eqolUFState and (self._eqolUFState._wantsAuras or self._eqolUFState._wantsDispelTint) then reg("UNIT_AURA") end
 	if self._eqolUFState and self._eqolUFState._wantsRangeFade then reg("UNIT_IN_RANGE_UPDATE") end
+	reg("INCOMING_SUMMON_CHANGED")
+	reg("INCOMING_RESURRECT_CHANGED")
+	reg("UNIT_PHASE")
 end
 
 function GF.UnitButton_OnAttributeChanged(self, name, value)
@@ -5224,6 +5574,12 @@ local UNIT_DISPATCH = {
 	UNIT_FLAGS = dispatchUnitFlags,
 	UNIT_IN_RANGE_UPDATE = dispatchUnitRange,
 	UNIT_AURA = dispatchUnitAura,
+	INCOMING_SUMMON_CHANGED = function(btn)
+		GF:UpdateSummonIcon(btn)
+		GF:UpdateResurrectIcon(btn)
+	end,
+	INCOMING_RESURRECT_CHANGED = function(btn) GF:UpdateResurrectIcon(btn) end,
+	UNIT_PHASE = function(btn) GF:UpdatePhaseIcon(btn) end,
 }
 
 function GF.UnitButton_OnEvent(self, event, unit, ...)
@@ -6115,6 +6471,38 @@ function GF:RefreshRaidIcons()
 		for _, frames in pairs(GF._previewFrames) do
 			for _, btn in ipairs(frames) do
 				if btn then GF:UpdateRaidIcon(btn) end
+			end
+		end
+	end
+end
+
+function GF:RefreshStatusIcons(event)
+	if not isFeatureEnabled() then return end
+	for _, header in pairs(GF.headers or {}) do
+		forEachChild(header, function(child)
+			if child then GF:UpdateStatusIcons(child, event) end
+		end)
+	end
+	if GF._previewFrames then
+		for _, frames in pairs(GF._previewFrames) do
+			for _, btn in ipairs(frames) do
+				if btn then GF:UpdateStatusIcons(btn, event) end
+			end
+		end
+	end
+end
+
+function GF:RefreshReadyCheckIcons(event)
+	if not isFeatureEnabled() then return end
+	for _, header in pairs(GF.headers or {}) do
+		forEachChild(header, function(child)
+			if child then GF:UpdateReadyCheckIcon(child, event) end
+		end)
+	end
+	if GF._previewFrames then
+		for _, frames in pairs(GF._previewFrames) do
+			for _, btn in ipairs(frames) do
+				if btn then GF:UpdateReadyCheckIcon(btn, event) end
 			end
 		end
 	end
@@ -7027,6 +7415,169 @@ local function anchorUsesUIParent(kind)
 	local cfg = getCfg(kind)
 	local rel = cfg and cfg.relativeTo
 	return rel == nil or rel == "" or rel == "UIParent"
+end
+
+function GF.ReadStatusIconField(kind, key, field, fallback)
+	local cfg = getCfg(kind)
+	local iconCfg = cfg and cfg.status and cfg.status[key]
+	if iconCfg and iconCfg[field] ~= nil then return iconCfg[field] end
+	local defCfg = DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status[key]
+	if defCfg and defCfg[field] ~= nil then return defCfg[field] end
+	return fallback
+end
+
+function GF.SetStatusIconField(kind, key, field, value)
+	local cfg = getCfg(kind)
+	if not cfg then return nil end
+	cfg.status = cfg.status or {}
+	cfg.status[key] = cfg.status[key] or {}
+	cfg.status[key][field] = value
+	return cfg.status[key][field]
+end
+
+function GF:AppendStatusIconSettings(settings, kind, editModeId, insertIndex)
+	local iconMeta = GFH.STATUS_ICON_EDITMODE_META
+	if not (settings and SettingType and iconMeta and iconMeta[1]) then return end
+	local function push(entry)
+		if insertIndex and insertIndex > 0 then
+			table.insert(settings, insertIndex, entry)
+			insertIndex = insertIndex + 1
+		else
+			settings[#settings + 1] = entry
+		end
+	end
+
+	push({
+		name = "Status icons",
+		kind = SettingType.Collapsible,
+		id = "statusicons",
+		defaultCollapsed = true,
+	})
+
+	for _, meta in ipairs(iconMeta) do
+		local key = meta.key
+		local label = meta.name or key
+		local defaultPoint = meta.defaultPoint or "CENTER"
+		local defaultSize = tonumber(meta.defaultSize) or 16
+		local enabledField = key .. "Enabled"
+		local sampleField = key .. "Sample"
+		local sizeField = key .. "Size"
+		local pointField = key .. "Point"
+		local offsetXField = key .. "OffsetX"
+		local offsetYField = key .. "OffsetY"
+
+		push({
+			name = "Show " .. label,
+			kind = SettingType.Checkbox,
+			field = enabledField,
+			parentId = "statusicons",
+			get = function() return GF.ReadStatusIconField(kind, key, "enabled", true) ~= false end,
+			set = function(_, value)
+				local stored = GF.SetStatusIconField(kind, key, "enabled", value and true or false)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, enabledField, stored, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+				if GF._previewActive and GF._previewActive[kind] then GF:UpdatePreviewLayout(kind) end
+				GF:RefreshStatusIcons()
+			end,
+		})
+		push({
+			name = label .. " sample",
+			kind = SettingType.Checkbox,
+			field = sampleField,
+			parentId = "statusicons",
+			get = function() return GF.ReadStatusIconField(kind, key, "sample", false) == true end,
+			set = function(_, value)
+				local stored = GF.SetStatusIconField(kind, key, "sample", value and true or false)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, sampleField, stored, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+				if GF._previewActive and GF._previewActive[kind] then GF:UpdatePreviewLayout(kind) end
+				GF:RefreshStatusIcons()
+			end,
+			isEnabled = function() return GF.ReadStatusIconField(kind, key, "enabled", true) ~= false end,
+		})
+		push({
+			name = label .. " size",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = sizeField,
+			parentId = "statusicons",
+			minValue = 8,
+			maxValue = 40,
+			valueStep = 1,
+			get = function() return GF.ReadStatusIconField(kind, key, "size", defaultSize) end,
+			set = function(_, value)
+				local current = GF.ReadStatusIconField(kind, key, "size", defaultSize)
+				local stored = GF.SetStatusIconField(kind, key, "size", clampNumber(value, 8, 40, current))
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, sizeField, stored, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+				if GF._previewActive and GF._previewActive[kind] then GF:UpdatePreviewLayout(kind) end
+				GF:RefreshStatusIcons()
+			end,
+			isEnabled = function() return GF.ReadStatusIconField(kind, key, "enabled", true) ~= false end,
+		})
+		push({
+			name = label .. " anchor",
+			kind = SettingType.Dropdown,
+			field = pointField,
+			parentId = "statusicons",
+			values = anchorOptions9,
+			height = 180,
+			get = function() return GF.ReadStatusIconField(kind, key, "point", defaultPoint) end,
+			set = function(_, value)
+				local stored = GF.SetStatusIconField(kind, key, "point", value)
+				GF.SetStatusIconField(kind, key, "relativePoint", value)
+				local storedX = GF.SetStatusIconField(kind, key, "x", 0)
+				local storedY = GF.SetStatusIconField(kind, key, "y", 0)
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, pointField, stored, nil, true) end
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, offsetXField, storedX, nil, true) end
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, offsetYField, storedY, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+				if GF._previewActive and GF._previewActive[kind] then GF:UpdatePreviewLayout(kind) end
+				GF:RefreshStatusIcons()
+			end,
+			isEnabled = function() return GF.ReadStatusIconField(kind, key, "enabled", true) ~= false end,
+		})
+		push({
+			name = label .. " offset X",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = offsetXField,
+			parentId = "statusicons",
+			minValue = -200,
+			maxValue = 200,
+			valueStep = 1,
+			get = function() return GF.ReadStatusIconField(kind, key, "x", 0) end,
+			set = function(_, value)
+				local current = GF.ReadStatusIconField(kind, key, "x", 0)
+				local stored = GF.SetStatusIconField(kind, key, "x", clampNumber(value, -200, 200, current))
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, offsetXField, stored, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+				if GF._previewActive and GF._previewActive[kind] then GF:UpdatePreviewLayout(kind) end
+				GF:RefreshStatusIcons()
+			end,
+			isEnabled = function() return GF.ReadStatusIconField(kind, key, "enabled", true) ~= false end,
+		})
+		push({
+			name = label .. " offset Y",
+			kind = SettingType.Slider,
+			allowInput = true,
+			field = offsetYField,
+			parentId = "statusicons",
+			minValue = -200,
+			maxValue = 200,
+			valueStep = 1,
+			get = function() return GF.ReadStatusIconField(kind, key, "y", 0) end,
+			set = function(_, value)
+				local current = GF.ReadStatusIconField(kind, key, "y", 0)
+				local stored = GF.SetStatusIconField(kind, key, "y", clampNumber(value, -200, 200, current))
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, offsetYField, stored, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+				if GF._previewActive and GF._previewActive[kind] then GF:UpdatePreviewLayout(kind) end
+				GF:RefreshStatusIcons()
+			end,
+			isEnabled = function() return GF.ReadStatusIconField(kind, key, "enabled", true) ~= false end,
+		})
+	end
 end
 
 local function buildEditModeSettings(kind, editModeId)
@@ -15485,6 +16036,17 @@ local function buildEditModeSettings(kind, editModeId)
 		}
 	end
 
+	if kind == "party" or raidLikeKind then
+		local raidMarkerIndex
+		for i, setting in ipairs(settings) do
+			if setting and setting.id == "raidmarker" then
+				raidMarkerIndex = i
+				break
+			end
+		end
+		GF:AppendStatusIconSettings(settings, kind, editModeId, raidMarkerIndex)
+	end
+
 	return settings
 end
 
@@ -15981,6 +16543,34 @@ local function applyEditModeData(kind, data)
 		end
 		if data.assistIconOffsetX ~= nil then cfg.status.assistIcon.x = data.assistIconOffsetX end
 		if data.assistIconOffsetY ~= nil then cfg.status.assistIcon.y = data.assistIconOffsetY end
+	end
+	for _, meta in ipairs(GFH.STATUS_ICON_EDITMODE_META or EMPTY) do
+		local iconKey = meta and meta.key
+		if iconKey then
+			local enabled = data[iconKey .. "Enabled"]
+			local sample = data[iconKey .. "Sample"]
+			local size = data[iconKey .. "Size"]
+			local point = data[iconKey .. "Point"]
+			local relativePoint = data[iconKey .. "RelativePoint"]
+			local offsetX = data[iconKey .. "OffsetX"]
+			local offsetY = data[iconKey .. "OffsetY"]
+			if enabled ~= nil or sample ~= nil or size ~= nil or point ~= nil or relativePoint ~= nil or offsetX ~= nil or offsetY ~= nil then
+				cfg.status[iconKey] = cfg.status[iconKey] or {}
+				local iconCfg = cfg.status[iconKey]
+				local defIconCfg = DEFAULTS[kind] and DEFAULTS[kind].status and DEFAULTS[kind].status[iconKey] or EMPTY
+				local defaultSize = defIconCfg.size or 16
+				if enabled ~= nil then iconCfg.enabled = enabled and true or false end
+				if sample ~= nil then iconCfg.sample = sample and true or false end
+				if size ~= nil then iconCfg.size = clampNumber(size, 8, 40, iconCfg.size or defaultSize) end
+				if point ~= nil then
+					iconCfg.point = point
+					if relativePoint == nil then iconCfg.relativePoint = point end
+				end
+				if relativePoint ~= nil then iconCfg.relativePoint = relativePoint end
+				if offsetX ~= nil then iconCfg.x = clampNumber(offsetX, -200, 200, iconCfg.x or 0) end
+				if offsetY ~= nil then iconCfg.y = clampNumber(offsetY, -200, 200, iconCfg.y or 0) end
+			end
+		end
 	end
 	if data.roleIconEnabled ~= nil then
 		cfg.roleIcon = cfg.roleIcon or {}
@@ -16592,6 +17182,50 @@ function GF:EnsureEditMode()
 				assistIconPoint = acfg.point or "TOPLEFT",
 				assistIconOffsetX = acfg.x or 0,
 				assistIconOffsetY = acfg.y or 0,
+				readyCheckIconEnabled = (sc.readyCheckIcon and sc.readyCheckIcon.enabled) ~= false,
+				readyCheckIconSample = (sc.readyCheckIcon and sc.readyCheckIcon.sample) == true,
+				readyCheckIconSize = (sc.readyCheckIcon and sc.readyCheckIcon.size) or (def.status and def.status.readyCheckIcon and def.status.readyCheckIcon.size) or 16,
+				readyCheckIconPoint = (sc.readyCheckIcon and sc.readyCheckIcon.point) or (def.status and def.status.readyCheckIcon and def.status.readyCheckIcon.point) or "CENTER",
+				readyCheckIconRelativePoint = (sc.readyCheckIcon and sc.readyCheckIcon.relativePoint)
+					or (sc.readyCheckIcon and sc.readyCheckIcon.point)
+					or (def.status and def.status.readyCheckIcon and def.status.readyCheckIcon.relativePoint)
+					or (def.status and def.status.readyCheckIcon and def.status.readyCheckIcon.point)
+					or "CENTER",
+				readyCheckIconOffsetX = (sc.readyCheckIcon and sc.readyCheckIcon.x) or (def.status and def.status.readyCheckIcon and def.status.readyCheckIcon.x) or 0,
+				readyCheckIconOffsetY = (sc.readyCheckIcon and sc.readyCheckIcon.y) or (def.status and def.status.readyCheckIcon and def.status.readyCheckIcon.y) or 0,
+				summonIconEnabled = (sc.summonIcon and sc.summonIcon.enabled) ~= false,
+				summonIconSample = (sc.summonIcon and sc.summonIcon.sample) == true,
+				summonIconSize = (sc.summonIcon and sc.summonIcon.size) or (def.status and def.status.summonIcon and def.status.summonIcon.size) or 16,
+				summonIconPoint = (sc.summonIcon and sc.summonIcon.point) or (def.status and def.status.summonIcon and def.status.summonIcon.point) or "CENTER",
+				summonIconRelativePoint = (sc.summonIcon and sc.summonIcon.relativePoint)
+					or (sc.summonIcon and sc.summonIcon.point)
+					or (def.status and def.status.summonIcon and def.status.summonIcon.relativePoint)
+					or (def.status and def.status.summonIcon and def.status.summonIcon.point)
+					or "CENTER",
+				summonIconOffsetX = (sc.summonIcon and sc.summonIcon.x) or (def.status and def.status.summonIcon and def.status.summonIcon.x) or 0,
+				summonIconOffsetY = (sc.summonIcon and sc.summonIcon.y) or (def.status and def.status.summonIcon and def.status.summonIcon.y) or 0,
+				resurrectIconEnabled = (sc.resurrectIcon and sc.resurrectIcon.enabled) ~= false,
+				resurrectIconSample = (sc.resurrectIcon and sc.resurrectIcon.sample) == true,
+				resurrectIconSize = (sc.resurrectIcon and sc.resurrectIcon.size) or (def.status and def.status.resurrectIcon and def.status.resurrectIcon.size) or 16,
+				resurrectIconPoint = (sc.resurrectIcon and sc.resurrectIcon.point) or (def.status and def.status.resurrectIcon and def.status.resurrectIcon.point) or "CENTER",
+				resurrectIconRelativePoint = (sc.resurrectIcon and sc.resurrectIcon.relativePoint)
+					or (sc.resurrectIcon and sc.resurrectIcon.point)
+					or (def.status and def.status.resurrectIcon and def.status.resurrectIcon.relativePoint)
+					or (def.status and def.status.resurrectIcon and def.status.resurrectIcon.point)
+					or "CENTER",
+				resurrectIconOffsetX = (sc.resurrectIcon and sc.resurrectIcon.x) or (def.status and def.status.resurrectIcon and def.status.resurrectIcon.x) or 0,
+				resurrectIconOffsetY = (sc.resurrectIcon and sc.resurrectIcon.y) or (def.status and def.status.resurrectIcon and def.status.resurrectIcon.y) or 0,
+				phaseIconEnabled = (sc.phaseIcon and sc.phaseIcon.enabled) == true,
+				phaseIconSample = (sc.phaseIcon and sc.phaseIcon.sample) == true,
+				phaseIconSize = (sc.phaseIcon and sc.phaseIcon.size) or (def.status and def.status.phaseIcon and def.status.phaseIcon.size) or 14,
+				phaseIconPoint = (sc.phaseIcon and sc.phaseIcon.point) or (def.status and def.status.phaseIcon and def.status.phaseIcon.point) or "TOPLEFT",
+				phaseIconRelativePoint = (sc.phaseIcon and sc.phaseIcon.relativePoint)
+					or (sc.phaseIcon and sc.phaseIcon.point)
+					or (def.status and def.status.phaseIcon and def.status.phaseIcon.relativePoint)
+					or (def.status and def.status.phaseIcon and def.status.phaseIcon.point)
+					or "TOPLEFT",
+				phaseIconOffsetX = (sc.phaseIcon and sc.phaseIcon.x) or (def.status and def.status.phaseIcon and def.status.phaseIcon.x) or 0,
+				phaseIconOffsetY = (sc.phaseIcon and sc.phaseIcon.y) or (def.status and def.status.phaseIcon and def.status.phaseIcon.y) or 0,
 				roleIconEnabled = rc.enabled ~= false,
 				roleIconSize = rc.size or 14,
 				roleIconPoint = rc.point or "LEFT",
@@ -16850,6 +17484,9 @@ registerFeatureEvents = function(frame)
 		frame:RegisterEvent("INSPECT_READY")
 		frame:RegisterEvent("RAID_TARGET_UPDATE")
 		frame:RegisterEvent("PLAYER_TARGET_CHANGED")
+		frame:RegisterEvent("READY_CHECK")
+		frame:RegisterEvent("READY_CHECK_CONFIRM")
+		frame:RegisterEvent("READY_CHECK_FINISHED")
 	end
 end
 
@@ -16867,6 +17504,9 @@ unregisterFeatureEvents = function(frame)
 		frame:UnregisterEvent("INSPECT_READY")
 		frame:UnregisterEvent("RAID_TARGET_UPDATE")
 		frame:UnregisterEvent("PLAYER_TARGET_CHANGED")
+		frame:UnregisterEvent("READY_CHECK")
+		frame:UnregisterEvent("READY_CHECK_CONFIRM")
+		frame:UnregisterEvent("READY_CHECK_FINISHED")
 	end
 end
 
@@ -16883,6 +17523,7 @@ function GF:RunPostEnterWorldRefreshPass()
 	self.Refresh()
 	self:RefreshRoleIcons()
 	self:RefreshGroupIcons()
+	self:RefreshStatusIcons()
 	self:RefreshStatusText()
 	self:RefreshGroupIndicators()
 	self:RefreshCustomSortNameList("raid")
@@ -16947,6 +17588,8 @@ do
 			return
 		elseif event == "RAID_TARGET_UPDATE" then
 			GF:RefreshRaidIcons()
+		elseif event == "READY_CHECK" or event == "READY_CHECK_CONFIRM" or event == "READY_CHECK_FINISHED" then
+			GF:RefreshReadyCheckIcons(event)
 		elseif event == "PLAYER_TARGET_CHANGED" then
 			GF:RefreshTargetHighlights()
 		elseif event == "PLAYER_FLAGS_CHANGED" then
@@ -16979,6 +17622,7 @@ do
 			local partyCfg = getCfg("party")
 			if partyCfg and resolveSortMethod(partyCfg) == "NAMELIST" then GF:RefreshCustomSortNameList("party") end
 			if needsFullRefresh or updatedCount > 0 then
+				GF:RefreshStatusIcons()
 				GF:RefreshGroupIndicators()
 				queueGroupIndicatorRefresh(0, 4)
 			end

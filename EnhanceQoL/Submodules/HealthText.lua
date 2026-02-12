@@ -110,10 +110,32 @@ local function getPlayerHB()
 	return hb, pf
 end
 
-local function shouldApply(kind)
+local function isUFEnabledConfig(cfg) return type(cfg) == "table" and cfg.enabled == true end
+
+local function isEQoLUFEnabled(kind, idx)
+	local ufFrames = addon and addon.db and addon.db.ufFrames
+	if type(ufFrames) ~= "table" then return false end
+
+	if kind == "boss" then
+		if idx then
+			if isUFEnabledConfig(ufFrames["boss" .. idx]) then return true end
+			return isUFEnabledConfig(ufFrames.boss)
+		end
+		if isUFEnabledConfig(ufFrames.boss) then return true end
+		local n = _G.MAX_BOSS_FRAMES or 5
+		for i = 1, n do
+			if isUFEnabledConfig(ufFrames["boss" .. i]) then return true end
+		end
+		return false
+	end
+
+	return isUFEnabledConfig(ufFrames[kind])
+end
+
+local function shouldApply(kind, idx)
 	local mode = HealthText.modes[kind] or "OFF"
-	-- When a mode is selected (not OFF), we actively apply our text
-	return mode ~= "OFF"
+	-- Apply only when mode is active and Blizzard frame is not replaced by EQoL UF.
+	return mode ~= "OFF" and not isEQoLUFEnabled(kind, idx)
 end
 
 local function unitFor(kind, idx)
@@ -123,7 +145,7 @@ local function unitFor(kind, idx)
 end
 
 function HealthText:Update(kind, idx)
-	if not shouldApply(kind) then return end
+	if not shouldApply(kind, idx) then return end
 	local hb
 	if kind == "player" then
 		hb = getPlayerHB()
@@ -164,7 +186,7 @@ local function ensureBarHook(hb, ctx)
 		hooksecurefunc(hb, "UpdateTextStringWithValues", function(bar, textString, value, min, max)
 			if not addon or not addon.HealthText then return end
 			local kind, idx = ctx.kind, ctx.idx
-			if not shouldApply(kind) then return end
+			if not shouldApply(kind, idx) then return end
 			if not textString then return end
 			local unit = unitFor(kind, idx)
 			if unit ~= "player" and not UnitExists(unit) then return end
@@ -182,7 +204,7 @@ local function ensureBarHook(hb, ctx)
 			if statusBar ~= hb or not textString then return end
 			if not addon or not addon.HealthText then return end
 			local kind, idx = ctx.kind, ctx.idx
-			if not shouldApply(kind) then return end
+			if not shouldApply(kind, idx) then return end
 			local unit = unitFor(kind, idx)
 			if unit ~= "player" and not UnitExists(unit) then return end
 			if UnitIsDead(unit) then
@@ -214,8 +236,10 @@ function HealthText:HookBars()
 	if shouldApply("boss") then
 		local n = _G.MAX_BOSS_FRAMES or 5
 		for i = 1, n do
-			hb = getBossHB(i)
-			if hb then ensureBarHook(hb, { kind = "boss", idx = i }) end
+			if shouldApply("boss", i) then
+				hb = getBossHB(i)
+				if hb then ensureBarHook(hb, { kind = "boss", idx = i }) end
+			end
 		end
 	end
 
@@ -239,7 +263,7 @@ function HealthText:HookBars()
 				elseif name then
 					local i = tonumber(name:match("^Boss(%d)TargetFrame$"))
 					if i then
-						if shouldApply("boss") then ht:Update("boss", i) end
+						if shouldApply("boss", i) then ht:Update("boss", i) end
 						return
 					end
 				end
@@ -251,9 +275,9 @@ function HealthText:HookBars()
 end
 
 local function anyEnabled()
-	for _, v in pairs(HealthText.modes) do
-		if v and v ~= "OFF" then return true end
-	end
+	if shouldApply("player") then return true end
+	if shouldApply("target") then return true end
+	if shouldApply("boss") then return true end
 	return false
 end
 
