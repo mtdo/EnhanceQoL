@@ -2869,10 +2869,10 @@ local function ensureAuraContainer(st, key)
 		st[key] = CreateFrame("Frame", nil, st.barGroup or st.frame)
 		st[key]:EnableMouse(false)
 	end
-	local base = st.healthTextLayer or st.barGroup or st.frame or st[key]:GetParent()
+	local base = st.statusIconLayer or st.healthTextLayer or st.barGroup or st.frame or st[key]:GetParent()
 	if base then
 		if st[key].SetFrameStrata and base.GetFrameStrata then st[key]:SetFrameStrata(base:GetFrameStrata()) end
-		if st[key].SetFrameLevel and base.GetFrameLevel then st[key]:SetFrameLevel((base:GetFrameLevel() or 0) + 5) end
+		if st[key].SetFrameLevel and base.GetFrameLevel then st[key]:SetFrameLevel((base:GetFrameLevel() or 0) + 10) end
 	end
 	return st[key]
 end
@@ -2881,7 +2881,16 @@ local function hideAuraButtons(buttons, startIndex)
 	if not buttons then return end
 	for i = startIndex, #buttons do
 		local btn = buttons[i]
-		if btn then btn:Hide() end
+		if btn then
+			btn._showTooltip = false
+			if btn.SetMouseClickEnabled then btn:SetMouseClickEnabled(false) end
+			if btn.SetMouseMotionEnabled then btn:SetMouseMotionEnabled(false) end
+			if btn.EnableMouse then
+				btn._eqolAuraMouseEnabled = false
+				btn:EnableMouse(false)
+			end
+			btn:Hide()
+		end
 	end
 end
 
@@ -2889,12 +2898,13 @@ local function setAuraTooltipState(btn, style)
 	if not (btn and style) then return end
 	local show = style.showTooltip == true
 	if btn._showTooltip ~= show then btn._showTooltip = show end
+	if btn.SetMouseClickEnabled then btn:SetMouseClickEnabled(show) end
+	if btn.SetMouseMotionEnabled then btn:SetMouseMotionEnabled(show) end
 	if btn.EnableMouse then
-		if btn._eqolAuraMouseEnabled ~= show then
-			btn._eqolAuraMouseEnabled = show
-			btn:EnableMouse(show)
-		end
+		if btn._eqolAuraMouseEnabled ~= show then btn._eqolAuraMouseEnabled = show end
+		btn:EnableMouse(show)
 	end
+	if not show and GameTooltip and GameTooltip.Hide then GameTooltip:Hide() end
 end
 
 local function calcAuraGridSize(shown, perRow, size, spacing, primary)
@@ -4784,7 +4794,7 @@ function GF:UpdatePrivateAuras(self)
 	local def = DEFAULTS[kind] or {}
 	local pcfg = (cfg and cfg.privateAuras) or def.privateAuras
 	local privateAuraParent = st.health or st.barGroup or self
-	local privateAuraLevelParent = st.healthTextLayer or st.health or st.barGroup or self
+	local privateAuraLevelParent = st.statusIconLayer or st.healthTextLayer or st.health or st.barGroup or self
 	if not st.privateAuras then
 		if not (pcfg and pcfg.enabled == true) then return end
 		st.privateAuras = CreateFrame("Frame", nil, privateAuraParent)
