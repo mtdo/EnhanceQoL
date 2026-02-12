@@ -933,6 +933,7 @@ local function buildUnitSettings(unit)
 		else
 			refreshFunc(unit)
 		end
+		if addon.EditModeLib and addon.EditModeLib.IsInEditMode and addon.EditModeLib:IsInEditMode() then refreshEditModeFrame(isBoss and "boss" or unit) end
 	end
 	local refresh = refreshSelf
 	local isPlayer = unit == "player"
