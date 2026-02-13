@@ -4990,22 +4990,9 @@ local function updateClassResourceVisibility()
 	if not classTag then return end
 	if ensureClassResourceHideHook then ensureClassResourceHideHook() end
 
-	local function showFrame(frame)
-		if not frame then return end
-		if frame.Setup then
-			frame:Setup()
-		else
-			frame:Show()
-		end
-	end
-
 	local function apply(frame, hideKey)
 		if not frame then return end
-		if addon.db[hideKey] and not ufActive then
-			frame:Hide()
-		else
-			showFrame(frame)
-		end
+		if addon.db[hideKey] and not ufActive then frame:Hide() end
 	end
 
 	if classTag == "DEATHKNIGHT" then
@@ -5038,13 +5025,9 @@ local classResourceHideConfig = {
 	WARLOCK = { frameName = "WarlockPowerFrame", hideKey = "warlock_HideSoulShardBar" },
 }
 
-local function isPlayerUFActive()
-	return addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.enabled
-end
+local function isPlayerUFActive() return addon.db and addon.db.ufFrames and addon.db.ufFrames.player and addon.db.ufFrames.player.enabled end
 
-local function shouldHideClassResource(hideKey)
-	return addon.db and addon.db[hideKey] and not isPlayerUFActive()
-end
+local function shouldHideClassResource(hideKey) return addon.db and addon.db[hideKey] and not isPlayerUFActive() end
 
 ensureClassResourceHideHook = function()
 	local _, classTag = UnitClass("player")

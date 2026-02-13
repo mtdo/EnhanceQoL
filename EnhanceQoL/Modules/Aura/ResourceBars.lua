@@ -3173,7 +3173,7 @@ function updatePowerBar(type, runeSlot)
 	local cfg = getBarSettings(type) or {}
 	local cfgDef = (RB.POWER_CONFIG and RB.POWER_CONFIG[type]) or {}
 	local isSoulShards = type == "SOUL_SHARDS"
-	local useRaw = isSoulShards == true
+	local useRaw = isSoulShards and addon.variables and addon.variables.unitClass == "WARLOCK" and addon.variables.unitSpec == 3
 	local maxPower = bar._lastMax
 	if not maxPower or bar._lastMaxRaw ~= useRaw then
 		maxPower = UnitPowerMax("player", pType, useRaw)
@@ -3197,7 +3197,7 @@ function updatePowerBar(type, runeSlot)
 	end
 	local displayCur = curPower
 	local displayMax = maxPower
-	if isSoulShards then
+	if isSoulShards and useRaw then
 		displayCur = (curPower or 0) / 10
 		displayMax = (maxPower or 0) / 10
 	end
@@ -3553,7 +3553,7 @@ local function getSafeThresholdMaxValue(bar, pType)
 		if last ~= nil and not isSecret(last) then maxValue = last end
 	end
 	if not maxValue and pType and POWER_ENUM and UnitPowerMax then
-		local useRaw = pType == "SOUL_SHARDS"
+		local useRaw = pType == "SOUL_SHARDS" and addon.variables and addon.variables.unitClass == "WARLOCK" and addon.variables.unitSpec == 3
 		local tmp = UnitPowerMax("player", POWER_ENUM[pType], useRaw)
 		if tmp ~= nil and not isSecret(tmp) then maxValue = tmp end
 	end

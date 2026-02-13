@@ -1,5 +1,15 @@
 # Changelog
 
+## [7.13.2] - 2026-02-13
+
+### 🐛 Fixed
+
+- Resource Bars: Soul Shards now show correct full values for Affliction and Demonology; decimal shard values remain only for Destruction.
+- Vendor: CraftShopper no longer forces to hide `Track recipe`
+- Forbidden table error fixes
+
+---
+
 ## [7.13.1] - 2026-02-12
 
 ### 🐛 Fixed
