@@ -1,5 +1,11 @@
 # Changelog
 
+## [7.15.2] - 2026-02-13
+
+- Resource Bar: Separator backdrop was not working
+
+---
+
 ## [7.15.1] - 2026-02-13
 
 ### 🐛 Fixed
