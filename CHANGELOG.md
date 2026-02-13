@@ -2,6 +2,11 @@
 
 ## [7.15.0] - 2026-02-13
 
+### ✨ Added
+
+- Unit Frames (Auras): Added sliders to change aura border size and position.
+- Unit Frames (Auras): Expanded the slider ranges for more control.
+
 ### 🐛 Fixed
 
 - Resource Bars: Fixed a visual issue where one Holy Power divider could look out of place at certain UI scales.
