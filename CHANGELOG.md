@@ -7,6 +7,9 @@
 - Cooldown Panels: Anchors to other Cooldown Panels now resolve reliably after reload/login.
 - Unit Frames: Fixed overlap issues between detached power bars and class resources by allowing class resource strata/frame level offset adjustments.
 - Minimap: After switching Covenants in Shadowlands, the minimap icon now stays in the correct position.
+- Auto accept Res: Now checking the ressing unit for combat state
+- Resource Bars: Segment color wasn't working
+- Resource Bars: Backdrop alpha wasn't working
 
 ---
 
