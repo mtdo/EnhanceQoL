@@ -2809,9 +2809,11 @@ end
 
 local function shouldAutoAcceptResurrection(offerer)
 	if not addon.db or not addon.db["autoAcceptResurrection"] then return false end
-	if addon.db["autoAcceptResurrectionExcludeCombat"] and UnitAffectingCombat("player") then return false end
+	local unit = resolveResurrectOffererUnit(offerer)
+	if addon.db["autoAcceptResurrectionExcludeCombat"] then
+		if unit and UnitAffectingCombat(unit) then return false end
+	end
 	if addon.db["autoAcceptResurrectionExcludeAfterlife"] then
-		local unit = resolveResurrectOffererUnit(offerer)
 		if unit and UnitIsDeadOrGhost(unit) then return false end
 	end
 	return true
