@@ -394,6 +394,13 @@ local visibilityRuleMetadata = {
 		unitRequirement = "player",
 		order = 46,
 	},
+	TALENT_SPELLBOOK_OPEN = {
+		key = "TALENT_SPELLBOOK_OPEN",
+		label = L["visibilityRule_talentSpellbookOpen"] or "When Talents/Spellbook open",
+		description = L["visibilityRule_talentSpellbookOpen_desc"] or "Show this bar while the Talents (N) or Spellbook (P) window is open.",
+		appliesTo = { actionbar = true },
+		order = 48,
+	},
 	ALWAYS_HIDE_IN_GROUP = {
 		key = "ALWAYS_HIDE_IN_GROUP",
 		label = L["visibilityRule_groupedHide"] or "Always hide in party/raid",
@@ -1683,6 +1690,56 @@ local EQOL_LastMouseoverBar
 local EQOL_LastMouseoverVar
 
 local function EQOL_ShouldKeepVisibleByFlyout() return _G.SpellFlyout and _G.SpellFlyout:IsShown() and MouseIsOver(_G.SpellFlyout) end
+
+local function IsTalentOrSpellbookOpen()
+	local psf = _G.PlayerSpellsFrame
+	if psf and psf.IsShown and psf:IsShown() then return true end
+	local sbf = _G.SpellBookFrame
+	if sbf and sbf.IsShown and sbf:IsShown() then return true end
+	return false
+end
+
+local function EnsureTalentSpellbookActionBarHooks()
+	addon.variables = addon.variables or {}
+	if addon.variables.eqolTalentSpellbookActionBarHooked then return end
+
+	local function refreshBars()
+		if addon.functions and addon.functions.RefreshAllActionBarVisibilityAlpha then addon.functions.RefreshAllActionBarVisibilityAlpha(true) end
+	end
+
+	local function onShow()
+		refreshBars()
+	end
+
+	local function onHide()
+		refreshBars()
+	end
+
+	local function hookFrame(frame)
+		if not frame or frame.EQOL_TalentSpellbookHooked then return end
+		frame:HookScript("OnShow", onShow)
+		frame:HookScript("OnHide", onHide)
+		frame.EQOL_TalentSpellbookHooked = true
+	end
+
+	if C_AddOns and C_AddOns.LoadAddOn then pcall(C_AddOns.LoadAddOn, "Blizzard_PlayerSpells") end
+	hookFrame(_G.PlayerSpellsFrame)
+	hookFrame(_G.SpellBookFrame)
+
+	if not _G.PlayerSpellsFrame then
+		local loader = CreateFrame("Frame")
+		loader:RegisterEvent("ADDON_LOADED")
+		loader:SetScript("OnEvent", function(_, event, name)
+			if event == "ADDON_LOADED" and name == "Blizzard_PlayerSpells" then
+				loader:UnregisterEvent("ADDON_LOADED")
+				hookFrame(_G.PlayerSpellsFrame)
+			end
+		end)
+	end
+
+	addon.variables.eqolTalentSpellbookActionBarHooked = true
+end
+
 local ACTIONBAR_VISIBILITY_MOUSEOVER_ONLY = { MOUSEOVER = true }
 local function IsActionBarMouseoverGroupEnabled() return addon.db and addon.db.actionBarMouseoverShowAll == true end
 
@@ -1763,6 +1820,7 @@ local function GetActionBarVisibilityConfig(variable, incoming, persistLegacy)
 				or source.PLAYER_MOUNTED == true
 				or source.PLAYER_NOT_MOUNTED == true
 				or source.PLAYER_IN_GROUP == true
+				or source.TALENT_SPELLBOOK_OPEN == true
 				or source.ALWAYS_HIDDEN == true
 			then
 				return source
@@ -1784,6 +1842,7 @@ local function GetActionBarVisibilityConfig(variable, incoming, persistLegacy)
 			PLAYER_MOUNTED = source.PLAYER_MOUNTED == true,
 			PLAYER_NOT_MOUNTED = source.PLAYER_NOT_MOUNTED == true,
 			PLAYER_IN_GROUP = source.PLAYER_IN_GROUP == true,
+			TALENT_SPELLBOOK_OPEN = source.TALENT_SPELLBOOK_OPEN == true,
 			ALWAYS_HIDDEN = source.ALWAYS_HIDDEN == true,
 		}
 	elseif source == true then
@@ -1797,6 +1856,7 @@ local function GetActionBarVisibilityConfig(variable, incoming, persistLegacy)
 			PLAYER_MOUNTED = false,
 			PLAYER_NOT_MOUNTED = false,
 			PLAYER_IN_GROUP = false,
+			TALENT_SPELLBOOK_OPEN = false,
 			ALWAYS_HIDDEN = false,
 		}
 	elseif source == "hide" then
@@ -1819,6 +1879,7 @@ local function GetActionBarVisibilityConfig(variable, incoming, persistLegacy)
 			or config.PLAYER_MOUNTED
 			or config.PLAYER_NOT_MOUNTED
 			or config.PLAYER_IN_GROUP
+			or config.TALENT_SPELLBOOK_OPEN
 			or config.ALWAYS_HIDDEN
 		)
 	then
@@ -1839,6 +1900,7 @@ local function GetActionBarVisibilityConfig(variable, incoming, persistLegacy)
 			if config.PLAYER_MOUNTED then stored.PLAYER_MOUNTED = true end
 			if config.PLAYER_NOT_MOUNTED then stored.PLAYER_NOT_MOUNTED = true end
 			if config.PLAYER_IN_GROUP then stored.PLAYER_IN_GROUP = true end
+			if config.TALENT_SPELLBOOK_OPEN then stored.TALENT_SPELLBOOK_OPEN = true end
 			if config.ALWAYS_HIDDEN then stored.ALWAYS_HIDDEN = true end
 			addon.db[variable] = stored
 		end
@@ -1869,6 +1931,7 @@ local function GetActionBarVisibilityContext(combatOverride)
 		mounted = IsPlayerMounted(),
 		isCasting = IsPlayerCasting(),
 		isSkyriding = addon.variables and addon.variables.isPlayerSkyriding,
+		isTalentSpellbookOpen = IsTalentOrSpellbookOpen(),
 	}
 end
 
@@ -1883,6 +1946,7 @@ local function ActionBarShouldForceShowByConfig(config, context, combatOverride)
 	if config.PLAYER_MOUNTED and ctx.mounted then return true end
 	if config.PLAYER_NOT_MOUNTED and not ctx.mounted then return true end
 	if config.PLAYER_IN_GROUP and ctx.inGroup then return true end
+	if config.TALENT_SPELLBOOK_OPEN and ctx.isTalentSpellbookOpen then return true end
 	return false
 end
 
@@ -1974,6 +2038,7 @@ local function ApplyActionBarAlpha(bar, variable, config, combatOverride, skipFa
 		or cfg.PLAYER_MOUNTED
 		or cfg.PLAYER_NOT_MOUNTED
 		or cfg.PLAYER_IN_GROUP
+		or cfg.TALENT_SPELLBOOK_OPEN
 
 	if cfg.SKYRIDING_INACTIVE then
 		if ctx.isSkyriding then

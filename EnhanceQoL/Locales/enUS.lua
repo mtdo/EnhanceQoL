@@ -882,6 +882,8 @@ L["visibilityRule_playerHasTarget_desc"] = "Automatically show the element whene
 L["visibilityRule_playerHealth_desc"] = "Automatically show the element while your health is below 100%."
 L["visibilityRule_inGroup"] = "In party/raid"
 L["visibilityRule_inGroup_desc"] = "Automatically show the element while you are in a party or raid."
+L["visibilityRule_talentSpellbookOpen"] = "When Talents/Spellbook open"
+L["visibilityRule_talentSpellbookOpen_desc"] = "Show this bar while the Talents (N) or Spellbook (P) window is open."
 L["visibilityRule_groupedHide"] = "Always hide in party/raid"
 L["visibilityRule_groupedHide_desc"] =
 	"Hide the player frame whenever you are in a party or raid. While grouped, only this rule (and Mouseover, if enabled) is evaluated; other visibility rules are ignored."
