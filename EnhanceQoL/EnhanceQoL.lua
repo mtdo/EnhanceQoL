@@ -401,6 +401,20 @@ local visibilityRuleMetadata = {
 		appliesTo = { actionbar = true },
 		order = 48,
 	},
+	QUICK_KEYBIND_ACTIVE = {
+		key = "QUICK_KEYBIND_ACTIVE",
+		label = L["visibilityRule_quickKeybindActive"] or "When Quick keybind mode is active",
+		description = L["visibilityRule_quickKeybindActive_desc"] or "Show this bar while Quick keybind mode (/kb) is active.",
+		appliesTo = { actionbar = true },
+		order = 49,
+	},
+	MACRO_MENU_OPEN = {
+		key = "MACRO_MENU_OPEN",
+		label = L["visibilityRule_macroMenuOpen"] or "When macro menu is open",
+		description = L["visibilityRule_macroMenuOpen_desc"] or "Show this bar while the Macro (Esc → Macros) window is open.",
+		appliesTo = { actionbar = true },
+		order = 50,
+	},
 	ALWAYS_HIDE_IN_GROUP = {
 		key = "ALWAYS_HIDE_IN_GROUP",
 		label = L["visibilityRule_groupedHide"] or "Always hide in party/raid",
@@ -1699,6 +1713,16 @@ local function IsTalentOrSpellbookOpen()
 	return false
 end
 
+local function IsQuickKeybindActive()
+	local f = _G.QuickKeybindFrame
+	return f and f.IsShown and f:IsShown()
+end
+
+local function IsMacroFrameOpen()
+	local f = _G.MacroFrame
+	return f and f.IsShown and f:IsShown()
+end
+
 local function EnsureTalentSpellbookActionBarHooks()
 	addon.variables = addon.variables or {}
 	if addon.variables.eqolTalentSpellbookActionBarHooked then return end
@@ -1722,20 +1746,33 @@ local function EnsureTalentSpellbookActionBarHooks()
 		frame.EQOL_TalentSpellbookHooked = true
 	end
 
+	-- Only load PlayerSpells so talent/spellbook hooks work; do not load QuickKeybind/MacroUI
+	-- here to avoid addon load order side effects. Those frames are hooked when they exist
+	-- or when their addon loads later (ADDON_LOADED).
 	if C_AddOns and C_AddOns.LoadAddOn then pcall(C_AddOns.LoadAddOn, "Blizzard_PlayerSpells") end
 	hookFrame(_G.PlayerSpellsFrame)
 	hookFrame(_G.SpellBookFrame)
+	hookFrame(_G.QuickKeybindFrame)
+	hookFrame(_G.MacroFrame)
 
-	if not _G.PlayerSpellsFrame then
+	local function hookWhenLoaded(addonName, frameGetter)
+		local frame = frameGetter()
+		if frame then hookFrame(frame); return end
 		local loader = CreateFrame("Frame")
 		loader:RegisterEvent("ADDON_LOADED")
 		loader:SetScript("OnEvent", function(_, event, name)
-			if event == "ADDON_LOADED" and name == "Blizzard_PlayerSpells" then
+			if event == "ADDON_LOADED" and name == addonName then
 				loader:UnregisterEvent("ADDON_LOADED")
-				hookFrame(_G.PlayerSpellsFrame)
+				hookFrame(frameGetter())
+				refreshBars()
 			end
 		end)
 	end
+	if not _G.PlayerSpellsFrame then
+		hookWhenLoaded("Blizzard_PlayerSpells", function() return _G.PlayerSpellsFrame end)
+	end
+	hookWhenLoaded("Blizzard_QuickKeybind", function() return _G.QuickKeybindFrame end)
+	hookWhenLoaded("Blizzard_MacroUI", function() return _G.MacroFrame end)
 
 	addon.variables.eqolTalentSpellbookActionBarHooked = true
 end
@@ -1821,6 +1858,8 @@ local function GetActionBarVisibilityConfig(variable, incoming, persistLegacy)
 				or source.PLAYER_NOT_MOUNTED == true
 				or source.PLAYER_IN_GROUP == true
 				or source.TALENT_SPELLBOOK_OPEN == true
+				or source.QUICK_KEYBIND_ACTIVE == true
+				or source.MACRO_MENU_OPEN == true
 				or source.ALWAYS_HIDDEN == true
 			then
 				return source
@@ -1843,6 +1882,8 @@ local function GetActionBarVisibilityConfig(variable, incoming, persistLegacy)
 			PLAYER_NOT_MOUNTED = source.PLAYER_NOT_MOUNTED == true,
 			PLAYER_IN_GROUP = source.PLAYER_IN_GROUP == true,
 			TALENT_SPELLBOOK_OPEN = source.TALENT_SPELLBOOK_OPEN == true,
+			QUICK_KEYBIND_ACTIVE = source.QUICK_KEYBIND_ACTIVE == true,
+			MACRO_MENU_OPEN = source.MACRO_MENU_OPEN == true,
 			ALWAYS_HIDDEN = source.ALWAYS_HIDDEN == true,
 		}
 	elseif source == true then
@@ -1857,6 +1898,8 @@ local function GetActionBarVisibilityConfig(variable, incoming, persistLegacy)
 			PLAYER_NOT_MOUNTED = false,
 			PLAYER_IN_GROUP = false,
 			TALENT_SPELLBOOK_OPEN = false,
+			QUICK_KEYBIND_ACTIVE = false,
+			MACRO_MENU_OPEN = false,
 			ALWAYS_HIDDEN = false,
 		}
 	elseif source == "hide" then
@@ -1880,6 +1923,8 @@ local function GetActionBarVisibilityConfig(variable, incoming, persistLegacy)
 			or config.PLAYER_NOT_MOUNTED
 			or config.PLAYER_IN_GROUP
 			or config.TALENT_SPELLBOOK_OPEN
+			or config.QUICK_KEYBIND_ACTIVE
+			or config.MACRO_MENU_OPEN
 			or config.ALWAYS_HIDDEN
 		)
 	then
@@ -1901,6 +1946,8 @@ local function GetActionBarVisibilityConfig(variable, incoming, persistLegacy)
 			if config.PLAYER_NOT_MOUNTED then stored.PLAYER_NOT_MOUNTED = true end
 			if config.PLAYER_IN_GROUP then stored.PLAYER_IN_GROUP = true end
 			if config.TALENT_SPELLBOOK_OPEN then stored.TALENT_SPELLBOOK_OPEN = true end
+			if config.QUICK_KEYBIND_ACTIVE then stored.QUICK_KEYBIND_ACTIVE = true end
+			if config.MACRO_MENU_OPEN then stored.MACRO_MENU_OPEN = true end
 			if config.ALWAYS_HIDDEN then stored.ALWAYS_HIDDEN = true end
 			addon.db[variable] = stored
 		end
@@ -1932,6 +1979,8 @@ local function GetActionBarVisibilityContext(combatOverride)
 		isCasting = IsPlayerCasting(),
 		isSkyriding = addon.variables and addon.variables.isPlayerSkyriding,
 		isTalentSpellbookOpen = IsTalentOrSpellbookOpen(),
+		isQuickKeybindActive = IsQuickKeybindActive(),
+		isMacroMenuOpen = IsMacroFrameOpen(),
 	}
 end
 
@@ -1947,6 +1996,8 @@ local function ActionBarShouldForceShowByConfig(config, context, combatOverride)
 	if config.PLAYER_NOT_MOUNTED and not ctx.mounted then return true end
 	if config.PLAYER_IN_GROUP and ctx.inGroup then return true end
 	if config.TALENT_SPELLBOOK_OPEN and ctx.isTalentSpellbookOpen then return true end
+	if config.QUICK_KEYBIND_ACTIVE and ctx.isQuickKeybindActive then return true end
+	if config.MACRO_MENU_OPEN and ctx.isMacroMenuOpen then return true end
 	return false
 end
 
@@ -2039,6 +2090,8 @@ local function ApplyActionBarAlpha(bar, variable, config, combatOverride, skipFa
 		or cfg.PLAYER_NOT_MOUNTED
 		or cfg.PLAYER_IN_GROUP
 		or cfg.TALENT_SPELLBOOK_OPEN
+		or cfg.QUICK_KEYBIND_ACTIVE
+		or cfg.MACRO_MENU_OPEN
 
 	if cfg.SKYRIDING_INACTIVE then
 		if ctx.isSkyriding then
@@ -2521,6 +2574,7 @@ EnsureActionBarVisibilityWatcher = function()
 	end
 
 	EnsureSkyridingStateDriver()
+	EnsureTalentSpellbookActionBarHooks()
 	setActionBarVisibilityWatcherEnabled(watcher, true)
 	return true
 end
