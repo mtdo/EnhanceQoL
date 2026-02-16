@@ -2595,6 +2595,33 @@ local function buildUnitSettings(unit)
 		classAnchor.isEnabled = isClassResourceEnabled
 		list[#list + 1] = classAnchor
 
+		local classStrata = radioDropdown(
+			L["UFClassResourceStrata"] or "Class resource strata",
+			strataOptionsWithDefault,
+			function() return getValue(unit, { "classResource", "strata" }, crDef.strata or "") end,
+			function(val)
+				setValue(unit, { "classResource", "strata" }, (val and val ~= "") and val or nil)
+				refreshSelf()
+			end,
+			crDef.strata or "",
+			"classResource"
+		)
+		classStrata.isEnabled = isClassResourceEnabled
+		list[#list + 1] = classStrata
+
+		local classFrameLevelOffset = slider(L["UFClassResourceFrameLevelOffset"] or "Class resource frame level offset", 0, 50, 1, function()
+			local fallback = crDef.frameLevelOffset
+			if fallback == nil then fallback = 5 end
+			return math.max(0, getValue(unit, { "classResource", "frameLevelOffset" }, fallback))
+		end, function(val)
+			local levelOffset = math.max(0, val or 0)
+			setValue(unit, { "classResource", "frameLevelOffset" }, levelOffset)
+			if UF and UF.ClassResourceUtil and UF.ClassResourceUtil.SetFrameLevelHookOffset then UF.ClassResourceUtil.SetFrameLevelHookOffset(levelOffset) end
+			refreshSelf()
+		end, math.max(0, (crDef.frameLevelOffset == nil) and 5 or crDef.frameLevelOffset), "classResource", true)
+		classFrameLevelOffset.isEnabled = isClassResourceEnabled
+		list[#list + 1] = classFrameLevelOffset
+
 		local classOffsetX = slider(
 			L["Offset X"] or "Offset X",
 			-OFFSET_RANGE,
