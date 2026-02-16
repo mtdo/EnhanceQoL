@@ -66,6 +66,7 @@ local ResourcebarVars = {
 	DEFAULT_THRESHOLDS = { 25, 50, 75, 90 },
 	DEFAULT_THRESHOLD_COUNT = 3,
 	WHITE = { 1, 1, 1, 1 },
+	DEFAULT_MAX_COLOR = { 0, 1, 0, 1 },
 	DEFAULT_RB_TEX = "Interface\\Buttons\\WHITE8x8", -- historical default (Solid)
 	DEFAULT_HEALTH_WIDTH = 200,
 	DEFAULT_HEALTH_HEIGHT = 20,
@@ -637,7 +638,7 @@ local function ensureMaelstromWeaponDefaults(cfg)
 	if cfg.useMaelstromFiveColor == nil then cfg.useMaelstromFiveColor = true end
 	if cfg.useMaelstromTenStacks == nil then cfg.useMaelstromTenStacks = cfg.visualSegments == RB.MAELSTROM_WEAPON_MAX_STACKS end
 	if cfg.useMaxColor == nil then cfg.useMaxColor = true end
-	if not cfg.maxColor then cfg.maxColor = { 0, 1, 0, 1 } end
+	if not cfg.maxColor then cfg.maxColor = CopyTable(RB.DEFAULT_MAX_COLOR) end
 	if not cfg.maelstromFiveColor then cfg.maelstromFiveColor = CopyTable(ResourcebarVars.DEFAULT_MAELSTROM_WEAPON_FIVE_COLOR) end
 	if cfg.useMaelstromTenStacks then
 		cfg.visualSegments = RB.MAELSTROM_WEAPON_MAX_STACKS
@@ -663,7 +664,7 @@ local function ensureAuraPowerDefaults(pType, cfg)
 	if not cfg.separatorColor then cfg.separatorColor = CopyTable(RB.SEP_DEFAULT) end
 	if def and not cfg.visualSegments then cfg.visualSegments = def.visualSegments end
 	if def and def.useMaxColorDefault and cfg.useMaxColor == nil then cfg.useMaxColor = true end
-	if cfg.useMaxColor and not cfg.maxColor then cfg.maxColor = { 0, 1, 0, 1 } end
+	if cfg.useMaxColor and not cfg.maxColor then cfg.maxColor = CopyTable(RB.DEFAULT_MAX_COLOR) end
 	if pType == "MAELSTROM_WEAPON" then ensureMaelstromWeaponDefaults(cfg) end
 end
 
@@ -1403,6 +1404,12 @@ local function configureSpecialTexture(bar, pType, cfg)
 			bar._lastColor = bar._lastColor or {}
 			bar._lastColor[1], bar._lastColor[2], bar._lastColor[3], bar._lastColor[4] = 1, 1, 1, 1
 			bar._usingMaxColor = false
+		else
+			local keepSecretCurve = addon.variables and addon.variables.isMidnight and cfg and cfg.useMaxColor == true
+			if not keepSecretCurve then
+				local lc = bar._lastColor
+				if lc then bar:SetStatusBarColor(lc[1] or 1, lc[2] or 1, lc[3] or 1, lc[4] or 1) end
+			end
 		end
 	end
 	bar._eqolSpecialAtlas = atlas
@@ -1815,35 +1822,98 @@ end
 local function applyBarFillColor(bar, cfg, pType)
 	if not bar then return end
 	cfg = cfg or {}
-	local r, g, b, a
+	local function isAtCap()
+		if pType == "HEALTH" then
+			local cur = UnitHealth("player")
+			local mx = UnitHealthMax("player")
+			if issecretvalue and (issecretvalue(cur) or issecretvalue(mx)) then return nil end
+			return (cur or 0) >= max((mx or 1), 1)
+		end
+		if pType == "STAGGER" then
+			local stagger = (UnitStagger and UnitStagger("player")) or 0
+			local mx = UnitHealthMax("player") or 1
+			if issecretvalue and (issecretvalue(stagger) or issecretvalue(mx)) then return nil end
+			return stagger >= max(mx, 1)
+		end
+		if isAuraPowerType and isAuraPowerType(pType) and getAuraPowerCounts then
+			local stacks, logicalMax = getAuraPowerCounts(pType)
+			if issecretvalue and (issecretvalue(stacks) or issecretvalue(logicalMax)) then return nil end
+			return (logicalMax or 0) > 0 and (stacks or 0) >= logicalMax
+		end
+		if pType == "RUNES" then return false end
+		local powerEnum = POWER_ENUM and POWER_ENUM[pType]
+		if not powerEnum then return false end
+		local useRaw = pType == "SOUL_SHARDS" and addon.variables and addon.variables.unitClass == "WARLOCK" and addon.variables.unitSpec == 3
+		local curPower = UnitPower("player", powerEnum, useRaw)
+		local maxPower = UnitPowerMax("player", powerEnum, useRaw)
+		if issecretvalue and (issecretvalue(curPower) or issecretvalue(maxPower)) then return nil end
+		return (curPower or 0) >= max((maxPower or 1), 1)
+	end
+
+	local baseR, baseG, baseB, baseA
 	local shouldDesaturate = false
 	if pType == "STAGGER" and cfg.useBarColor ~= true then
 		local stagger = (UnitStagger and UnitStagger("player")) or 0
 		local maxHealth = UnitHealthMax("player") or 1
 		local percent = maxHealth > 0 and (stagger / maxHealth) or 0
-		r, g, b, a = getStaggerStateColor(percent, cfg)
-		a = a or (cfg.barColor and cfg.barColor[4]) or 1
+		baseR, baseG, baseB, baseA = getStaggerStateColor(percent, cfg)
+		baseA = baseA or (cfg.barColor and cfg.barColor[4]) or 1
 	elseif cfg.useBarColor then
 		local color = cfg.barColor or RB.WHITE
-		r, g, b, a = color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1
+		baseR, baseG, baseB, baseA = color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1
 	elseif cfg.useClassColor == true then
-		r, g, b, a = getPlayerClassColor()
-		a = a or (cfg.barColor and cfg.barColor[4]) or 1
+		baseR, baseG, baseB, baseA = getPlayerClassColor()
+		baseA = baseA or (cfg.barColor and cfg.barColor[4]) or 1
 		if pType == "HEALTH" then shouldDesaturate = true end
 	else
-		r, g, b = getPowerBarColor(pType or "MANA")
-		a = (cfg.barColor and cfg.barColor[4]) or 1
+		baseR, baseG, baseB = getPowerBarColor(pType or "MANA")
+		baseA = (cfg.barColor and cfg.barColor[4]) or 1
 	end
-	bar:SetStatusBarColor(r, g, b, a or 1)
+
+	local targetR, targetG, targetB, targetA = baseR, baseG, baseB, baseA
+	local usingMaxColor = false
+	local secretCurveColor
+	if cfg.useMaxColor == true then
+		local capState = isAtCap()
+		if capState == true then
+			local maxCol = cfg.maxColor or RB.DEFAULT_MAX_COLOR
+			targetR = maxCol[1] or targetR
+			targetG = maxCol[2] or targetG
+			targetB = maxCol[3] or targetB
+			targetA = maxCol[4] or targetA
+			usingMaxColor = true
+		elseif capState == nil then
+			-- Midnight secret values must use curve-based coloring instead of direct comparisons.
+			if pType == "HEALTH" then
+				if UnitHealthPercent and curve then
+					SetColorCurvePoints(cfg.maxColor or RB.DEFAULT_MAX_COLOR)
+					secretCurveColor = UnitHealthPercent("player", true, curve)
+				end
+			elseif pType ~= "RUNES" then
+				local powerEnum = POWER_ENUM and POWER_ENUM[pType]
+				if powerEnum and UnitPowerPercent then
+					if not curvePower[pType] then SetColorCurvePointsPower(pType, cfg.maxColor or RB.DEFAULT_MAX_COLOR, { baseR, baseG, baseB, baseA or 1 }) end
+					if curvePower[pType] then secretCurveColor = UnitPowerPercent("player", powerEnum, false, curvePower[pType]) end
+				end
+			end
+			if secretCurveColor then usingMaxColor = true end
+		end
+	end
+
+	bar:SetStatusBarColor(targetR, targetG, targetB, targetA or 1)
 	setBarDesaturated(bar, shouldDesaturate)
 	bar._baseColor = bar._baseColor or {}
-	bar._baseColor[1], bar._baseColor[2], bar._baseColor[3], bar._baseColor[4] = r, g, b, a or 1
+	bar._baseColor[1], bar._baseColor[2], bar._baseColor[3], bar._baseColor[4] = baseR, baseG, baseB, baseA or 1
 	bar._lastColor = bar._lastColor or {}
-	bar._lastColor[1], bar._lastColor[2], bar._lastColor[3], bar._lastColor[4] = r, g, b, a or 1
-	bar._usingMaxColor = false
+	bar._lastColor[1], bar._lastColor[2], bar._lastColor[3], bar._lastColor[4] = targetR, targetG, targetB, targetA or 1
+	bar._usingMaxColor = usingMaxColor
 	if pType and pType ~= "RUNES" then SetColorCurvePointsPower(pType, cfg.maxColor, bar._baseColor) end
 	configureSpecialTexture(bar, pType, cfg)
 	if ResourceBars.RefreshStatusBarGradient then ResourceBars.RefreshStatusBarGradient(bar, cfg) end
+	if secretCurveColor and secretCurveColor.GetRGBA and bar.GetStatusBarTexture then
+		local tex = bar:GetStatusBarTexture()
+		if tex and tex.SetVertexColor then tex:SetVertexColor(secretCurveColor:GetRGBA()) end
+	end
 end
 
 RB.DK_SPEC_COLOR = {
@@ -2287,7 +2357,7 @@ function updateHealthBar(evt)
 			local useMaxColor = settings.useMaxColor == true
 			local finalR, finalG, finalB, finalA = baseR, baseG, baseB, baseA
 			if useMaxColor and reachedCap then
-				local maxCol = settings.maxColor or RB.WHITE
+				local maxCol = settings.maxColor or RB.DEFAULT_MAX_COLOR
 				finalR, finalG, finalB, finalA = maxCol[1] or baseR, maxCol[2] or baseG, maxCol[3] or baseB, maxCol[4] or baseA
 			end
 
@@ -2317,7 +2387,7 @@ function updateHealthBar(evt)
 					if wasMax ~= settings.useMaxColor then
 						wasMax = settings.useMaxColor
 						if settings.useMaxColor then
-							SetColorCurvePoints(settings.maxColor or RB.WHITE)
+							SetColorCurvePoints(settings.maxColor or RB.DEFAULT_MAX_COLOR)
 						else
 							SetColorCurvePoints()
 						end
@@ -2850,7 +2920,7 @@ function updatePowerBar(type, runeSlot)
 		-- Runes use max color only when all six runes are ready (resource at maximum).
 		local allRunesReady = count == 0
 		if cfg.useMaxColor == true and allRunesReady then
-			local maxCol = cfg.maxColor or RB.WHITE
+			local maxCol = cfg.maxColor or RB.DEFAULT_MAX_COLOR
 			readyR = maxCol[1] or readyR
 			readyG = maxCol[2] or readyG
 			readyB = maxCol[3] or readyB
@@ -3181,7 +3251,7 @@ function updatePowerBar(type, runeSlot)
 		local targetR, targetG, targetB, targetA = baseR, baseG, baseB, baseA
 		local flag
 		if cfg.useMaxColor == true and curPower >= max(maxHealth, 1) then
-			local maxCol = cfg.maxColor or RB.WHITE
+			local maxCol = cfg.maxColor or RB.DEFAULT_MAX_COLOR
 			targetR, targetG, targetB, targetA = maxCol[1] or targetR, maxCol[2] or targetG, maxCol[3] or targetB, maxCol[4] or targetA
 			flag = "max"
 		end
@@ -3284,7 +3354,7 @@ function updatePowerBar(type, runeSlot)
 		local flag
 		local useMaxDefault = (RB.AURA_POWER_CONFIG[type] and RB.AURA_POWER_CONFIG[type].useMaxColorDefault) or false
 		if (cfg.useMaxColor ~= false and (cfg.useMaxColor or useMaxDefault)) and logicalMax > 0 and stacks >= logicalMax then
-			local maxCol = cfg.maxColor or RB.WHITE
+			local maxCol = cfg.maxColor or RB.DEFAULT_MAX_COLOR
 			targetR, targetG, targetB, targetA = maxCol[1] or targetR, maxCol[2] or targetG, maxCol[3] or targetB, maxCol[4] or targetA
 			flag = "max"
 		elseif type == "MAELSTROM_WEAPON" and cfg.useMaelstromFiveColor ~= false and stacks >= RB.MAELSTROM_WEAPON_SEGMENTS then
@@ -3409,14 +3479,17 @@ function updatePowerBar(type, runeSlot)
 
 	local useHolyThreeColor = (type == "HOLY_POWER") and cfg.useHolyThreeColor == true
 	local holyThreeThreshold = 3
-	local reachedThree = useHolyThreeColor and curPower >= holyThreeThreshold
-	if not addon.variables.isMidnight or (issecretvalue and not issecretvalue(curPower) and not issecretvalue(maxPower)) then
+	local curPowerSecret = addon.variables.isMidnight and issecretvalue and issecretvalue(curPower)
+	local maxPowerSecret = addon.variables.isMidnight and issecretvalue and issecretvalue(maxPower)
+	local hasSecretPower = curPowerSecret or maxPowerSecret
+	local reachedThree = useHolyThreeColor and not curPowerSecret and curPower >= holyThreeThreshold
+	if not hasSecretPower then
 		local reachedCap = curPower >= max(maxPower, 1)
 		local useMaxColor = cfg.useMaxColor == true
 		local targetR, targetG, targetB, targetA = bar._baseColor[1], bar._baseColor[2], bar._baseColor[3], bar._baseColor[4]
 		local flag
 		if useMaxColor and reachedCap then
-			local maxCol = cfg.maxColor or RB.WHITE
+			local maxCol = cfg.maxColor or RB.DEFAULT_MAX_COLOR
 			targetR, targetG, targetB, targetA = maxCol[1] or targetR, maxCol[2] or targetG, maxCol[3] or targetB, maxCol[4] or (bar._baseColor[4] or 1)
 			flag = "max"
 		elseif reachedThree then
@@ -3442,18 +3515,28 @@ function updatePowerBar(type, runeSlot)
 			local br, bgc, bb, ba = base[1] or 1, base[2] or 1, base[3] or 1, base[4] or 1
 			local targetR, targetG, targetB, targetA = br, bgc, bb, ba
 			local useMaxColor = cfg.useMaxColor == true
-			local reachedCap = (issecretvalue and not issecretvalue(curPower) or not addon.variables.isMidnight) and curPower >= max(maxPower, 1)
-			if useMaxColor and issecretvalue and issecretvalue(curPower) and UnitPowerPercent and curvePower[type] then
-				local curveColor = UnitPowerPercent("player", pType, false, curvePower[type])
-				bar:GetStatusBarTexture():SetVertexColor(curveColor:GetRGBA())
-			else
-				if useMaxColor and reachedCap then
-					local maxCol = cfg.maxColor or RB.WHITE
-					targetR, targetG, targetB, targetA = maxCol[1] or br, maxCol[2] or bgc, maxCol[3] or bb, maxCol[4] or ba
-				elseif reachedThree then
+			local flag
+			if useMaxColor and UnitPowerPercent then
+				if not curvePower[type] then SetColorCurvePointsPower(type, cfg.maxColor or RB.DEFAULT_MAX_COLOR, { br, bgc, bb, ba }) end
+				if curvePower[type] then
+					local curveColor = UnitPowerPercent("player", pType, false, curvePower[type])
+					if curveColor then
+						local cr, cg, cb, ca = curveColor:GetRGBA()
+						local tex = bar.GetStatusBarTexture and bar:GetStatusBarTexture()
+						if tex and tex.SetVertexColor then tex:SetVertexColor(cr, cg, cb, ca) end
+						lc[1], lc[2], lc[3], lc[4] = cr, cg, cb, ca
+						bar._lastColor = lc
+						flag = "maxCurve"
+					end
+				end
+			end
+			if not flag then
+				if reachedThree then
 					targetR, targetG, targetB, targetA = getHolyThreeColor(cfg)
+					flag = "holy3"
 				end
 				if lc[1] ~= targetR or lc[2] ~= targetG or lc[3] ~= targetB or lc[4] ~= targetA then
+					lc[1], lc[2], lc[3], lc[4] = targetR, targetG, targetB, targetA
 					bar._lastColor = lc
 					if cfg.useBarColor and not cfg.useMaxColor and not reachedThree then bar:GetStatusBarTexture():SetVertexColor(1, 1, 1, 1) end
 					if ResourceBars.SetStatusBarColorWithGradient then
@@ -3463,9 +3546,9 @@ function updatePowerBar(type, runeSlot)
 					end
 				end
 			end
+			bar._usingMaxColor = flag == "maxCurve"
+			bar._usingHolyThreeColor = flag == "holy3"
 		end
-		bar._usingMaxColor = (cfg.useMaxColor == true)
-		bar._usingHolyThreeColor = reachedThree and not bar._usingMaxColor
 	end
 
 	if type == "ESSENCE" then
@@ -4676,12 +4759,25 @@ local function wipeTable(t)
 	end
 end
 
+function ResourceBars.SyncRuntimeSpecContext()
+	local spec = C_SpecializationInfo and C_SpecializationInfo.GetSpecialization and C_SpecializationInfo.GetSpecialization()
+	if not spec or spec <= 0 then return end
+	addon.variables.unitSpec = spec
+	if C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo then
+		local specId, specName = C_SpecializationInfo.GetSpecializationInfo(spec)
+		if specId then addon.variables.unitSpecId = specId end
+		if specName then addon.variables.unitSpecName = specName end
+	end
+	if GetSpecializationRole then addon.variables.unitRole = GetSpecializationRole(spec) end
+end
+
 -- Coalesce spec/trait refreshes to avoid duplicate work or timing races
 local function scheduleSpecRefresh()
 	if frameAnchor and frameAnchor._specRefreshScheduled then return end
 	if frameAnchor then frameAnchor._specRefreshScheduled = true end
 	After(0.2, function()
 		if frameAnchor then frameAnchor._specRefreshScheduled = false end
+		ResourceBars.SyncRuntimeSpecContext()
 		-- First detach all bar points to avoid transient loops
 		if addon and addon.Aura and addon.Aura.ResourceBars and addon.Aura.ResourceBars.DetachAllBars then addon.Aura.ResourceBars.DetachAllBars() end
 		ResourceBars._suspendAnchors = true
@@ -4702,9 +4798,11 @@ local function eventHandler(self, event, unit, arg1)
 	if event == "UNIT_DISPLAYPOWER" and unit == "player" then
 		setPowerbars()
 	elseif event == "ACTIVE_PLAYER_SPECIALIZATION_CHANGED" then
+		ResourceBars.SyncRuntimeSpecContext()
 		scheduleSpecRefresh()
 		if scheduleRelativeFrameWidthSync then scheduleRelativeFrameWidthSync() end
 	elseif event == "TRAIT_CONFIG_UPDATED" then
+		ResourceBars.SyncRuntimeSpecContext()
 		scheduleSpecRefresh()
 		if scheduleRelativeFrameWidthSync then scheduleRelativeFrameWidthSync() end
 	elseif event == "CLIENT_SCENE_OPENED" then
@@ -4717,6 +4815,7 @@ local function eventHandler(self, event, unit, arg1)
 		ResourceBars.ApplyVisibilityPreference(event)
 		return
 	elseif event == "PLAYER_ENTERING_WORLD" then
+		ResourceBars.SyncRuntimeSpecContext()
 		updateHealthBar("UNIT_ABSORB_AMOUNT_CHANGED")
 		setPowerbars()
 		if After then After(0, function()
@@ -5142,7 +5241,7 @@ function ResourceBars.Refresh()
 	if healthBar then
 		local hCfg = getBarSettings("HEALTH") or {}
 		if hCfg.useMaxColor then
-			SetColorCurvePoints(hCfg.maxColor or RB.WHITE)
+			SetColorCurvePoints(hCfg.maxColor or RB.DEFAULT_MAX_COLOR)
 		else
 			SetColorCurvePoints()
 		end

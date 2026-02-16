@@ -1,5 +1,54 @@
 # Changelog
 
+## [7.18.0] - 2026-02-16
+
+### ✨ Added
+
+- GCD Bar: Added vertical fill directions in Edit Mode (`Bottom to top` and `Top to bottom`).
+- Group Frames (Main Tank): Added `Hide myself` option to hide your own unit from MT frames.
+
+### 🔄 Changed
+
+- GCD Bar: Increased width/height limits for both dimensions.
+- GCD Bar: Width and height sliders now allow direct numeric input.
+
+---
+
+## [7.17.1] - 2026-02-16
+
+### 🐛 Fixed
+
+- Group Frames: Border offset now expands the border outward, so increasing it no longer makes the actual frame content area smaller.
+- Resource Bars: Max color now stays active more reliably on affected classes/specs.
+- Unit Frames: Name/level text layering now stays above absorb clip layers, preventing status text from being hidden behind absorb bars.
+
+---
+
+## [7.17.0] - 2026-02-16
+
+### ✨ Added
+
+- Baganator support for Vendor features.
+  - The Destroy Queue button is now available directly in the Baganator bag window.
+  - Items marked for Auto-Sell or Destroy now show their EnhanceQoL marker in Baganator.
+  - The `EnhanceQoL Sell/Destroy` marker can be positioned by the player in Baganator via `Icon Corners`.
+
+### 🐛 Fixed
+
+- Resource Bars: `Use max color` now works reliably.
+
+---
+
+## [7.16.1] - 2026-02-15
+
+### 🐛 Fixed
+
+- Unit Frames: Edit Mode settings max height is now dynamic via screen height.
+- Resource Bars: Fixed an issue where changing one spec could overwrite mana/power bar position and size in another spec after reload/spec switches.
+- Resource Bars: Improved spec handling so each specialization now keeps its own bar settings reliably.
+
+---
+
 ## [7.16.0] - 2026-02-15
 
 ### 🔄 Changed

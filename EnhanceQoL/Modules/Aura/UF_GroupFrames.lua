@@ -174,15 +174,24 @@ local function setBackdrop(frame, borderCfg)
 		local borderFrame = ensureBorderFrame(frame)
 		if not borderFrame then return end
 		local color = borderCfg.color or { 0, 0, 0, 0.8 }
-		local insetVal = borderCfg.offset
-		if insetVal == nil then insetVal = borderCfg.inset end
-		if insetVal == nil then insetVal = borderCfg.edgeSize or 1 end
+		local edgeSize = tonumber(borderCfg.edgeSize) or 1
+		if edgeSize < 1 then edgeSize = 1 end
+		local offset = borderCfg.offset
+		if offset == nil then offset = borderCfg.inset end
+		if offset == nil then offset = edgeSize end
+		offset = max(0, tonumber(offset) or 0)
+		local insetVal = borderCfg.inset
+		if insetVal == nil then insetVal = edgeSize end
+		insetVal = max(0, tonumber(insetVal) or edgeSize)
 		local edgeFile = (UFHelper and UFHelper.resolveBorderTexture and UFHelper.resolveBorderTexture(borderCfg.texture)) or "Interface\\Buttons\\WHITE8x8"
+		borderFrame:ClearAllPoints()
+		borderFrame:SetPoint("TOPLEFT", frame, "TOPLEFT", -offset, offset)
+		borderFrame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", offset, -offset)
 		borderFrame:SetBackdrop({
 			bgFile = "Interface\\Buttons\\WHITE8x8",
 			edgeFile = edgeFile,
 			tile = false,
-			edgeSize = borderCfg.edgeSize or 1,
+			edgeSize = edgeSize,
 			insets = { left = insetVal, right = insetVal, top = insetVal, bottom = insetVal },
 		})
 		borderFrame:SetBackdropColor(0, 0, 0, 0)
@@ -1788,6 +1797,7 @@ do
 	mtDefaults.enabled = false
 	mtDefaults.sortMethod = "NAME"
 	mtDefaults.sortDir = "ASC"
+	mtDefaults.hideSelf = false
 	mtDefaults.groupBy = nil
 	mtDefaults.groupingOrder = nil
 	mtDefaults.groupFilter = nil
@@ -2407,26 +2417,13 @@ function GF:LayoutButton(self)
 	if st._powerHidden then powerH = 0 end
 	local w, h = self:GetSize()
 	if not w or not h then return end
-	local borderOffset = 0
-	local bc = cfg.border or {}
-	if bc.enabled ~= false then
-		borderOffset = bc.offset
-		if borderOffset == nil then borderOffset = bc.edgeSize or 1 end
-		borderOffset = max(0, borderOffset or 0)
-	end
-	local maxOffset = floor((math.min(w, h) - 4) / 2)
-	if maxOffset < 0 then maxOffset = 0 end
-	if borderOffset > maxOffset then borderOffset = maxOffset end
-	borderOffset = roundToPixel(borderOffset, scale)
-
-	local availH = h - borderOffset * 2
+	local availH = h
 	if availH < 1 then availH = 1 end
 	if powerH > availH - 4 then powerH = math.max(0, availH * 0.25) end
 	powerH = roundToEvenPixel(max(0, powerH), scale)
 	if powerH > availH then powerH = availH end
 
-	local negBorderOffset = roundToPixel(-borderOffset, scale)
-	local healthBottomOffset = roundToPixel(powerH + borderOffset, scale)
+	local healthBottomOffset = roundToPixel(powerH, scale)
 
 	st.barGroup:SetAllPoints(self)
 	setBackdrop(st.barGroup, cfg.border)
@@ -2437,13 +2434,13 @@ function GF:LayoutButton(self)
 	applyHighlightStyle(st, st._highlightTargetCfg, "target")
 
 	st.power:ClearAllPoints()
-	st.power:SetPoint("BOTTOMLEFT", st.barGroup, "BOTTOMLEFT", borderOffset, borderOffset)
-	st.power:SetPoint("BOTTOMRIGHT", st.barGroup, "BOTTOMRIGHT", negBorderOffset, borderOffset)
+	st.power:SetPoint("BOTTOMLEFT", st.barGroup, "BOTTOMLEFT", 0, 0)
+	st.power:SetPoint("BOTTOMRIGHT", st.barGroup, "BOTTOMRIGHT", 0, 0)
 	st.power:SetHeight(powerH)
 
 	st.health:ClearAllPoints()
-	st.health:SetPoint("TOPLEFT", st.barGroup, "TOPLEFT", borderOffset, negBorderOffset)
-	st.health:SetPoint("BOTTOMRIGHT", st.barGroup, "BOTTOMRIGHT", negBorderOffset, healthBottomOffset)
+	st.health:SetPoint("TOPLEFT", st.barGroup, "TOPLEFT", 0, 0)
+	st.health:SetPoint("BOTTOMRIGHT", st.barGroup, "BOTTOMRIGHT", 0, healthBottomOffset)
 	applyBarBackdrop(st.health, hc)
 	applyBarBackdrop(st.power, cfg.power or {})
 
@@ -6892,7 +6889,7 @@ function GF:ApplyHeaderAttributes(kind)
 	elseif isSplitRoleKind(kind) then
 		setAttr("showParty", false)
 		setAttr("showRaid", true)
-		setAttr("showPlayer", true)
+		setAttr("showPlayer", not (kind == "mt" and cfg.hideSelf == true))
 		setAttr("showSolo", false)
 		setAttr("groupingOrder", nil)
 		setAttr("groupFilter", nil)
@@ -6911,7 +6908,7 @@ function GF:ApplyHeaderAttributes(kind)
 	if header._eqolForceShow then
 		setAttr("showParty", true)
 		setAttr("showRaid", true)
-		setAttr("showPlayer", true)
+		setAttr("showPlayer", not (kind == "mt" and cfg.hideSelf == true))
 		setAttr("showSolo", true)
 	end
 
@@ -15572,6 +15569,25 @@ local function buildEditModeSettings(kind, editModeId)
 			defaultCollapsed = true,
 		}
 		settings[#settings + 1] = {
+			name = "Hide myself",
+			kind = SettingType.Checkbox,
+			field = "hideSelf",
+			parentId = "raid",
+			default = (DEFAULTS.mt and DEFAULTS.mt.hideSelf) or false,
+			get = function()
+				local cfg = getCfg(kind)
+				return cfg and cfg.hideSelf == true
+			end,
+			set = function(_, value)
+				local cfg = getCfg(kind)
+				if not cfg then return end
+				cfg.hideSelf = value and true or false
+				if EditMode and EditMode.SetValue then EditMode:SetValue(editModeId, "hideSelf", cfg.hideSelf, nil, true) end
+				GF:ApplyHeaderAttributes(kind)
+			end,
+			isShown = function() return kind == "mt" end,
+		}
+		settings[#settings + 1] = {
 			name = "Units per column",
 			kind = SettingType.Slider,
 			allowInput = true,
@@ -16912,6 +16928,7 @@ local function applyEditModeData(kind, data)
 			end
 		end
 	elseif isRaidLikeKind(kind) then
+		if kind == "mt" and data.hideSelf ~= nil then cfg.hideSelf = data.hideSelf and true or false end
 		if kind == "raid" then
 			local custom = GFH.EnsureCustomSortConfig(cfg)
 			if data.customSortEnabled ~= nil then
@@ -17073,6 +17090,7 @@ function GF:EnsureEditMode()
 				tooltipAuras = ac.buff.showTooltip == true and ac.debuff.showTooltip == true and ac.externals.showTooltip == true,
 				showPlayer = cfg.showPlayer == true,
 				showSolo = cfg.showSolo == true,
+				hideSelf = cfg.hideSelf == true,
 				hideInClientScene = (cfg.hideInClientScene ~= nil and cfg.hideInClientScene == true) or ((cfg.hideInClientScene == nil) and (def.hideInClientScene ~= false)),
 				unitsPerColumn = cfg.unitsPerColumn or (DEFAULTS[kind] and DEFAULTS[kind].unitsPerColumn) or (DEFAULTS.raid and DEFAULTS.raid.unitsPerColumn) or 5,
 				maxColumns = cfg.maxColumns or (DEFAULTS[kind] and DEFAULTS[kind].maxColumns) or (DEFAULTS.raid and DEFAULTS.raid.maxColumns) or 8,

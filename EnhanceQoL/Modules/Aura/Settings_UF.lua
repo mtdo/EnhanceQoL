@@ -5932,6 +5932,54 @@ local function registerStandaloneCastbarEditModeSettings()
 end
 
 local DEFAULT_SETTINGS_MAX_HEIGHT = 900
+local DEFAULT_SETTINGS_SCREEN_MARGIN = 200
+local registeredUnitFrames = {}
+local settingsMaxHeightWatcher
+
+local function getSettingsMaxHeight()
+	local screenHeight = addon.variables and tonumber(addon.variables.screenHeight)
+	if (not screenHeight or screenHeight <= 0) and GetScreenHeight then
+		screenHeight = tonumber(GetScreenHeight())
+		if screenHeight and screenHeight > 0 then
+			addon.variables = addon.variables or {}
+			addon.variables.screenHeight = screenHeight
+		end
+	end
+	if not screenHeight or screenHeight <= 0 then return DEFAULT_SETTINGS_MAX_HEIGHT end
+	if screenHeight < DEFAULT_SETTINGS_MAX_HEIGHT then return screenHeight end
+	return math.max(DEFAULT_SETTINGS_MAX_HEIGHT, screenHeight - DEFAULT_SETTINGS_SCREEN_MARGIN)
+end
+
+local function applyFrameSettingsMaxHeight(frame, maxHeight)
+	local lib = addon.EditModeLib or (EditMode and EditMode.lib)
+	if not (lib and lib.SetFrameSettingsMaxHeight and frame) then return end
+	lib:SetFrameSettingsMaxHeight(frame, maxHeight or getSettingsMaxHeight())
+end
+
+local function applyRegisteredSettingsMaxHeight()
+	local maxHeight = getSettingsMaxHeight()
+	for _, frame in pairs(registeredUnitFrames) do
+		applyFrameSettingsMaxHeight(frame, maxHeight)
+	end
+end
+
+local function ensureSettingsMaxHeightWatcher()
+	if settingsMaxHeightWatcher then return end
+	settingsMaxHeightWatcher = CreateFrame("Frame")
+	settingsMaxHeightWatcher:RegisterEvent("PLAYER_LOGIN")
+	settingsMaxHeightWatcher:RegisterEvent("DISPLAY_SIZE_CHANGED")
+	settingsMaxHeightWatcher:RegisterEvent("UI_SCALE_CHANGED")
+	settingsMaxHeightWatcher:SetScript("OnEvent", function()
+		if GetScreenHeight then
+			local screenHeight = tonumber(GetScreenHeight())
+			if screenHeight and screenHeight > 0 then
+				addon.variables = addon.variables or {}
+				addon.variables.screenHeight = screenHeight
+			end
+		end
+		applyRegisteredSettingsMaxHeight()
+	end)
+end
 
 local function registerUnitFrame(unit, info)
 	if UF.EnsureFrames then
@@ -5982,11 +6030,17 @@ local function registerUnitFrame(unit, info)
 		collapseExclusive = true,
 		showReset = false,
 	})
+	registeredUnitFrames[unit] = frame
+	applyFrameSettingsMaxHeight(frame)
 	hideFrameReset(frame)
 end
 
 local function registerEditModeFrames()
-	if UF.EditModeRegistered then return end
+	ensureSettingsMaxHeightWatcher()
+	if UF.EditModeRegistered then
+		applyRegisteredSettingsMaxHeight()
+		return
+	end
 	UF.EditModeRegistered = true
 	local frames = {
 		player = { frameName = "EQOLUFPlayerFrame", frameId = frameIds.player, title = L["UFPlayerFrame"] or PLAYER },
@@ -6001,6 +6055,7 @@ local function registerEditModeFrames()
 		for unit, info in pairs(frames) do
 			registerUnitFrame(unit, info)
 		end
+		applyRegisteredSettingsMaxHeight()
 		requestRefresh()
 	end)
 	endRefreshBatch()

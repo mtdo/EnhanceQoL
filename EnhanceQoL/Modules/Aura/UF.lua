@@ -4117,7 +4117,7 @@ local function setFrameLevelAbove(child, parent, offset)
 	child:SetFrameLevel(level)
 end
 
-local function getHealthTextAnchor(st)
+local function getHealthTextAnchor(st, includeStatus)
 	if not st or not st.health then return nil end
 	local anchor = st.health
 	local maxLevel = (anchor.GetFrameLevel and anchor:GetFrameLevel()) or 0
@@ -4131,6 +4131,7 @@ local function getHealthTextAnchor(st)
 	end
 	consider(st.health.absorbClip)
 	consider(st.health._healthFillClip)
+	if includeStatus then consider(st.status) end
 	return anchor
 end
 
@@ -4151,16 +4152,20 @@ local function syncTextFrameLevels(st)
 	if not st then return end
 	local scfg = (st.cfg and st.cfg.status) or {}
 	local healthAnchor = getHealthTextAnchor(st) or st.health
+	local statusAnchor = getHealthTextAnchor(st, true) or st.status or healthAnchor
 	setFrameLevelAbove(st.healthTextLayer, healthAnchor, 5)
 	setFrameLevelAbove(st.powerTextLayer, st.power, 5)
-	setFrameLevelAbove(st.statusTextLayer, st.status, 5)
+	setFrameLevelAbove(st.statusTextLayer, statusAnchor, 5)
 	local levelLayer = st.levelTextLayer or st.statusTextLayer
 	local levelOffset = tonumber(scfg.levelFrameLevelOffset)
 	if levelOffset == nil then levelOffset = 5 end
-	setFrameLevelAbove(levelLayer, st.status, levelOffset)
-	if levelLayer and levelLayer.SetFrameStrata and st.status and st.status.GetFrameStrata then
+	setFrameLevelAbove(levelLayer, statusAnchor, levelOffset)
+	if levelLayer and levelLayer.SetFrameStrata then
 		local levelStrata = normalizeStrataToken(scfg.levelStrata)
-		levelLayer:SetFrameStrata(levelStrata or st.status:GetFrameStrata())
+		local fallbackStrata
+		if statusAnchor and statusAnchor.GetFrameStrata then fallbackStrata = statusAnchor:GetFrameStrata() end
+		if not fallbackStrata and st.status and st.status.GetFrameStrata then fallbackStrata = st.status:GetFrameStrata() end
+		if levelStrata or fallbackStrata then levelLayer:SetFrameStrata(levelStrata or fallbackStrata) end
 	end
 	if st.restLoop and st.statusTextLayer then setFrameLevelAbove(st.restLoop, st.statusTextLayer, 3) end
 	if st.castTextLayer then setFrameLevelAbove(st.castTextLayer, st.castBar, 5) end
