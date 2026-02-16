@@ -1,5 +1,20 @@
 # Changelog
 
+## [7.17.0] - 2026-02-16
+
+### ✨ Added
+
+- Baganator support for Vendor features.
+  - The Destroy Queue button is now available directly in the Baganator bag window.
+  - Items marked for Auto-Sell or Destroy now show their EnhanceQoL marker in Baganator.
+  - The `EnhanceQoL Sell/Destroy` marker can be positioned by the player in Baganator via `Icon Corners`.
+
+### 🐛 Fixed
+
+- Resource Bars: `Use max color` now works reliably.
+
+---
+
 ## [7.16.1] - 2026-02-15
 
 ### 🐛 Fixed
